@@ -1,0 +1,416 @@
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: #f0f2f5;
+}
+
+#root {
+  min-height: 100%;
+}
+
+.ticket-submit-reference-page {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  padding: 12px 8px 24px;
+}
+
+.ticket-submit-title {
+  margin: 0 0 10px 0 !important;
+  padding-left: 64px;
+}
+
+.reference-ticket-form {
+  color: #333;
+}
+
+.reference-form-line {
+  border-top: 1px dotted #ddd;
+  padding: 7px 0;
+  min-height: 42px;
+}
+
+.reference-form-line:last-of-type {
+  border-bottom: 1px dotted #ddd;
+}
+
+.reference-form-line .ant-form-item {
+  margin-bottom: 0;
+}
+
+.reference-form-line .ant-form-item-label {
+  line-height: 30px;
+}
+
+.reference-form-line .ant-form-item-label > label {
+  color: #333;
+  font-size: 14px;
+}
+
+.reference-form-line .ant-form-item-explain {
+  font-size: 12px;
+}
+
+.reference-form-line .ant-input,
+.reference-form-line .ant-select-selector {
+  border-radius: 2px !important;
+}
+
+.reference-short-control {
+  width: 150px !important;
+}
+
+.priority-sla-hint {
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.reference-medium-control {
+  width: 220px !important;
+}
+
+.reference-title-control {
+  max-width: 560px;
+}
+
+.reference-conditional-line {
+  background: #fffdf6;
+}
+
+.reference-form-line-tall {
+  padding-bottom: 12px;
+}
+
+.reference-form-line-tall .ant-form-item-label {
+  align-items: flex-start;
+  padding-top: 8px;
+}
+
+.reference-attachment-line .ant-form-item-label {
+  align-items: flex-start;
+  padding-top: 8px;
+}
+
+.reference-form-actions {
+  padding: 16px 0 0 112px;
+}
+
+.rich-text-editor {
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  max-width: calc(100vw - 360px);
+}
+
+.rich-text-toolbar {
+  min-height: 38px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #d9d9d9;
+  background: #fafafa;
+}
+
+.rich-text-content {
+  min-height: 220px;
+  padding: 12px;
+  outline: none;
+  overflow: auto;
+}
+
+.rich-text-content:empty::before {
+  content: attr(data-placeholder);
+  color: #bfbfbf;
+}
+
+.rich-text-content img,
+.ticket-rich-description img {
+  max-width: 100%;
+  height: auto;
+}
+
+.ticket-rich-description img {
+  cursor: zoom-in;
+}
+
+.rich-text-content blockquote,
+.ticket-rich-description blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid #d9d9d9;
+  color: #666;
+}
+
+.reference-upload {
+  max-width: 640px;
+}
+
+.reference-upload .ant-upload-drag {
+  border-radius: 2px;
+}
+
+.ticket-rich-description {
+  min-height: 24px;
+}
+
+.ticket-rich-description p {
+  margin: 0 0 8px;
+}
+
+.ticket-description-section {
+  padding: 12px 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  background: #fff;
+  min-height: 80px;
+}
+
+.ticket-attachment-section {
+  padding: 4px 0;
+}
+
+.message-rich-content {
+  min-height: 24px;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.message-rich-content p {
+  margin: 0 0 8px;
+}
+
+.message-rich-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  cursor: zoom-in;
+}
+
+.message-rich-content blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid #d9d9d9;
+  color: #666;
+}
+
+.message-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.message-thread-item {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding-top: 4px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.message-thread-item:first-child {
+  border-top: none;
+}
+
+.message-thread-avatar {
+  position: relative;
+}
+
+.message-thread-avatar-inner {
+  position: sticky;
+  top: 12px;
+  width: 44px;
+  height: 44px;
+}
+
+.message-thread-body {
+  min-width: 0;
+}
+
+.message-thread-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.message-thread-actions {
+  margin-top: 10px;
+}
+
+.message-quote-block,
+.message-quote-editor {
+  border-left: 3px solid #91caff;
+  background: #f5faff;
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+
+.message-quote-block {
+  margin-bottom: 10px;
+}
+
+.message-quote-block-text,
+.message-quote-editor-text {
+  margin: 4px 0 0 !important;
+  color: #595959;
+}
+
+.message-quote-editor {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.message-quote-editor-main {
+  min-width: 0;
+}
+
+.attachment-list-item {
+  max-width: 100%;
+}
+
+.attachment-thumb {
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.attachment-thumb .ant-image-img {
+  object-fit: cover;
+}
+
+.attachment-file-icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  background: #fafafa;
+  color: #8c8c8c;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.attachment-file-icon-word {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
+.attachment-file-icon-excel {
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.attachment-file-icon-pdf {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.attachment-file-icon-ppt {
+  background: #fff7e6;
+  color: #d46b08;
+}
+
+.attachment-file-icon-text {
+  background: #fafafa;
+  color: #595959;
+}
+
+.attachment-file-icon-zip {
+  background: #f9f0ff;
+  color: #722ed1;
+}
+
+.attachment-file-icon-default {
+  background: #fafafa;
+  color: #8c8c8c;
+}
+
+.priority-tag-p1 {
+  font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(255, 77, 79, 0.25);
+}
+
+.sla-remaining-text {
+  font-weight: 600;
+}
+
+.sla-remaining-p1 {
+  color: #cf1322;
+}
+
+.sla-remaining-overdue {
+  color: #a8071a;
+}
+
+.sla-expire-time {
+  font-size: 12px;
+}
+
+.sla-remaining-refreshing {
+  animation: slaRefreshPulse 0.9s ease;
+}
+
+.ticket-row-priority-p1 td {
+  border-left-color: #ff4d4f;
+}
+
+.ticket-row-priority-p1 td:first-child {
+  box-shadow: inset 4px 0 0 #ff4d4f;
+}
+
+.ticket-row-overdue td {
+  background: #fff1f0 !important;
+}
+
+.ticket-row-overdue:hover td {
+  background: #ffe7e6 !important;
+}
+
+.ticket-unread-badge .ant-badge-count {
+  font-weight: 700;
+  font-size: 13px;
+  height: 24px;
+  line-height: 24px;
+  padding: 0 10px;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.18);
+}
+
+.ticket-unread-badge-compact .ant-badge-count {
+  font-size: 12px;
+  height: 20px;
+  line-height: 20px;
+  min-width: 20px;
+  padding: 0 8px;
+}
+
+.ticket-read-tag {
+  margin-inline-end: 0;
+  font-weight: 600;
+}
+
+.ticket-read-tag-compact {
+  font-size: 12px;
+  line-height: 18px;
+  padding-inline: 6px;
+}
+
+@keyframes slaRefreshPulse {
+  0% {
+    background: #fffbe6;
+    box-shadow: 0 0 0 0 rgba(250, 173, 20, 0.35);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 8px rgba(250, 173, 20, 0);
+  }
+}

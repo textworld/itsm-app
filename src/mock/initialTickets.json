@@ -1,0 +1,476 @@
+[
+  {
+    "id": "TKT-20260410-0001",
+    "title": "申请开通报表中心的【季度营收报表】查看权限",
+    "toolType": "PERMISSION",
+    "description": "因业务需要，申请开通报表中心-季度营收报表的查看权限，负责人：张三。",
+    "attachments": [],
+    "status": "PENDING",
+    "createdAt": "2026-04-10T09:20:00.000Z",
+    "updatedAt": "2026-04-10T09:20:00.000Z",
+    "requesterId": "u_requester_1",
+    "requesterName": "张三 (提单人)",
+    "assigneeL1Id": null,
+    "assigneeL1Name": null,
+    "assigneeL2Id": null,
+    "assigneeL2Name": null,
+    "messages": [],
+    "defectTag": null,
+    "linkedDefect": null,
+    "l2Conclusion": "",
+    "summary": "",
+    "summarySyncedToCorpus": false,
+    "rejectionReason": "",
+    "satisfaction": null,
+    "timeline": [
+      {
+        "action": "SUBMIT",
+        "actionLabel": "提交工单",
+        "fromStatus": null,
+        "toStatus": "PENDING",
+        "operator": "张三 (提单人)",
+        "operatorId": "u_requester_1",
+        "role": "REQUESTER",
+        "at": "2026-04-10T09:20:00.000Z",
+        "remark": "新建工单"
+      }
+    ],
+    "priority": "P1",
+    "priorityLabel": "P1-紧急",
+    "expiresAt": "2026-04-10T09:50:00.000Z"
+  },
+  {
+    "id": "TKT-20260412-0002",
+    "title": "提取华东区域 2026Q1 订单明细数据",
+    "toolType": "DATA_EXTRACT",
+    "description": "需要提取华东区域(上海/江苏/浙江/安徽)2026 年 1-3 月的订单明细，用于季度经营分析。字段见附件。",
+    "attachments": [],
+    "status": "PROCESSING",
+    "createdAt": "2026-04-12T10:05:00.000Z",
+    "updatedAt": "2026-04-12T11:30:00.000Z",
+    "requesterId": "u_requester_1",
+    "requesterName": "张三 (提单人)",
+    "assigneeL1Id": "u_l1_1",
+    "assigneeL1Name": "李一线 (一线技术支持)",
+    "assigneeL2Id": null,
+    "assigneeL2Name": null,
+    "messages": [
+      {
+        "id": "m_0001",
+        "authorId": "u_l1_1",
+        "authorName": "李一线 (一线技术支持)",
+        "authorRole": "L1",
+        "content": "您好，工单已受理，请确认字段列表是否需要增加【渠道来源】字段？",
+        "attachments": [],
+        "createdAt": "2026-04-12T11:00:00.000Z"
+      },
+      {
+        "id": "m_0002",
+        "authorId": "u_requester_1",
+        "authorName": "张三 (提单人)",
+        "authorRole": "REQUESTER",
+        "content": "需要，请补充【渠道来源】字段，谢谢。",
+        "attachments": [],
+        "createdAt": "2026-04-12T11:30:00.000Z"
+      }
+    ],
+    "defectTag": null,
+    "linkedDefect": null,
+    "l2Conclusion": "",
+    "summary": "",
+    "summarySyncedToCorpus": false,
+    "rejectionReason": "",
+    "satisfaction": null,
+    "timeline": [
+      {
+        "action": "SUBMIT",
+        "actionLabel": "提交工单",
+        "fromStatus": null,
+        "toStatus": "PENDING",
+        "operator": "张三 (提单人)",
+        "operatorId": "u_requester_1",
+        "role": "REQUESTER",
+        "at": "2026-04-12T10:05:00.000Z",
+        "remark": "新建工单"
+      },
+      {
+        "action": "ACCEPT",
+        "actionLabel": "受理工单",
+        "fromStatus": "PENDING",
+        "toStatus": "PROCESSING",
+        "operator": "李一线 (一线技术支持)",
+        "operatorId": "u_l1_1",
+        "role": "L1",
+        "at": "2026-04-12T11:00:00.000Z",
+        "remark": "一线受理"
+      }
+    ],
+    "priority": "P2",
+    "priorityLabel": "P2-高",
+    "expiresAt": "2026-04-12T12:05:00.000Z"
+  },
+  {
+    "id": "TKT-20260415-0003",
+    "title": "数据抽取工具在 100 万+ 数据量下报超时",
+    "toolType": "DATA_EXTRACT",
+    "description": "使用数据抽取工具抽取订单大表(约 130 万行)时频繁报超时错误，请协助排查。",
+    "attachments": [],
+    "status": "INVESTIGATING",
+    "createdAt": "2026-04-15T08:40:00.000Z",
+    "updatedAt": "2026-04-16T10:00:00.000Z",
+    "requesterId": "u_requester_1",
+    "requesterName": "张三 (提单人)",
+    "assigneeL1Id": "u_l1_1",
+    "assigneeL1Name": "李一线 (一线技术支持)",
+    "assigneeL2Id": "u_l2_1",
+    "assigneeL2Name": "王二线 (二线运维)",
+    "messages": [
+      {
+        "id": "m_0003",
+        "authorId": "u_l1_1",
+        "authorName": "李一线 (一线技术支持)",
+        "authorRole": "L1",
+        "content": "初步定位为后端任务超时限制 + 索引缺失导致，已打标为缺陷并关联到 BUG-2026-0003，流转给二线进一步排查。",
+        "attachments": [],
+        "createdAt": "2026-04-16T10:00:00.000Z"
+      }
+    ],
+    "defectTag": {
+      "type": "性能问题",
+      "description": "大数据量抽取超时，疑似索引缺失与任务超时阈值过低",
+      "taggedAt": "2026-04-16T09:50:00.000Z",
+      "taggedBy": "李一线 (一线技术支持)"
+    },
+    "linkedDefect": {
+      "defectId": "BUG-2026-0003",
+      "title": "数据抽取任务大数据量下超时",
+      "module": "数据集成",
+      "priority": "P2",
+      "isNew": false
+    },
+    "l2Conclusion": "",
+    "summary": "",
+    "summarySyncedToCorpus": false,
+    "rejectionReason": "",
+    "satisfaction": null,
+    "timeline": [
+      {
+        "action": "SUBMIT",
+        "actionLabel": "提交工单",
+        "fromStatus": null,
+        "toStatus": "PENDING",
+        "operator": "张三 (提单人)",
+        "operatorId": "u_requester_1",
+        "role": "REQUESTER",
+        "at": "2026-04-15T08:40:00.000Z",
+        "remark": "新建工单"
+      },
+      {
+        "action": "ACCEPT",
+        "actionLabel": "受理工单",
+        "fromStatus": "PENDING",
+        "toStatus": "PROCESSING",
+        "operator": "李一线 (一线技术支持)",
+        "operatorId": "u_l1_1",
+        "role": "L1",
+        "at": "2026-04-15T09:30:00.000Z",
+        "remark": "一线受理"
+      },
+      {
+        "action": "TAG_DEFECT_AND_LINK",
+        "actionLabel": "打标为缺陷并关联",
+        "fromStatus": "PROCESSING",
+        "toStatus": "INVESTIGATING",
+        "operator": "李一线 (一线技术支持)",
+        "operatorId": "u_l1_1",
+        "role": "L1",
+        "at": "2026-04-16T10:00:00.000Z",
+        "remark": "已关联缺陷 BUG-2026-0003"
+      }
+    ],
+    "priority": "P3",
+    "priorityLabel": "P3-中",
+    "expiresAt": "2026-04-15T14:40:00.000Z"
+  },
+  {
+    "id": "TKT-20260413-0005",
+    "title": "报表中心导出 Excel 时部分中文字段乱码",
+    "toolType": "OTHER",
+    "description": "在报表中心导出「华南区销售明细」Excel 时，部分中文字段(如商品名称)乱码，疑似编码问题。请协助排查。",
+    "attachments": [],
+    "status": "REVIEWING",
+    "createdAt": "2026-04-13T09:10:00.000Z",
+    "updatedAt": "2026-04-14T16:20:00.000Z",
+    "requesterId": "u_requester_1",
+    "requesterName": "张三 (提单人)",
+    "assigneeL1Id": "u_l1_1",
+    "assigneeL1Name": "李一线 (一线技术支持)",
+    "assigneeL2Id": "u_l2_1",
+    "assigneeL2Name": "王二线 (二线运维)",
+    "messages": [
+      {
+        "id": "m_0005",
+        "authorId": "u_l1_1",
+        "authorName": "李一线 (一线技术支持)",
+        "authorRole": "L1",
+        "content": "您好，已复现问题并初步定位为导出组件字符集非 UTF-8-BOM，已打标缺陷并关联到 BUG-2026-0001，转二线深入排查。",
+        "attachments": [],
+        "createdAt": "2026-04-13T14:00:00.000Z"
+      },
+      {
+        "id": "m_0006",
+        "authorId": "u_l2_1",
+        "authorName": "王二线 (二线运维)",
+        "authorRole": "L2",
+        "content": "【系统】二线运维给出排查结论：导出模板固定使用 GBK 编码，对含生僻字的商品名未能兼容。临时规避：在导出前对字段做 UTF-8-BOM 转码；根因修复需升级报表导出组件版本，已排期 V5.2 版本解决。",
+        "attachments": [],
+        "createdAt": "2026-04-14T16:20:00.000Z"
+      }
+    ],
+    "defectTag": {
+      "type": "功能缺陷",
+      "description": "导出 Excel 组件字符集非 UTF-8-BOM，导致部分中文字段乱码",
+      "taggedAt": "2026-04-13T13:50:00.000Z",
+      "taggedBy": "李一线 (一线技术支持)"
+    },
+    "linkedDefect": {
+      "defectId": "BUG-2026-0001",
+      "title": "报表导出时部分中文字段乱码",
+      "module": "报表中心",
+      "priority": "P1",
+      "isNew": false
+    },
+    "l2Conclusion": "导出模板固定使用 GBK 编码，对含生僻字的商品名未能兼容。临时规避：在导出前对字段做 UTF-8-BOM 转码；根因修复需升级报表导出组件版本，已排期 V5.2 版本解决。",
+    "summary": "",
+    "summarySyncedToCorpus": false,
+    "rejectionReason": "",
+    "satisfaction": null,
+    "timeline": [
+      {
+        "action": "SUBMIT",
+        "actionLabel": "提交工单",
+        "fromStatus": null,
+        "toStatus": "PENDING",
+        "operator": "张三 (提单人)",
+        "operatorId": "u_requester_1",
+        "role": "REQUESTER",
+        "at": "2026-04-13T09:10:00.000Z",
+        "remark": "新建工单"
+      },
+      {
+        "action": "ACCEPT",
+        "actionLabel": "受理工单",
+        "fromStatus": "PENDING",
+        "toStatus": "PROCESSING",
+        "operator": "李一线 (一线技术支持)",
+        "operatorId": "u_l1_1",
+        "role": "L1",
+        "at": "2026-04-13T10:30:00.000Z",
+        "remark": "一线受理"
+      },
+      {
+        "action": "TAG_DEFECT_AND_LINK",
+        "actionLabel": "打标为缺陷并关联",
+        "fromStatus": "PROCESSING",
+        "toStatus": "INVESTIGATING",
+        "operator": "李一线 (一线技术支持)",
+        "operatorId": "u_l1_1",
+        "role": "L1",
+        "at": "2026-04-13T14:00:00.000Z",
+        "remark": "已关联缺陷 BUG-2026-0001"
+      },
+      {
+        "action": "SUBMIT_CONCLUSION",
+        "actionLabel": "提交排查结论",
+        "fromStatus": "INVESTIGATING",
+        "toStatus": "REVIEWING",
+        "operator": "王二线 (二线运维)",
+        "operatorId": "u_l2_1",
+        "role": "L2",
+        "at": "2026-04-14T16:20:00.000Z",
+        "remark": "二线提交排查结论"
+      }
+    ],
+    "priority": "P4",
+    "priorityLabel": "P4-不紧急",
+    "expiresAt": "2026-04-13T17:10:00.000Z"
+  },
+  {
+    "id": "TKT-20260411-0006",
+    "title": "申请开通【客户管理平台】订单明细导出权限",
+    "toolType": "PERMISSION",
+    "description": "业务侧需要定期导出客户订单明细做对账，申请开通客户管理平台订单明细导出权限。",
+    "attachments": [],
+    "status": "VERIFYING",
+    "createdAt": "2026-04-11T08:50:00.000Z",
+    "updatedAt": "2026-04-11T15:40:00.000Z",
+    "requesterId": "u_requester_1",
+    "requesterName": "张三 (提单人)",
+    "assigneeL1Id": "u_l1_1",
+    "assigneeL1Name": "李一线 (一线技术支持)",
+    "assigneeL2Id": null,
+    "assigneeL2Name": null,
+    "messages": [
+      {
+        "id": "m_0007",
+        "authorId": "u_l1_1",
+        "authorName": "李一线 (一线技术支持)",
+        "authorRole": "L1",
+        "content": "您好，已在权限中心为您账号分配「订单明细导出」权限(只读+导出)，请登录客户管理平台验证是否生效。",
+        "attachments": [],
+        "createdAt": "2026-04-11T14:50:00.000Z"
+      },
+      {
+        "id": "m_0008",
+        "authorId": "u_l1_1",
+        "authorName": "李一线 (一线技术支持)",
+        "authorRole": "L1",
+        "content": "【系统】一线已完成复核并同步总结至语料库，请提单人验证。",
+        "attachments": [],
+        "createdAt": "2026-04-11T15:40:00.000Z"
+      }
+    ],
+    "defectTag": null,
+    "linkedDefect": null,
+    "l2Conclusion": "",
+    "summary": "【工单总结】\n- 工单编号: TKT-20260411-0006\n- 工单标题: 申请开通【客户管理平台】订单明细导出权限\n- 工具类型: 权限申请\n- 提交人: 张三 (提单人)\n- 当前状态: 待复核\n\n## 问题描述\n业务侧需要定期导出客户订单明细做对账，申请开通客户管理平台订单明细导出权限。\n\n## 处理流程\n1. 2026-04-11 08:50 · 张三 (提单人) (REQUESTER) · 提交工单 · 新建工单\n2. 2026-04-11 10:00 · 李一线 (一线技术支持) (L1) · 受理工单 · 一线受理\n3. 2026-04-11 15:00 · 李一线 (一线技术支持) (L1) · 直接进入待复核 · 非缺陷类工单直接进入复核\n\n## 处理结论\n已在权限中心为账号分配「订单明细导出」只读+导出权限，按权限策略配置完成。",
+    "summarySyncedToCorpus": true,
+    "rejectionReason": "",
+    "satisfaction": null,
+    "timeline": [
+      {
+        "action": "SUBMIT",
+        "actionLabel": "提交工单",
+        "fromStatus": null,
+        "toStatus": "PENDING",
+        "operator": "张三 (提单人)",
+        "operatorId": "u_requester_1",
+        "role": "REQUESTER",
+        "at": "2026-04-11T08:50:00.000Z",
+        "remark": "新建工单"
+      },
+      {
+        "action": "ACCEPT",
+        "actionLabel": "受理工单",
+        "fromStatus": "PENDING",
+        "toStatus": "PROCESSING",
+        "operator": "李一线 (一线技术支持)",
+        "operatorId": "u_l1_1",
+        "role": "L1",
+        "at": "2026-04-11T10:00:00.000Z",
+        "remark": "一线受理"
+      },
+      {
+        "action": "MOVE_TO_REVIEW",
+        "actionLabel": "直接进入待复核",
+        "fromStatus": "PROCESSING",
+        "toStatus": "REVIEWING",
+        "operator": "李一线 (一线技术支持)",
+        "operatorId": "u_l1_1",
+        "role": "L1",
+        "at": "2026-04-11T15:00:00.000Z",
+        "remark": "非缺陷类工单直接进入复核"
+      },
+      {
+        "action": "SUBMIT_REVIEW",
+        "actionLabel": "提交复核（同步语料库）",
+        "fromStatus": "REVIEWING",
+        "toStatus": "VERIFYING",
+        "operator": "李一线 (一线技术支持)",
+        "operatorId": "u_l1_1",
+        "role": "L1",
+        "at": "2026-04-11T15:40:00.000Z",
+        "remark": "一线复核完成，总结已同步语料库"
+      }
+    ],
+    "priority": "P1",
+    "priorityLabel": "P1-紧急",
+    "expiresAt": "2026-04-11T09:20:00.000Z"
+  },
+  {
+    "id": "TKT-20260408-0004",
+    "title": "申请临时开通 BI 平台【运营大盘】只读权限",
+    "toolType": "PERMISSION",
+    "description": "临时参与季度复盘会议，需要查看运营大盘只读权限，为期 7 天。",
+    "attachments": [],
+    "status": "CLOSED",
+    "createdAt": "2026-04-08T09:00:00.000Z",
+    "updatedAt": "2026-04-09T15:30:00.000Z",
+    "requesterId": "u_requester_1",
+    "requesterName": "张三 (提单人)",
+    "assigneeL1Id": "u_l1_1",
+    "assigneeL1Name": "李一线 (一线技术支持)",
+    "assigneeL2Id": null,
+    "assigneeL2Name": null,
+    "messages": [
+      {
+        "id": "m_0004",
+        "authorId": "u_l1_1",
+        "authorName": "李一线 (一线技术支持)",
+        "authorRole": "L1",
+        "content": "权限已开通，有效期至 2026-04-15，请查收。",
+        "attachments": [],
+        "createdAt": "2026-04-09T14:00:00.000Z"
+      }
+    ],
+    "defectTag": null,
+    "linkedDefect": null,
+    "l2Conclusion": "",
+    "summary": "【工单总结】\n- 问题描述: 用户申请开通 BI 平台运营大盘的临时只读权限\n- 处理过程: 一线技术支持核对申请人所属部门并在权限中心为其分配临时只读角色\n- 处理结论: 临时权限已开通，到期自动回收\n- 关联缺陷: 无",
+    "summarySyncedToCorpus": true,
+    "rejectionReason": "",
+    "satisfaction": {
+      "rating": 5,
+      "comment": "响应及时，处理规范，非常满意。"
+    },
+    "timeline": [
+      {
+        "action": "SUBMIT",
+        "actionLabel": "提交工单",
+        "fromStatus": null,
+        "toStatus": "PENDING",
+        "operator": "张三 (提单人)",
+        "operatorId": "u_requester_1",
+        "role": "REQUESTER",
+        "at": "2026-04-08T09:00:00.000Z",
+        "remark": "新建工单"
+      },
+      {
+        "action": "ACCEPT",
+        "actionLabel": "受理工单",
+        "fromStatus": "PENDING",
+        "toStatus": "PROCESSING",
+        "operator": "李一线 (一线技术支持)",
+        "operatorId": "u_l1_1",
+        "role": "L1",
+        "at": "2026-04-08T10:00:00.000Z",
+        "remark": "一线受理"
+      },
+      {
+        "action": "SUBMIT_REVIEW",
+        "actionLabel": "提交复核（同步语料库）",
+        "fromStatus": "REVIEWING",
+        "toStatus": "VERIFYING",
+        "operator": "李一线 (一线技术支持)",
+        "operatorId": "u_l1_1",
+        "role": "L1",
+        "at": "2026-04-09T14:30:00.000Z",
+        "remark": "总结已同步语料库"
+      },
+      {
+        "action": "VERIFY_YES",
+        "actionLabel": "验证通过",
+        "fromStatus": "VERIFYING",
+        "toStatus": "CLOSED",
+        "operator": "张三 (提单人)",
+        "operatorId": "u_requester_1",
+        "role": "REQUESTER",
+        "at": "2026-04-09T15:30:00.000Z",
+        "remark": "满意度 5 星"
+      }
+    ],
+    "priority": "P2",
+    "priorityLabel": "P2-高",
+    "expiresAt": "2026-04-08T11:00:00.000Z"
+  }
+]
