@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from 'react';
+'use client';
+
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, Button, Typography, App as AntdApp, Image } from 'antd';
 import { InboxOutlined, UploadOutlined } from '@ant-design/icons';
 import {
   ACCEPTED_ATTACHMENT_TYPES,
   isAllowedAttachment,
-  fileToBase64
+  mapAttachmentsToUploadFileList,
+  uploadAttachmentFile
 } from '../../utils/fileUtils.js';
 
 export default function FileUploader({
@@ -19,39 +22,57 @@ export default function FileUploader({
   const { message } = AntdApp.useApp();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState('');
+  const fileListRef = useRef(fileList || []);
+
+  useEffect(() => {
+    fileListRef.current = fileList || [];
+  }, [fileList]);
 
   const listType = useMemo(
     () => (variant === 'dragger' ? 'picture' : 'picture'),
     [variant]
   );
 
-  const beforeUpload = (file) => {
+  const beforeUpload = async (file) => {
     if (!isAllowedAttachment(file)) {
       message.error(`不支持的附件类型：${file.name}`);
       return Upload.LIST_IGNORE;
     }
 
-    return false;
+    if ((fileListRef.current?.length || 0) >= maxCount) {
+      message.warning(`最多上传 ${maxCount} 个附件`);
+      return Upload.LIST_IGNORE;
+    }
+
+    try {
+      const attachment = await uploadAttachmentFile(file);
+      const nextFileItem = mapAttachmentsToUploadFileList([attachment])[0];
+      const nextFileList = [...(fileListRef.current || []), nextFileItem];
+      fileListRef.current = nextFileList;
+      onChange?.(nextFileList);
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '附件上传失败');
+    }
+
+    return Upload.LIST_IGNORE;
   };
 
   const handlePreview = async (file) => {
     if (!isImageFile(file)) return;
 
-    let previewSource = file.url || file.thumbUrl || file.preview;
-
-    if (!previewSource && file.originFileObj) {
-      previewSource = await fileToBase64(file.originFileObj);
-      file.preview = previewSource;
-    }
-
-    if (!previewSource && file.base64) {
-      previewSource = file.base64;
-    }
-
+    const previewSource = file.url || file.thumbUrl || file.preview || file.base64;
     if (!previewSource) return;
 
     setPreviewImage(previewSource);
     setPreviewOpen(true);
+  };
+
+  const handleRemove = (file) => {
+    const nextFileList = (fileListRef.current || []).filter((item) => item.uid !== file.uid);
+    fileListRef.current = nextFileList;
+    onChange?.(nextFileList);
+    return false;
   };
 
   const uploadProps = {
@@ -62,7 +83,7 @@ export default function FileUploader({
     fileList,
     listType,
     onPreview: handlePreview,
-    onChange: ({ fileList: next }) => onChange && onChange(next),
+    onRemove: handleRemove,
     disabled
   };
 

@@ -1,30 +1,39 @@
-# ITSM 工单系统原型 (itsm-app-proto)
+# ITSM 工单系统 (itsm-app-nextjs)
 
-一个基于 **React 18 + Ant Design 5 + Vite + React Router 6** 的 ITSM 工单管理系统前端原型，
+一个基于 **Next.js + React 18 + Ant Design 5 + SQLite** 的 ITSM 工单管理系统，
 完整还原提单人、一线技术支持、二线运维 3 类角色的工单流转闭环，支持：
 
 - 工单提交 / 受理 / 打标缺陷 / 关联缺陷 / 二线排查 / 一线复核 / 提单人验证 / 满意度评价 全流程
+- 信息补充阶段支持修改工单描述，并保留历史版本与版本差异对比
+- 未受理工单支持提单人撤回至草稿箱
 - 基于状态机 (`src/state-machine/ticketStateMachine.js`) 的规则驱动流转
-- `localStorage` 持久化 + "初始化数据" / "导出数据" 能力
+- SQLite 持久化 + "初始化数据" / "导出数据" 能力
 - 角色感知的菜单、列表视图、操作按钮权限
 
 ## 一、启动方式
 
 ```bash
-npm install
-npm start          # 启动开发服务器
-# 默认地址：http://localhost:5173/itsm-app-proto/
+pnpm install
+pnpm dev
+# 默认地址：http://localhost:3000
 ```
 
 生产构建：
 
 ```bash
-npm run build
-npm run preview
+pnpm build
+pnpm start
 ```
 
-> `vite.config.js` 中已配置 `base: '/itsm-app-proto/'`，打包后资源均挂载在此前缀下。
-> `src/App.jsx` 的 BrowserRouter 也使用了相同的 `basename`。
+大模型智能解答需要在本地 `.env` 或部署环境中配置：
+
+```bash
+OPENAI_API_KEY=你的服务端密钥
+OPENAI_BASE_URL=https://api.codexzh.com/v1
+OPENAI_MODEL=gpt-5.4
+```
+
+> 首次启动时会自动初始化 `data/itsm.sqlite`，并将 `src/mock` 下的初始用户、工单、缺陷写入数据库。
 
 ## 二、测试账号（密码均为 `123456`）
 
@@ -39,18 +48,26 @@ npm run preview
 ## 三、目录结构
 
 ```text
+app/
+├── (protected)/                    # 受保护页面
+├── api/                            # Next Route Handlers
+├── layout.jsx                      # 根布局
+└── page.jsx                        # 首页重定向到 /tickets
+data/
+└── itsm.sqlite                     # 运行期 SQLite 数据库
 src/
-├── main.jsx                         # 入口，ConfigProvider(zh_CN)
-├── App.jsx                          # BrowserRouter + 两个 Provider
 ├── index.css
-├── router/index.jsx                 # 路由 + RequireAuth 守卫
 ├── context/
-│   ├── AuthContext.jsx              # 当前登录用户
-│   └── TicketContext.jsx            # 工单/缺陷 CRUD + 自动持久化 + 事件分发
+│   ├── AuthContext.jsx              # Cookie 会话 + 当前登录用户
+│   └── TicketContext.jsx            # 工单/缺陷 CRUD + API 调用
 ├── constants/
 │   ├── roles.js                     # REQUESTER / L1 / L2
 │   ├── ticketStatus.js              # 6 状态枚举 + 中文 + 颜色
 │   └── toolTypes.js                 # 权限申请 / 数据提取 / 其他
+├── server/
+│   ├── db.js                        # SQLite 初始化 / 建表 / seed
+│   ├── store.js                     # 数据读写仓储
+│   └── session.js                   # 登录 Cookie 会话
 ├── state-machine/
 │   └── ticketStateMachine.js        # 状态、事件、转移表、canTransition、applyTransition
 ├── mock/
@@ -58,7 +75,6 @@ src/
 │   ├── initialUsers.json            # 3 个测试账号
 │   └── initialDefects.json          # 项目管理系统缺陷池
 ├── utils/
-│   ├── storage.js                   # localStorage 封装 + bootstrap/reset/export
 │   ├── idGenerator.js               # 工单号 TKT-YYYYMMDD-xxxx + 短 id
 │   ├── summaryGenerator.js          # 自动生成工单总结
 │   ├── fileUtils.js                 # 附件转 base64 / 类型校验
@@ -81,7 +97,7 @@ src/
 │       ├── StatusTag.jsx            # 状态彩色 Tag
 │       ├── FileUploader.jsx         # Upload 封装
 │       └── AttachmentList.jsx       # 已有附件列表(支持下载)
-└── pages/
+└── views/
     ├── Login/index.jsx              # 登录页
     ├── TicketSubmit/index.jsx       # 工单提交
     ├── TicketList/index.jsx         # 工单列表(按角色渲染)
@@ -96,6 +112,7 @@ src/
 
 | Key | 中文 | 角色观感 |
 | --- | --- | --- |
+| `DRAFT` | 草稿 | 提单人撤回后保存在草稿箱 |
 | `PENDING` | 待受理 | 一线可见、可受理 |
 | `PROCESSING` | 处理中 | 一线处理中 |
 | `INVESTIGATING` | 待排查 | 二线排查中 |
@@ -107,7 +124,10 @@ src/
 
 | 从状态 | 事件 | 角色 | 目标状态 | 前置条件(guard) |
 | --- | --- | --- | --- | --- |
-| (创建) | `SUBMIT` | 提单人 | `PENDING` | - |
+| (创建) | `CREATE_DRAFT` | 提单人 | `DRAFT` | 提交后先进入智能解答 |
+| `DRAFT` | `AI_RESOLVE` | 提单人 | `CLOSED` | 用户确认大模型已解决 |
+| `DRAFT` | `SUBMIT` | 提单人 | `PENDING` | 用户选择人工处理 |
+| `PENDING` | `WITHDRAW` | 提单人 | `DRAFT` | - |
 | `PENDING` | `ACCEPT` | 一线 | `PROCESSING` | - |
 | `PROCESSING` | `TAG_DEFECT_AND_LINK` | 一线 | `INVESTIGATING` | 已打标 + 已关联缺陷 |
 | `INVESTIGATING` | `SUBMIT_CONCLUSION` | 二线 | `REVIEWING` | 需填写排查结论 |
@@ -126,13 +146,13 @@ src/
 
 ## 五、数据操作
 
-- **初始化数据**：工单列表页顶部/底部均有按钮，点击后会用 `src/mock/initialTickets.json` 与 `src/mock/initialDefects.json` 覆盖 localStorage。
-- **导出数据**：点击后将当前 localStorage 中的工单序列化为 JSON 下载（文件名：`itsm-tickets-YYYYMMDD-HHmmss.json`）。
-- **首次加载**：若 localStorage 中不存在对应 key，会自动用 mock 数据回填。
+- **初始化数据**：工单列表页顶部/底部均有按钮，点击后会用 `src/mock/initialTickets.json` 与 `src/mock/initialDefects.json` 重置 SQLite。
+- **导出数据**：点击后将当前 SQLite 中的工单序列化为 JSON 下载（文件名：`itsm-tickets-YYYYMMDD-HHmmss.json`）。
+- **首次加载**：若数据库为空，会自动用 mock 数据回填。
 
 ## 六、核心交互说明
 
-1. 提单人提交工单 → 状态 `PENDING` → 一线可见。
+1. 提单人提交工单 → 先保存为 `DRAFT` 并弹出大模型解答抽屉；点击「问题已解决」→ `CLOSED`，点击「人工处理」→ `PENDING`。
 2. 一线登录 `support1`：
    - 对 `PENDING` 工单点「受理」 → `PROCESSING`。
    - 在「处理中」: 打标为缺陷 + 关联缺陷(或创建新缺陷) → 「流转至二线排查」 → `INVESTIGATING`。
@@ -148,7 +168,8 @@ src/
 ## 七、技术细节
 
 - Ant Design `App` 组件提供静态 `message` API（`AntdApp.useApp()`）。
-- 附件通过 `FileReader.readAsDataURL` 转为 base64 直接入库，便于 localStorage 持久化与回显下载。
+- 附件通过 `FileReader.readAsDataURL` 转为 base64，最终存入 SQLite，便于回显下载。
+- 登录通过 Next Route Handler 校验测试账号，并使用 HttpOnly Cookie 维持会话。
 - 菜单 / 列表 / 操作按钮 均基于 `user.role` 动态渲染，未登录自动跳转 `/login`。
 
 ## 八、License

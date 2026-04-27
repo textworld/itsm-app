@@ -4,6 +4,7 @@ import {
   Space,
   Select,
   Button,
+  Popconfirm,
   Tag,
   Typography,
   Modal,
@@ -27,12 +28,21 @@ const PRIORITY_OPTIONS = [
  * - "创建新缺陷"：写入 defects 并回选
  * - 已关联时展示当前缺陷摘要 + 取消关联按钮
  */
-export default function LinkDefectPanel({ ticket, onChange, disabled }) {
+export default function LinkDefectPanel({
+  ticket,
+  onChange,
+  disabled,
+  variant = 'card'
+}) {
   const { defects, addDefect } = useTickets();
   const { message } = AntdApp.useApp();
   const [selectedId, setSelectedId] = useState(ticket?.linkedDefect?.defectId || undefined);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm] = Form.useForm();
+
+  React.useEffect(() => {
+    setSelectedId(ticket?.linkedDefect?.defectId || undefined);
+  }, [ticket?.id, ticket?.linkedDefect?.defectId]);
 
   const defectOptions = useMemo(
     () =>
@@ -44,116 +54,169 @@ export default function LinkDefectPanel({ ticket, onChange, disabled }) {
     [defects]
   );
 
-  const handleLink = () => {
+  const handleLink = async () => {
     if (!selectedId) {
       message.warning('请先选择要关联的缺陷');
       return;
     }
     const hit = defects.find((d) => d.defectId === selectedId);
     if (!hit) return;
-    onChange({
-      defectId: hit.defectId,
-      title: hit.title,
-      module: hit.module,
-      priority: hit.priority,
-      isNew: false
-    });
-    message.success(`已关联缺陷 ${hit.defectId}`);
+    try {
+      await onChange({
+        defectId: hit.defectId,
+        title: hit.title,
+        module: hit.module,
+        priority: hit.priority,
+        isNew: false
+      });
+      message.success(`已关联缺陷 ${hit.defectId}`);
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '关联缺陷失败');
+    }
   };
 
-  const handleUnlink = () => {
-    onChange(null);
-    setSelectedId(undefined);
-    message.success('已取消关联');
+  const handleUnlink = async () => {
+    try {
+      await onChange(null);
+      setSelectedId(undefined);
+      message.success('已取消关联');
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '取消关联失败');
+    }
   };
 
   const handleCreate = async () => {
-    const values = await createForm.validateFields();
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const id = `BUG-${now.getFullYear()}-${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}`;
-    const defect = {
-      defectId: id,
-      title: values.title.trim(),
-      module: values.module.trim(),
-      priority: values.priority,
-      status: '新建',
-      createdAt: now.toISOString()
-    };
-    addDefect(defect);
-    onChange({
-      defectId: defect.defectId,
-      title: defect.title,
-      module: defect.module,
-      priority: defect.priority,
-      isNew: true
-    });
-    setSelectedId(defect.defectId);
-    setCreateOpen(false);
-    createForm.resetFields();
-    message.success(`已创建并关联缺陷 ${defect.defectId}`);
+    try {
+      const values = await createForm.validateFields();
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const id = `BUG-${now.getFullYear()}-${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}`;
+      const defect = {
+        defectId: id,
+        title: values.title.trim(),
+        module: values.module.trim(),
+        priority: values.priority,
+        status: '新建',
+        createdAt: now.toISOString()
+      };
+      await addDefect(defect);
+      await onChange({
+        defectId: defect.defectId,
+        title: defect.title,
+        module: defect.module,
+        priority: defect.priority,
+        isNew: true
+      });
+      setSelectedId(defect.defectId);
+      setCreateOpen(false);
+      createForm.resetFields();
+      message.success(`已创建并关联缺陷 ${defect.defectId}`);
+    } catch (error) {
+      if (error?.errorFields) {
+        return;
+      }
+      console.error(error);
+      message.error(error.message || '创建缺陷失败');
+    }
   };
 
   const linked = ticket?.linkedDefect;
-
-  return (
-    <Card
-      type="inner"
-      title={
-        <Space>
-          <LinkOutlined />
-          关联项目缺陷
-        </Space>
-      }
-      extra={
+  const content = linked ? (
+    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+      <Space wrap>
+        <Tag color="blue">{linked.defectId}</Tag>
+        <Tag color="geekblue">{linked.module}</Tag>
+        <Tag color="red">{linked.priority}</Tag>
+        {linked.isNew && <Tag color="success">本次新建</Tag>}
+      </Space>
+      <Typography.Text>{linked.title}</Typography.Text>
+      <Popconfirm
+        title="确认取消关联该缺陷？"
+        description="取消后需要重新选择或新建缺陷，才能继续流转二线支持。"
+        okText="确认取消"
+        cancelText="取消"
+        onConfirm={handleUnlink}
+        disabled={disabled}
+      >
         <Button
-          type="link"
-          icon={<PlusOutlined />}
-          onClick={() => setCreateOpen(true)}
+          danger
+          size="small"
+          icon={<DisconnectOutlined />}
           disabled={disabled}
         >
-          创建新缺陷
+          取消关联
         </Button>
-      }
+      </Popconfirm>
+    </Space>
+  ) : (
+    <Space style={{ width: '100%' }} wrap>
+      <Select
+        showSearch
+        allowClear
+        placeholder="输入缺陷ID/标题搜索"
+        style={{ minWidth: 360 }}
+        value={selectedId}
+        onChange={setSelectedId}
+        options={defectOptions}
+        filterOption={(input, option) =>
+          (option?.label || '').toLowerCase().includes(input.toLowerCase())
+        }
+        disabled={disabled}
+      />
+      <Popconfirm
+        title="确认关联该缺陷？"
+        description="关联后即可继续发起二线支持。"
+        okText="确认关联"
+        cancelText="取消"
+        onConfirm={handleLink}
+        disabled={disabled || !selectedId}
+      >
+        <Button type="primary" disabled={disabled || !selectedId}>
+          关联
+        </Button>
+      </Popconfirm>
+    </Space>
+  );
+
+  const createButton = (
+    <Button
+      type="link"
+      icon={<PlusOutlined />}
+      onClick={() => setCreateOpen(true)}
+      disabled={disabled}
     >
-      {linked ? (
-        <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          <Space wrap>
-            <Tag color="blue">{linked.defectId}</Tag>
-            <Tag color="geekblue">{linked.module}</Tag>
-            <Tag color="red">{linked.priority}</Tag>
-            {linked.isNew && <Tag color="success">本次新建</Tag>}
+      创建新缺陷
+    </Button>
+  );
+
+  return (
+    <>
+      {variant === 'embedded' ? (
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+            <Space>
+              <LinkOutlined />
+              <Typography.Text strong>关联项目缺陷</Typography.Text>
+            </Space>
+            {createButton}
           </Space>
-          <Typography.Text>{linked.title}</Typography.Text>
-          <Button
-            danger
-            size="small"
-            icon={<DisconnectOutlined />}
-            onClick={handleUnlink}
-            disabled={disabled}
-          >
-            取消关联
-          </Button>
+          {content}
         </Space>
       ) : (
-        <Space style={{ width: '100%' }} wrap>
-          <Select
-            showSearch
-            allowClear
-            placeholder="输入缺陷ID/标题搜索"
-            style={{ minWidth: 360 }}
-            value={selectedId}
-            onChange={setSelectedId}
-            options={defectOptions}
-            filterOption={(input, option) =>
-              (option?.label || '').toLowerCase().includes(input.toLowerCase())
-            }
-            disabled={disabled}
-          />
-          <Button type="primary" onClick={handleLink} disabled={disabled}>
-            关联
-          </Button>
-        </Space>
+        <Card
+          type="inner"
+          title={
+            <Space>
+              <LinkOutlined />
+              关联项目缺陷
+            </Space>
+          }
+          extra={createButton}
+        >
+          {content}
+        </Card>
       )}
 
       <Modal
@@ -189,6 +252,6 @@ export default function LinkDefectPanel({ ticket, onChange, disabled }) {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </>
   );
 }

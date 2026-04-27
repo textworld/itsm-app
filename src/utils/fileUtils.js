@@ -70,6 +70,16 @@ export async function buildAttachments(fileList, uploader) {
   const results = [];
 
   for (const fileItem of fileList) {
+    if (fileItem?.attachmentData && !fileItem.originFileObj) {
+      results.push(fileItem.attachmentData);
+      continue;
+    }
+
+    if (fileItem?.attachmentData?.uploadId) {
+      results.push(fileItem.attachmentData);
+      continue;
+    }
+
     const rawFile = fileItem.originFileObj || fileItem;
     if (!rawFile) continue;
 
@@ -86,4 +96,48 @@ export async function buildAttachments(fileList, uploader) {
   }
 
   return results;
+}
+
+export function mapAttachmentsToUploadFileList(attachments = []) {
+  return attachments.map((attachment) => ({
+    uid: attachment.id || attachment.uploadId,
+    name: attachment.name,
+    status: 'done',
+    type: attachment.type,
+    size: attachment.size,
+    url: attachment.url || attachment.base64,
+    thumbUrl: attachment.url || attachment.base64,
+    base64: attachment.base64,
+    attachmentData: attachment
+  }));
+}
+
+export function normalizeUploadedAttachment(file, uploader) {
+  return {
+    id: file.uploadId,
+    uploadId: file.uploadId,
+    name: file.name,
+    type: file.type || '',
+    size: file.size || 0,
+    url: file.url,
+    uploadedAt: file.uploadedAt || new Date().toISOString(),
+    uploader: file.uploader || uploader?.name || uploader?.id || ''
+  };
+}
+
+export async function uploadAttachmentFile(file, uploader) {
+  const form = new FormData();
+  form.append('file', file);
+
+  const response = await fetch('/api/uploads', {
+    method: 'POST',
+    body: form
+  });
+  const payload = await response.json();
+
+  if (!response.ok || !payload?.ok || !payload?.file) {
+    throw new Error(payload?.reason || '文件上传失败');
+  }
+
+  return normalizeUploadedAttachment(payload.file, uploader);
 }

@@ -1,6 +1,9 @@
+'use client';
+
 import React, { useEffect, useMemo, useState } from 'react';
-import { Table, Typography, Button, Tag, Space, Badge } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { Table, Typography, Button, Tag, Space, Badge, Dropdown, App as AntdApp } from 'antd';
+import { MoreOutlined } from '@ant-design/icons';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
 import StatusTag from '../common/StatusTag.jsx';
@@ -22,16 +25,65 @@ import {
   shouldUseSecondRefresh,
   sortTicketsByPriorityAndCreatedAt
 } from '../../utils/sla.js';
+import {
+  getAssigneeColumnTitle,
+  getAssigneeDisplay,
+  getTicketNumberDisplay,
+  getTitleColumnWidth,
+  getTitleColumnTitle,
+  shouldShowStatusSubLabel,
+  shouldShowSlaColumn
+} from '../../utils/ticketListDisplay.js';
+import { getTicketListActions } from '../../utils/ticketListActions.js';
+import { shortId } from '../../utils/idGenerator.js';
 
 export default function TicketTable({ dataSource = [], showRequester = true }) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { user } = useAuth();
-  const { messageReads } = useTickets();
+  const { messageReads, dispatchEvent, addMessage } = useTickets();
+  const { message, modal } = AntdApp.useApp();
   const sortedDataSource = useMemo(
     () => sortTicketsByPriorityAndCreatedAt(dataSource),
     [dataSource]
   );
   const { now, pulse } = useSlaClock(sortedDataSource);
+  const showSlaColumn = shouldShowSlaColumn(user);
+
+  const handleTicketAction = (record, action) => {
+    if (!user || action.disabled) return;
+
+    modal.confirm({
+      title: action.confirmTitle,
+      content: action.confirmDescription,
+      okText: action.okText || '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        const result = await dispatchEvent(record.id, action.event, action.payload || {}, user);
+        if (!result.ok) {
+          message.error(result.reason || `${action.label}失败`);
+          return;
+        }
+
+        const targetTicketId = result.ticket?.id || record.id;
+        if (action.systemMessage) {
+          await addMessage(targetTicketId, {
+            id: shortId('m'),
+            authorId: user.id,
+            authorName: user.name,
+            authorRole: user.role,
+            content: action.systemMessage,
+            attachments: [],
+            createdAt: new Date().toISOString()
+          });
+        }
+
+        message.success(action.successMessage || `${action.label}成功`);
+        if (action.key === 'accept') {
+          router.push(`/tickets/${targetTicketId}`);
+        }
+      }
+    });
+  };
 
   const columns = [
     {
@@ -41,8 +93,8 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
       fixed: 'left',
       render: (id, record) => (
         <Space size={8} wrap>
-          <Button type="link" style={{ padding: 0 }} onClick={() => navigate(`/tickets/${id}`)}>
-            {id}
+          <Button type="link" style={{ padding: 0 }} onClick={() => router.push(`/tickets/${id}`)}>
+            {getTicketNumberDisplay(record)}
           </Button>
           <UnreadMessageBadge
             ticket={record}
@@ -54,11 +106,12 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
       )
     },
     {
-      title: '标题',
+      title: getTitleColumnTitle(user),
+      width: getTitleColumnWidth(user),
       dataIndex: 'title',
       ellipsis: true,
       render: (text, record) => (
-        <Typography.Link onClick={() => navigate(`/tickets/${record.id}`)}>
+        <Typography.Link onClick={() => router.push(`/tickets/${record.id}`)}>
           {text}
         </Typography.Link>
       )
@@ -82,28 +135,32 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
       width: 110,
       render: (_, record) => <VisibleStatus ticket={record} user={user} />
     },
-    {
-      title: 'SLA剩余',
-      dataIndex: 'expiresAt',
-      width: 170,
-      render: (_, record) => (
-        <Space direction="vertical" size={0}>
-          <Typography.Text
-            className={[
-              'sla-remaining-text',
-              pulse ? 'sla-remaining-refreshing' : '',
-              isTicketOverdue(record, now) ? 'sla-remaining-overdue' : '',
-              record.priority === PRIORITIES.P1 ? 'sla-remaining-p1' : ''
-            ].filter(Boolean).join(' ')}
-          >
-            {formatTicketRemaining(record, now)}
-          </Typography.Text>
-          <Typography.Text type="secondary" className="sla-expire-time">
-            到期：{formatDateTime(getTicketExpiresAt(record))}
-          </Typography.Text>
-        </Space>
-      )
-    },
+    ...(showSlaColumn
+      ? [
+          {
+            title: 'SLA剩余',
+            dataIndex: 'expiresAt',
+            width: 170,
+            render: (_, record) => (
+              <Space direction="vertical" size={0}>
+                <Typography.Text
+                  className={[
+                    'sla-remaining-text',
+                    pulse ? 'sla-remaining-refreshing' : '',
+                    isTicketOverdue(record, now) ? 'sla-remaining-overdue' : '',
+                    record.priority === PRIORITIES.P1 ? 'sla-remaining-p1' : ''
+                  ].filter(Boolean).join(' ')}
+                >
+                  {formatTicketRemaining(record, now)}
+                </Typography.Text>
+                <Typography.Text type="secondary" className="sla-expire-time">
+                  到期：{formatDateTime(getTicketExpiresAt(record))}
+                </Typography.Text>
+              </Space>
+            )
+          }
+        ]
+      : []),
     ...(showRequester
       ? [
           {
@@ -114,14 +171,9 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
         ]
       : []),
     {
-      title: '处理人',
+      title: getAssigneeColumnTitle(user),
       width: 200,
-      render: (_, record) => {
-        const parts = [];
-        if (record.assigneeL1Name) parts.push(`一线: ${record.assigneeL1Name}`);
-        if (record.assigneeL2Name) parts.push(`二线: ${record.assigneeL2Name}`);
-        return parts.join(' / ') || '-';
-      }
+      render: (_, record) => getAssigneeDisplay(record, user)
     },
     {
       title: '创建时间',
@@ -139,12 +191,45 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
     {
       title: '操作',
       fixed: 'right',
-      width: 100,
-      render: (_, record) => (
-        <Button type="link" onClick={() => navigate(`/tickets/${record.id}`)}>
-          查看/处理
-        </Button>
-      )
+      width: 200,
+      render: (_, record) => {
+        const ticketActions = getTicketListActions(record, user);
+        const directActions = ticketActions.slice(0, 2);
+        const overflowActions = ticketActions.slice(2);
+
+        return (
+          <Space size={2} wrap>
+            <Button type="link" size="small" onClick={() => router.push(`/tickets/${record.id}`)}>
+              查看
+            </Button>
+            {directActions.map((action) => (
+              <Button
+                key={action.key}
+                type="link"
+                size="small"
+                disabled={action.disabled}
+                onClick={() => handleTicketAction(record, action)}
+              >
+                {action.label}
+              </Button>
+            ))}
+            {overflowActions.length > 0 && (
+              <Dropdown
+                menu={{
+                  items: overflowActions.map((action) => ({
+                    key: action.key,
+                    label: action.label,
+                    disabled: action.disabled,
+                    onClick: () => handleTicketAction(record, action)
+                  }))
+                }}
+              >
+                <Button type="text" size="small" icon={<MoreOutlined />} />
+              </Dropdown>
+            )}
+          </Space>
+        );
+      }
     }
   ];
 
@@ -175,7 +260,10 @@ function getVisibleStatus(ticket, user) {
 
 function VisibleStatus({ ticket, user }) {
   const status = getVisibleStatus(ticket, user);
-  const subStatus = status === STATUS.PROCESSING ? getProcessingSubStatus(ticket) : null;
+  const subStatus =
+    shouldShowStatusSubLabel(user) && status === STATUS.PROCESSING
+      ? getProcessingSubStatus(ticket)
+      : null;
   return (
     <Space direction="vertical" size={0}>
       <StatusTag status={status} />

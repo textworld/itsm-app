@@ -30,7 +30,7 @@ export default function AttachmentList({ attachments = [], compact = false }) {
             actions={[
               <a
                 key="download"
-                href={attachment.base64}
+                href={attachment.url || attachment.base64}
                 download={attachment.name}
                 style={{ whiteSpace: 'nowrap' }}
               >
@@ -46,7 +46,7 @@ export default function AttachmentList({ attachments = [], compact = false }) {
                   className="attachment-thumb"
                   width={compact ? 44 : 56}
                   height={compact ? 44 : 56}
-                  src={attachment.base64}
+                  src={attachment.url || attachment.base64}
                   alt={attachment.name}
                   preview={{ mask: '预览' }}
                 />

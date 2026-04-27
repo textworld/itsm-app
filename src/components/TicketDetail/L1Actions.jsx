@@ -3,8 +3,8 @@ import {
   Card,
   Space,
   Button,
+  Popconfirm,
   Typography,
-  Input,
   Alert,
   Divider,
   Tag,
@@ -14,10 +14,7 @@ import {
   CheckOutlined,
   RollbackOutlined,
   FlagOutlined,
-  FileTextOutlined,
-  CloudUploadOutlined,
-  SendOutlined,
-  EditOutlined
+  SendOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
@@ -29,7 +26,6 @@ import {
 } from '../../constants/ticketStatus.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import DefectTagModal from './DefectTagModal.jsx';
-import LinkDefectPanel from './LinkDefectPanel.jsx';
 import { generateSummary } from '../../utils/summaryGenerator.js';
 import { shortId } from '../../utils/idGenerator.js';
 
@@ -42,7 +38,7 @@ import { shortId } from '../../utils/idGenerator.js';
  */
 export default function L1Actions({ ticket }) {
   const { user } = useAuth();
-  const { dispatchEvent, updateTicket, addMessage } = useTickets();
+  const { dispatchEvent, addMessage } = useTickets();
   const { message } = AntdApp.useApp();
   const [tagOpen, setTagOpen] = useState(false);
   const [editSummary, setEditSummary] = useState(ticket.summary || '');
@@ -52,8 +48,8 @@ export default function L1Actions({ ticket }) {
     setEditSummary(ticket.summary || '');
   }, [ticket.id, ticket.summary]);
 
-  const pushSystemMessage = (content) => {
-    addMessage(ticket.id, {
+  const pushSystemMessage = async (content) => {
+    await addMessage(ticket.id, {
       id: shortId('m'),
       authorId: user.id,
       authorName: user.name,
@@ -65,8 +61,8 @@ export default function L1Actions({ ticket }) {
   };
 
   // ---------- 受理 ----------
-  const handleAccept = () => {
-    const result = dispatchEvent(
+  const handleAccept = async () => {
+    const result = await dispatchEvent(
       ticket.id,
       EVENTS.ACCEPT,
       {
@@ -80,12 +76,12 @@ export default function L1Actions({ ticket }) {
       message.error(result.reason || '受理失败');
       return;
     }
-    pushSystemMessage(`【系统】一线技术支持 ${user.name} 已受理本工单。`);
+    await pushSystemMessage(`【系统】一线技术支持 ${user.name} 已受理本工单。`);
     message.success('已受理，进入处理中');
   };
 
-  const handleReturnForInfo = () => {
-    const result = dispatchEvent(
+  const handleReturnForInfo = async () => {
+    const result = await dispatchEvent(
       ticket.id,
       EVENTS.RETURN_FOR_INFO,
       {
@@ -97,38 +93,50 @@ export default function L1Actions({ ticket }) {
       message.error(result.reason || '退回失败');
       return;
     }
-    pushSystemMessage('【系统】一线技术支持已退回工单，请提单人补充信息后再继续处理。');
+    await pushSystemMessage('【系统】一线技术支持已退回工单，请提单人补充信息后再继续处理。');
     message.success('已退回提单人，工单进入信息补充');
   };
 
   // ---------- 打标为缺陷 ----------
-  const handleTagOk = (values) => {
-    updateTicket(ticket.id, (t) => ({
-      ...t,
-      defectTag: {
-        type: values.type,
-        description: values.description,
-        taggedAt: new Date().toISOString(),
-        taggedBy: user.name
-      },
-      updatedAt: new Date().toISOString()
-    }));
-    setTagOpen(false);
-    message.success('已标记为缺陷，请继续关联项目缺陷');
+  const handleTagOk = async (values) => {
+    try {
+      const result = await dispatchEvent(ticket.id, EVENTS.TAG_DEFECT, {
+        defectTag: {
+          type: values.type,
+          description: values.description,
+          taggedAt: new Date().toISOString(),
+          taggedBy: user.name
+        }
+      });
+      if (!result.ok) {
+        throw new Error(result.reason || '缺陷打标失败');
+      }
+      setTagOpen(false);
+      message.success('已保存缺陷打标');
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '缺陷打标失败');
+    }
   };
 
   // ---------- 关联/取消关联缺陷 ----------
-  const handleLinkChange = (linked) => {
-    updateTicket(ticket.id, (t) => ({
-      ...t,
-      linkedDefect: linked,
-      updatedAt: new Date().toISOString()
-    }));
+  const handleLinkChange = async (linked) => {
+    try {
+      const result = await dispatchEvent(ticket.id, EVENTS.UPDATE_LINKED_DEFECT, {
+        linkedDefect: linked
+      });
+      if (!result.ok) {
+        throw new Error(result.reason || '更新关联缺陷失败');
+      }
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '更新关联缺陷失败');
+    }
   };
 
   // ---------- 流转给二线 ----------
-  const handleFlowToL2 = () => {
-    const result = dispatchEvent(
+  const handleFlowToL2 = async () => {
+    const result = await dispatchEvent(
       ticket.id,
       EVENTS.REQUEST_L2_SUPPORT,
       {
@@ -143,44 +151,69 @@ export default function L1Actions({ ticket }) {
       message.error(result.reason || '流转失败：需要先完成打标 + 关联缺陷');
       return;
     }
-    pushSystemMessage(
+    await pushSystemMessage(
       `【系统】已将工单标记为【${ticket.defectTag?.type}】缺陷并关联到 ${ticket.linkedDefect?.defectId}，请求二线运维支持。`
     );
     message.success('已请求二线支持，工单仍为处理中');
   };
 
   // ---------- 生成 / 修改 / 同步 / 提交复核 ----------
-  const handleGenSummary = () => {
+  const handleGenSummary = async () => {
     const text = generateSummary(ticket);
     setEditSummary(text);
-    updateTicket(ticket.id, { summary: text, summarySyncedToCorpus: false });
-    message.success('工单总结已自动生成，您可以进一步修改');
+    try {
+      const result = await dispatchEvent(ticket.id, EVENTS.UPDATE_SUMMARY, {
+        summary: text,
+        summarySyncedToCorpus: false
+      });
+      if (!result.ok) {
+        throw new Error(result.reason || '生成工单总结失败');
+      }
+      message.success('工单总结已自动生成，您可以进一步修改');
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '生成工单总结失败');
+    }
   };
 
-  const handleSaveSummary = () => {
-    updateTicket(ticket.id, {
-      summary: editSummary,
-      summarySyncedToCorpus: false,
-      updatedAt: new Date().toISOString()
-    });
-    message.success('总结已保存（尚未同步语料库）');
+  const handleSaveSummary = async () => {
+    try {
+      const result = await dispatchEvent(ticket.id, EVENTS.UPDATE_SUMMARY, {
+        summary: editSummary,
+        summarySyncedToCorpus: false
+      });
+      if (!result.ok) {
+        throw new Error(result.reason || '保存总结失败');
+      }
+      message.success('总结已保存（尚未同步语料库）');
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '保存总结失败');
+    }
   };
 
-  const handleSyncCorpus = () => {
+  const handleSyncCorpus = async () => {
     if (!editSummary.trim()) {
       message.warning('请先生成或填写工单总结');
       return;
     }
-    updateTicket(ticket.id, {
-      summary: editSummary,
-      summarySyncedToCorpus: true,
-      updatedAt: new Date().toISOString()
-    });
-    message.success('已同步至大模型语料库');
+    try {
+      const result = await dispatchEvent(ticket.id, EVENTS.UPDATE_SUMMARY, {
+        summary: editSummary,
+        summarySyncedToCorpus: true
+      });
+      if (!result.ok) {
+        throw new Error(result.reason || '同步语料库失败');
+      }
+      message.success('已同步至大模型语料库');
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '同步语料库失败');
+    }
   };
 
-  const handleSubmitReview = () => {
-    const result = dispatchEvent(
+  const handleSubmitReview = async () => {
+    const result = await dispatchEvent(
       ticket.id,
       EVENTS.INITIATE_CLOSURE,
       {
@@ -194,7 +227,7 @@ export default function L1Actions({ ticket }) {
       message.error(result.reason || '提交复核失败');
       return;
     }
-    pushSystemMessage('【系统】一线已发起办结，请提单人确认。');
+    await pushSystemMessage('【系统】一线已发起办结，请提单人确认。');
     message.success('已发起办结，工单进入待确认');
   };
 
@@ -211,9 +244,17 @@ export default function L1Actions({ ticket }) {
           description="受理后将由您作为一线处理人继续跟进。"
           style={{ marginBottom: 16 }}
         />
-        <Button type="primary" icon={<CheckOutlined />} onClick={handleAccept}>
-          受理工单
-        </Button>
+        <Popconfirm
+          title="确认受理该工单？"
+          description="受理后您将成为一线处理人，工单会进入处理中。"
+          okText="确认受理"
+          cancelText="取消"
+          onConfirm={handleAccept}
+        >
+          <Button type="primary" icon={<CheckOutlined />}>
+            受理工单
+          </Button>
+        </Popconfirm>
       </Card>
     );
   }
@@ -247,15 +288,18 @@ export default function L1Actions({ ticket }) {
             )}
           </Space>
 
-          <LinkDefectPanel
-            ticket={ticket}
-            onChange={handleLinkChange}
-          />
-
           <Divider />
-          <Button icon={<RollbackOutlined />} onClick={handleReturnForInfo}>
-            退回提单人-信息补充
-          </Button>
+          <Popconfirm
+            title="确认退回提单人补充信息？"
+            description="退回后工单会进入信息补充状态，等待提单人修改后再继续处理。"
+            okText="确认退回"
+            cancelText="取消"
+            onConfirm={handleReturnForInfo}
+          >
+            <Button icon={<RollbackOutlined />}>
+              退回提单人-信息补充
+            </Button>
+          </Popconfirm>
 
           <Divider />
           <Space direction="vertical" size={4} style={{ width: '100%' }}>
@@ -263,20 +307,37 @@ export default function L1Actions({ ticket }) {
             <Typography.Text type="secondary">
               若本次问题已处理完毕，可生成/维护工单总结后发起办结，工单将进入提单人待确认。
             </Typography.Text>
-            <Button onClick={handleSubmitReview} disabled={!editSummary.trim()}>
-              发起办结
-            </Button>
+            <Popconfirm
+              title="确认发起办结？"
+              description="发起后工单会进入提单人待确认，请确认总结内容已准备好。"
+              okText="确认发起"
+              cancelText="取消"
+              onConfirm={handleSubmitReview}
+              disabled={!editSummary.trim()}
+            >
+              <Button disabled={!editSummary.trim()}>
+                发起办结
+              </Button>
+            </Popconfirm>
           </Space>
-
+	
           <Divider />
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
+          <Popconfirm
+            title="确认发起二线支持？"
+            description="发起后工单会保留处理中状态，并切换到二线排查。"
+            okText="确认发起"
+            cancelText="取消"
+            onConfirm={handleFlowToL2}
             disabled={!readyToFlow || isL2Investigation}
-            onClick={handleFlowToL2}
           >
-            二线支持
-          </Button>
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              disabled={!readyToFlow || isL2Investigation}
+            >
+              二线支持
+            </Button>
+          </Popconfirm>
           {isL2Investigation && (
             <Typography.Text type="secondary">
               当前子状态为「二线排查」，请等待二线运维触发「一线复核」。
@@ -291,7 +352,9 @@ export default function L1Actions({ ticket }) {
 
         <DefectTagModal
           open={tagOpen}
+          ticket={ticket}
           initialValue={ticket.defectTag}
+          onLinkChange={handleLinkChange}
           onOk={handleTagOk}
           onCancel={() => setTagOpen(false)}
         />

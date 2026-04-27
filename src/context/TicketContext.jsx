@@ -1,3 +1,5 @@
+'use client';
+
 import React, {
   createContext,
   useCallback,
@@ -6,146 +8,224 @@ import React, {
   useMemo,
   useState
 } from 'react';
-import {
-  bootstrapStorage,
-  exportTicketsAsJson,
-  loadDefects,
-  loadMessageReads,
-  loadTickets,
-  resetAllData,
-  saveDefects,
-  saveMessageReads,
-  saveTickets
-} from '../utils/storage.js';
-import {
-  applyTransition as smApplyTransition,
-  canTransition as smCanTransition
-} from '../state-machine/ticketStateMachine.js';
+import { useAuth } from './AuthContext.jsx';
+import { EVENTS } from '../state-machine/ticketStateMachine.js';
 
 const TicketContext = createContext(null);
 
-/**
- * TicketProvider
- * - 维护内存中的工单与缺陷池，任何 mutate 操作都会同步到 localStorage
- * - 暴露 addTicket / updateTicket / addMessage / dispatchEvent 等常用方法
- * - 暴露 resetData / exportData 供列表页 DataActionBar 调用
- */
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...options,
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...options.headers
+    }
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  const data = contentType.includes('application/json') ? await response.json() : null;
+  return { response, data };
+}
+
+function replaceTicketInList(list, ticket, previousId = ticket.id) {
+  const replacedIds = new Set([ticket.id, previousId].filter(Boolean));
+  const nextList = list.filter((item) => !replacedIds.has(item.id));
+  return [ticket, ...nextList];
+}
+
 export function TicketProvider({ children }) {
-  // 启动时幂等初始化（若 key 不存在则写入 initialTickets.json）
+  const { user, initialized: authInitialized } = useAuth();
   const [initialized, setInitialized] = useState(false);
-  const [tickets, setTicketsState] = useState([]);
-  const [defects, setDefectsState] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [defects, setDefects] = useState([]);
   const [messageReads, setMessageReads] = useState({});
 
+  const refreshData = useCallback(async () => {
+    if (!user) {
+      setTickets([]);
+      setDefects([]);
+      setMessageReads({});
+      return {
+        tickets: [],
+        defects: [],
+        messageReads: {}
+      };
+    }
+
+    const { response, data } = await requestJson('/api/data');
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.reason || '加载工单数据失败');
+    }
+
+    setTickets(data.tickets || []);
+    setDefects(data.defects || []);
+    setMessageReads(data.messageReads || {});
+    return data;
+  }, [user]);
+
   useEffect(() => {
-    bootstrapStorage();
-    setTicketsState(loadTickets());
-    setDefectsState(loadDefects());
-    setMessageReads(loadMessageReads());
-    setInitialized(true);
-  }, []);
+    let active = true;
 
-  // 自动持久化
-  useEffect(() => {
-    if (!initialized) return;
-    saveTickets(tickets);
-  }, [tickets, initialized]);
+    if (!authInitialized) {
+      return undefined;
+    }
 
-  useEffect(() => {
-    if (!initialized) return;
-    saveDefects(defects);
-  }, [defects, initialized]);
+    setInitialized(false);
 
-  useEffect(() => {
-    if (!initialized) return;
-    saveMessageReads(messageReads);
-  }, [messageReads, initialized]);
-
-  /** 新增工单 */
-  const addTicket = useCallback((ticket) => {
-    setTicketsState((prev) => [ticket, ...prev]);
-  }, []);
-
-  /** 按 id 更新工单（传入新工单对象或更新函数） */
-  const updateTicket = useCallback((id, updaterOrTicket) => {
-    setTicketsState((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t;
-        return typeof updaterOrTicket === 'function'
-          ? updaterOrTicket(t)
-          : { ...t, ...updaterOrTicket };
-      })
-    );
-  }, []);
-
-  /**
-   * 触发工单状态机事件
-   * @param {string} ticketId
-   * @param {string} event
-   * @param {object} payload  业务字段(将并入工单)
-   * @param {object} user     操作用户 { id, name, role }
-   * @returns {{ok: boolean, reason?: string, ticket?: object}}
-   */
-  const dispatchEvent = useCallback((ticketId, event, payload = {}, user) => {
-    let result = { ok: false, reason: '工单不存在' };
-    setTicketsState((prev) =>
-      prev.map((t) => {
-        if (t.id !== ticketId) return t;
-        const check = smCanTransition(t, event, user, payload);
-        if (!check.ok) {
-          result = { ok: false, reason: check.reason };
-          return t;
+    (async () => {
+      try {
+        if (!user) {
+          if (!active) return;
+          setTickets([]);
+          setDefects([]);
+          setMessageReads({});
+          return;
         }
-        try {
-          const next = smApplyTransition(t, event, payload, user);
-          result = { ok: true, ticket: next };
-          return next;
-        } catch (err) {
-          result = { ok: false, reason: err.message };
-          return t;
+
+        const data = await refreshData();
+        if (!active) return;
+        setTickets(data.tickets || []);
+        setDefects(data.defects || []);
+        setMessageReads(data.messageReads || {});
+      } catch (error) {
+        if (active) {
+          console.error(error);
+          setTickets([]);
+          setDefects([]);
+          setMessageReads({});
         }
-      })
-    );
-    return result;
+      } finally {
+        if (active) {
+          setInitialized(true);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [authInitialized, refreshData, user]);
+
+  const addTicket = useCallback(async (ticket, event = EVENTS.SUBMIT) => {
+    const { response, data } = await requestJson('/api/tickets', {
+      method: 'POST',
+      body: JSON.stringify({ ticket, event })
+    });
+
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.reason || (event === EVENTS.CREATE_DRAFT ? '暂存草稿失败' : '新建工单失败'));
+    }
+
+    setTickets((prev) => replaceTicketInList(prev, data.ticket));
+    return data.ticket;
   }, []);
 
-  /** 追加留言（不改变状态） */
-  const addMessage = useCallback(
-    (ticketId, message) => {
-      updateTicket(ticketId, (t) => ({
-        ...t,
-        messages: [...(t.messages || []), message],
-        updatedAt: new Date().toISOString()
-      }));
-    },
-    [updateTicket]
+  const createDraft = useCallback(
+    (ticket) => addTicket(ticket, EVENTS.CREATE_DRAFT),
+    [addTicket]
   );
 
-  const markMessagesRead = useCallback((ticketId, userId, readAt = new Date().toISOString()) => {
+  const updateTicket = useCallback(async () => {
+    throw new Error('请使用 dispatchEvent 通过状态机事件修改工单');
+  }, []);
+
+  const dispatchEvent = useCallback(async (ticketId, event, payload = {}) => {
+    try {
+      const { response, data } = await requestJson(`/api/tickets/${ticketId}/dispatch`, {
+        method: 'POST',
+        body: JSON.stringify({ event, payload })
+      });
+
+      if (!response.ok || data?.ok === false) {
+        return { ok: false, reason: data?.reason || '状态流转失败' };
+      }
+
+      setTickets((prev) => replaceTicketInList(prev, data.ticket, ticketId));
+      return { ok: true, ticket: data.ticket };
+    } catch (error) {
+      console.error(error);
+      return { ok: false, reason: error.message || '状态流转失败' };
+    }
+  }, []);
+
+  const addMessage = useCallback(async (ticketId, message) => {
+    const { response, data } = await requestJson(`/api/tickets/${ticketId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ message })
+    });
+
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.reason || '留言发送失败');
+    }
+
+    setTickets((prev) => replaceTicketInList(prev, data.ticket));
+    return data.ticket;
+  }, []);
+
+  const markMessagesRead = useCallback(async (ticketId, userId, readAt = new Date().toISOString()) => {
     if (!ticketId || !userId) return;
-    const key = `${userId}:${ticketId}`;
+
     setMessageReads((prev) => ({
       ...prev,
-      [key]: readAt
+      [`${userId}:${ticketId}`]: readAt
     }));
+
+    try {
+      await requestJson('/api/message-reads', {
+        method: 'POST',
+        body: JSON.stringify({ ticketId, readAt })
+      });
+    } catch (error) {
+      console.error(error);
+    }
   }, []);
 
-  /** 新建缺陷并入库，返回新缺陷对象 */
-  const addDefect = useCallback((defect) => {
-    setDefectsState((prev) => [defect, ...prev]);
-    return defect;
+  const addDefect = useCallback(async (defect) => {
+    const { response, data } = await requestJson('/api/defects', {
+      method: 'POST',
+      body: JSON.stringify({ defect })
+    });
+
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.reason || '创建缺陷失败');
+    }
+
+    setDefects((prev) => [data.defect, ...prev.filter((item) => item.defectId !== data.defect.defectId)]);
+    return data.defect;
   }, []);
 
-  /** 重置工单与缺陷为初始 json 数据 */
-  const resetData = useCallback(() => {
-    resetAllData();
-    setTicketsState(loadTickets());
-    setDefectsState(loadDefects());
-  }, []);
+  const resetData = useCallback(async () => {
+    const { response, data } = await requestJson('/api/reset', {
+      method: 'POST'
+    });
 
-  /** 导出工单数据为 json 文件 */
-  const exportData = useCallback(() => {
-    return exportTicketsAsJson();
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.reason || '初始化数据失败');
+    }
+
+    await refreshData();
+  }, [refreshData]);
+
+  const exportData = useCallback(async () => {
+    const response = await fetch('/api/export', { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('导出失败');
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('content-disposition') || '';
+    const matched = disposition.match(/filename="([^"]+)"/);
+    const filename = matched?.[1] || 'itsm-tickets-export.json';
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    return filename;
   }, []);
 
   const value = useMemo(
@@ -155,13 +235,15 @@ export function TicketProvider({ children }) {
       defects,
       messageReads,
       addTicket,
+      createDraft,
       updateTicket,
       addMessage,
       markMessagesRead,
       addDefect,
       dispatchEvent,
       resetData,
-      exportData
+      exportData,
+      refreshData
     }),
     [
       initialized,
@@ -169,13 +251,15 @@ export function TicketProvider({ children }) {
       defects,
       messageReads,
       addTicket,
+      createDraft,
       updateTicket,
       addMessage,
       markMessagesRead,
       addDefect,
       dispatchEvent,
       resetData,
-      exportData
+      exportData,
+      refreshData
     ]
   );
 

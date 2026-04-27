@@ -1,8 +1,10 @@
 import React from 'react';
-import { Card, Descriptions, Typography, Timeline, Space, Divider } from 'antd';
+import { Button, Card, Descriptions, Typography, Timeline, Space, Divider, Tag } from 'antd';
 import StatusTag from '../common/StatusTag.jsx';
 import AttachmentList from '../common/AttachmentList.jsx';
 import RichContentPreview from '../common/RichContentPreview.jsx';
+import DescriptionHistoryModal from './DescriptionHistoryModal.jsx';
+import DraftTicketEditButton from './DraftTicketEditButton.jsx';
 import {
   PROCESSING_SUB_STATUS_LABELS,
   STATUS,
@@ -12,14 +14,21 @@ import {
 } from '../../constants/ticketStatus.js';
 import { TOOL_TYPE_LABELS } from '../../constants/toolTypes.js';
 import { PRIORITY_LABELS } from '../../constants/priorities.js';
-import { ROLE_LABELS } from '../../constants/roles.js';
+import { ROLE_LABELS, ROLES } from '../../constants/roles.js';
 import { formatDateTime } from '../../utils/format.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 export default function TicketInfoCard({ ticket }) {
+  const { user } = useAuth();
+  const [historyOpen, setHistoryOpen] = React.useState(false);
+
   if (!ticket) return null;
 
   return (
-    <Card title="工单基本信息">
+    <Card
+      title="工单基本信息"
+      extra={<DraftTicketEditButton ticket={ticket} />}
+    >
       <Descriptions column={2} size="small" bordered>
         <Descriptions.Item label="工单编号">{ticket.id}</Descriptions.Item>
         <Descriptions.Item label="提单人状态">
@@ -64,9 +73,11 @@ export default function TicketInfoCard({ ticket }) {
         <Descriptions.Item label="一线处理人">
           {ticket.assigneeL1Name || '-'}
         </Descriptions.Item>
-        <Descriptions.Item label="二线处理人">
-          {ticket.assigneeL2Name || '-'}
-        </Descriptions.Item>
+        {user?.role !== ROLES.REQUESTER && (
+          <Descriptions.Item label="二线处理人">
+            {ticket.assigneeL2Name || '-'}
+          </Descriptions.Item>
+        )}
         <Descriptions.Item label="创建时间">
           {formatDateTime(ticket.createdAt)}
         </Descriptions.Item>
@@ -76,14 +87,28 @@ export default function TicketInfoCard({ ticket }) {
       </Descriptions>
 
       <Divider />
-      <Typography.Title level={5}>问题描述</Typography.Title>
+      <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
+        <Space>
+          <Typography.Title level={5} style={{ margin: 0 }}>问题描述</Typography.Title>
+          <Tag color="blue">历史版本 {ticket.descriptionHistory?.length || 1}</Tag>
+        </Space>
+        <Button size="small" onClick={() => setHistoryOpen(true)}>
+          查看历史记录
+        </Button>
+      </Space>
       <div className="ticket-description-section">
         <RichContentPreview
           className="ticket-rich-description"
+          doc={ticket.descriptionDoc}
           html={ticket.descriptionHtml}
           text={ticket.description}
         />
       </div>
+      <DescriptionHistoryModal
+        ticket={ticket}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+      />
 
       <Divider />
       <Typography.Title level={5}>附件</Typography.Title>
@@ -152,12 +177,42 @@ export default function TicketInfoCard({ ticket }) {
         </>
       )}
 
+      {ticket.aiResolved && (
+        <>
+          <Divider />
+          <Typography.Title level={5}>大模型解决</Typography.Title>
+          <Descriptions column={1} size="small" bordered>
+            <Descriptions.Item label="解决方式">
+              <Tag color="purple">大模型解决</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="解决时间">
+              {formatDateTime(ticket.aiResolution?.resolvedAt || ticket.closedAt)}
+            </Descriptions.Item>
+            <Descriptions.Item label="大模型答复">
+              <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+                {ticket.aiResolution?.answer || '-'}
+              </Typography.Paragraph>
+            </Descriptions.Item>
+          </Descriptions>
+        </>
+      )}
+
       {ticket.rejectionReason && (
         <>
           <Divider />
           <Typography.Title level={5}>最近驳回原因</Typography.Title>
           <Typography.Paragraph type="danger" style={{ whiteSpace: 'pre-wrap' }}>
             {ticket.rejectionReason}
+          </Typography.Paragraph>
+        </>
+      )}
+
+      {ticket.withdrawalReason && (
+        <>
+          <Divider />
+          <Typography.Title level={5}>最近撤回说明</Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ whiteSpace: 'pre-wrap' }}>
+            {ticket.withdrawalReason}
           </Typography.Paragraph>
         </>
       )}

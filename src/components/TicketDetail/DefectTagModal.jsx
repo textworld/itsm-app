@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Form, Input, Select } from 'antd';
+import { Divider, Form, Input, Modal, Select } from 'antd';
+import LinkDefectPanel from './LinkDefectPanel.jsx';
 
 const DEFECT_TYPE_OPTIONS = [
   { label: '功能缺陷', value: '功能缺陷' },
@@ -13,7 +14,14 @@ const DEFECT_TYPE_OPTIONS = [
  * "打标为缺陷"弹窗
  * 必填：缺陷类型、缺陷描述
  */
-export default function DefectTagModal({ open, initialValue, onOk, onCancel }) {
+export default function DefectTagModal({
+  open,
+  ticket,
+  initialValue,
+  onOk,
+  onCancel,
+  onLinkChange
+}) {
   const [form] = Form.useForm();
 
   React.useEffect(() => {
@@ -40,6 +48,7 @@ export default function DefectTagModal({ open, initialValue, onOk, onCancel }) {
       onCancel={onCancel}
       okText="保存打标"
       cancelText="取消"
+      width={720}
       destroyOnClose
     >
       <Form form={form} layout="vertical">
@@ -66,6 +75,13 @@ export default function DefectTagModal({ open, initialValue, onOk, onCancel }) {
           />
         </Form.Item>
       </Form>
+
+      <Divider style={{ margin: '8px 0 16px' }} />
+      <LinkDefectPanel
+        ticket={ticket}
+        onChange={onLinkChange}
+        variant="embedded"
+      />
     </Modal>
   );
 }

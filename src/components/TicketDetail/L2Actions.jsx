@@ -4,6 +4,7 @@ import {
   Space,
   Input,
   Button,
+  Popconfirm,
   Alert,
   Typography,
   App as AntdApp
@@ -47,12 +48,12 @@ export default function L2Actions({ ticket }) {
     );
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!conclusion.trim()) {
       message.warning('请填写排查结论');
       return;
     }
-    const result = dispatchEvent(
+    const result = await dispatchEvent(
       ticket.id,
       EVENTS.L1_REVIEW,
       {
@@ -67,7 +68,7 @@ export default function L2Actions({ ticket }) {
       message.error(result.reason || '提交失败');
       return;
     }
-    addMessage(ticket.id, {
+    await addMessage(ticket.id, {
       id: shortId('m'),
       authorId: user.id,
       authorName: user.name,
@@ -96,14 +97,22 @@ export default function L2Actions({ ticket }) {
           showCount
           placeholder="请详细填写排查过程、根因分析、临时规避/修复建议..."
         />
-        <Button
-          type="primary"
-          icon={<SendOutlined />}
-          onClick={handleSubmit}
+        <Popconfirm
+          title="确认提交给一线复核？"
+          description="提交后会记录排查结论，并把工单切回一线排查。"
+          okText="确认提交"
+          cancelText="取消"
+          onConfirm={handleSubmit}
           disabled={!conclusion.trim()}
         >
-          一线复核
-        </Button>
+          <Button
+            type="primary"
+            icon={<SendOutlined />}
+            disabled={!conclusion.trim()}
+          >
+            一线复核
+          </Button>
+        </Popconfirm>
       </Space>
     </Card>
   );

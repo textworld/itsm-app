@@ -3,7 +3,7 @@ import { Card, Button, Input, Space, App as AntdApp } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
-import { submitMessageDraft } from './messageComposer.js';
+import { isTicketMessageAllowed, submitMessageDraft } from './messageComposer.js';
 import FileUploader from '../common/FileUploader.jsx';
 
 export default function QuickMessageCard({ ticket, onViewAllMessages }) {
@@ -14,9 +14,15 @@ export default function QuickMessageCard({ ticket, onViewAllMessages }) {
   const [fileList, setFileList] = useState([]);
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
+  const allowMessage = isTicketMessageAllowed(ticket);
 
   const handleSend = async () => {
     if (sendingRef.current) {
+      return;
+    }
+
+    if (!allowMessage) {
+      message.warning('草稿箱状态不允许留言');
       return;
     }
 
@@ -63,15 +69,15 @@ export default function QuickMessageCard({ ticket, onViewAllMessages }) {
         <Input.TextArea
           value={content}
           onChange={(event) => setContent(event.target.value)}
-          placeholder="请输入留言内容"
+          placeholder={allowMessage ? '请输入留言内容' : '草稿箱状态不允许留言'}
           autoSize={{ minRows: 4, maxRows: 8 }}
-          disabled={sending}
+          disabled={sending || !allowMessage}
         />
         <Space wrap size={12} style={{ width: '100%' }}>
           <FileUploader
             fileList={fileList}
             onChange={setFileList}
-            disabled={sending}
+            disabled={sending || !allowMessage}
             buttonText="留言附件"
           />
           <Button
@@ -79,7 +85,7 @@ export default function QuickMessageCard({ ticket, onViewAllMessages }) {
             icon={<SendOutlined />}
             onClick={handleSend}
             loading={sending}
-            disabled={sending}
+            disabled={sending || !allowMessage}
           >
             发送留言
           </Button>

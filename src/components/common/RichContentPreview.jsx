@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Image, Typography } from 'antd';
+import { richTextDocToHtml } from '../../utils/richText.js';
 
 export default function RichContentPreview({
+  doc,
   html,
   text,
   className = '',
@@ -18,13 +20,15 @@ export default function RichContentPreview({
     setPreviewOpen(true);
   };
 
-  if (html) {
+  const renderedHtml = doc ? richTextDocToHtml(doc) : html;
+
+  if (renderedHtml) {
     return (
       <>
         <div
           className={className}
           onClick={handleClick}
-          dangerouslySetInnerHTML={{ __html: html }}
+          dangerouslySetInnerHTML={{ __html: renderedHtml }}
         />
         <Image
           wrapperStyle={{ display: 'none' }}

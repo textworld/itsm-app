@@ -19,8 +19,10 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
 import { ROLE_LABELS } from '../../constants/roles.js';
 import { formatDateTime, byCreatedAtDesc } from '../../utils/format.js';
+import { createEmptyRichTextDoc } from '../../utils/richText.js';
 import {
   buildQuotePreview,
+  isTicketMessageAllowed,
   submitMessageDraft
 } from './messageComposer.js';
 import FileUploader from '../common/FileUploader.jsx';
@@ -32,7 +34,7 @@ export default function MessageBoard({ ticket, readOnly }) {
   const { user } = useAuth();
   const { addMessage } = useTickets();
   const { message } = AntdApp.useApp();
-  const [contentHtml, setContentHtml] = useState('');
+  const [contentDoc, setContentDoc] = useState(createEmptyRichTextDoc());
   const [fileList, setFileList] = useState([]);
   const [sending, setSending] = useState(false);
   const [quotedMessage, setQuotedMessage] = useState(null);
@@ -42,6 +44,7 @@ export default function MessageBoard({ ticket, readOnly }) {
     () => [...(ticket?.messages || [])].sort(byCreatedAtDesc),
     [ticket?.messages]
   );
+  const allowMessage = isTicketMessageAllowed(ticket);
 
   const handleSend = async () => {
     if (sendingRef.current) {
@@ -54,13 +57,13 @@ export default function MessageBoard({ ticket, readOnly }) {
       await submitMessageDraft({
         ticketId: ticket?.id,
         addMessage,
-        contentHtml,
+        contentDoc,
         fileList,
         user,
         quotedMessage
       });
 
-      setContentHtml('');
+      setContentDoc(createEmptyRichTextDoc());
       setFileList([]);
       setQuotedMessage(null);
       message.success('留言已发送');
@@ -91,7 +94,7 @@ export default function MessageBoard({ ticket, readOnly }) {
         </Space>
       }
     >
-      {!readOnly && (
+      {!readOnly && allowMessage && (
         <Space direction="vertical" style={{ width: '100%', marginBottom: 20 }}>
           {quotedMessage && (
             <div className="message-quote-editor">
@@ -109,8 +112,8 @@ export default function MessageBoard({ ticket, readOnly }) {
             </div>
           )}
           <RichTextEditor
-            value={contentHtml}
-            onChange={setContentHtml}
+            value={contentDoc}
+            onChange={setContentDoc}
             disabled={sending}
             placeholder="输入留言内容，支持富文本、图片和引用回复..."
           />
@@ -167,6 +170,7 @@ export default function MessageBoard({ ticket, readOnly }) {
                 <div style={{ marginBottom: messageItem.attachments?.length ? 8 : 0 }}>
                   <RichContentPreview
                     className="message-rich-content"
+                    doc={messageItem.contentDoc}
                     html={messageItem.contentHtml}
                     text={messageItem.content}
                     emptyText="(无文本内容)"
@@ -177,7 +181,7 @@ export default function MessageBoard({ ticket, readOnly }) {
                   <AttachmentList attachments={messageItem.attachments} compact />
                 )}
 
-                {!readOnly && (
+                {!readOnly && allowMessage && (
                   <div className="message-thread-actions">
                     <Button
                       type="text"
@@ -193,6 +197,11 @@ export default function MessageBoard({ ticket, readOnly }) {
             </div>
           ))}
         </div>
+      )}
+      {!readOnly && !allowMessage && (
+        <Typography.Text type="secondary">
+          草稿箱状态不允许留言，请先提交工单后再进行沟通。
+        </Typography.Text>
       )}
     </Card>
   );

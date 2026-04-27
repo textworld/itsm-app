@@ -1,15 +1,30 @@
 import { shortId } from '../../utils/idGenerator.js';
 import { buildAttachments } from '../../utils/fileUtils.js';
-import { richTextHasContent, richTextToPlainText } from '../../utils/richText.js';
+import {
+  createEmptyRichTextDoc,
+  richTextHasContent,
+  richTextToPlainText,
+  richTextValueToDoc
+} from '../../utils/richText.js';
+import { STATUS, getRequesterStatus, getSupportStatus } from '../../constants/ticketStatus.js';
 
 const QUOTE_PREVIEW_LIMIT = 120;
 
-export function hasMessageInput({ content = '', contentHtml = '', fileList } = {}) {
-  return hasTextContent(content) || richTextHasContent(contentHtml) || Boolean(fileList?.length);
+export function hasMessageInput({ content = '', contentDoc = null, contentHtml = '', fileList } = {}) {
+  return hasTextContent(content) || richTextHasContent(contentDoc || contentHtml) || Boolean(fileList?.length);
+}
+
+export function isTicketMessageAllowed(ticket) {
+  if (!ticket) return false;
+  return (
+    getRequesterStatus(ticket) !== STATUS.DRAFT &&
+    getSupportStatus(ticket) !== STATUS.DRAFT
+  );
 }
 
 export async function buildMessagePayload({
   content = '',
+  contentDoc = null,
   contentHtml = '',
   fileList,
   user,
@@ -18,9 +33,10 @@ export async function buildMessagePayload({
   validateMessageAuthor(user);
 
   const attachments = await buildAttachments(fileList, user);
+  const normalizedContentDoc = contentDoc || richTextValueToDoc(contentHtml) || createEmptyRichTextDoc();
   const normalizedContent = hasTextContent(content)
     ? content.trim()
-    : richTextToPlainText(contentHtml);
+    : richTextToPlainText(normalizedContentDoc);
 
   return {
     id: shortId('m'),
@@ -28,7 +44,7 @@ export async function buildMessagePayload({
     authorName: user.name,
     authorRole: user.role,
     content: normalizedContent,
-    contentHtml,
+    contentDoc: normalizedContentDoc,
     attachments,
     quote: quotedMessage
       ? {
@@ -46,6 +62,7 @@ export async function submitMessageDraft({
   ticketId,
   addMessage,
   content = '',
+  contentDoc = null,
   contentHtml = '',
   fileList,
   user,
@@ -55,7 +72,7 @@ export async function submitMessageDraft({
     throw new Error('工单信息缺失');
   }
 
-  if (!hasMessageInput({ content, contentHtml, fileList })) {
+  if (!hasMessageInput({ content, contentDoc, contentHtml, fileList })) {
     throw new Error('请输入留言内容或上传附件');
   }
 
@@ -65,21 +82,23 @@ export async function submitMessageDraft({
 
   const messageItem = await buildMessagePayload({
     content,
+    contentDoc,
     contentHtml,
     fileList,
     user,
     quotedMessage
   });
 
-  addMessage(ticketId, messageItem);
+  await addMessage(ticketId, messageItem);
   return messageItem;
 }
 
 export function buildQuotePreview(messageItem) {
-  const text = richTextToPlainText(messageItem.contentHtml || messageItem.content || '');
+  const richValue = messageItem.contentDoc || messageItem.contentHtml || messageItem.content || '';
+  const text = richTextToPlainText(richValue);
   const hasAttachments = Boolean(messageItem.attachments?.length);
   const normalized = text || (
-    richTextHasContent(messageItem.contentHtml)
+    richTextHasContent(richValue)
       ? '[图片或富文本内容]'
       : hasAttachments
         ? '[附件消息]'

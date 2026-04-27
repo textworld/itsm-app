@@ -16,12 +16,26 @@ import {
   getSupportStatus
 } from '../constants/ticketStatus.js';
 import { ROLES } from '../constants/roles.js';
+import { PRIORITIES, PRIORITY_LABELS } from '../constants/priorities.js';
+import { SYSTEM_LABELS } from '../constants/systems.js';
+import { buildDescriptionHistoryEntry, buildDescriptionUpdate } from '../utils/descriptionHistory.js';
+import { buildDraftTicketUpdate } from '../utils/draftTicketEditing.js';
+import { createEmptyRichTextDoc, richTextHtmlToDoc, richTextToPlainText } from '../utils/richText.js';
+import { calculateTicketExpiresAt } from '../utils/sla.js';
 
 export const EVENTS = {
+  CREATE_DRAFT: 'CREATE_DRAFT',
   SUBMIT: 'SUBMIT',
+  UPDATE_DRAFT: 'UPDATE_DRAFT',
+  AI_RESOLVE: 'AI_RESOLVE',
+  WITHDRAW: 'WITHDRAW',
   ACCEPT: 'ACCEPT',
+  TAG_DEFECT: 'TAG_DEFECT',
+  UPDATE_LINKED_DEFECT: 'UPDATE_LINKED_DEFECT',
+  UPDATE_SUMMARY: 'UPDATE_SUMMARY',
   REQUEST_L2_SUPPORT: 'REQUEST_L2_SUPPORT',
   RETURN_FOR_INFO: 'RETURN_FOR_INFO',
+  UPDATE_INFO_SUPPLEMENT: 'UPDATE_INFO_SUPPLEMENT',
   COMPLETE_INFO_SUPPLEMENT: 'COMPLETE_INFO_SUPPLEMENT',
   L1_REVIEW: 'L1_REVIEW',
   INITIATE_CLOSURE: 'INITIATE_CLOSURE',
@@ -36,10 +50,18 @@ export const EVENTS = {
 };
 
 export const EVENT_LABELS = {
+  [EVENTS.CREATE_DRAFT]: '暂存草稿',
   [EVENTS.SUBMIT]: '提交工单',
+  [EVENTS.UPDATE_DRAFT]: '修改草稿',
+  [EVENTS.AI_RESOLVE]: '大模型解决',
+  [EVENTS.WITHDRAW]: '撤回工单',
   [EVENTS.ACCEPT]: '受理工单',
+  [EVENTS.TAG_DEFECT]: '缺陷打标',
+  [EVENTS.UPDATE_LINKED_DEFECT]: '更新关联缺陷',
+  [EVENTS.UPDATE_SUMMARY]: '更新工单总结',
   [EVENTS.REQUEST_L2_SUPPORT]: '二线支持',
   [EVENTS.RETURN_FOR_INFO]: '退回提交人',
+  [EVENTS.UPDATE_INFO_SUPPLEMENT]: '修改补充信息',
   [EVENTS.COMPLETE_INFO_SUPPLEMENT]: '已补充',
   [EVENTS.L1_REVIEW]: '一线复核',
   [EVENTS.INITIATE_CLOSURE]: '发起办结',
@@ -49,14 +71,74 @@ export const EVENT_LABELS = {
 
 export const TRANSITIONS = [
   {
+    id: 'T00',
+    from: null,
+    event: EVENTS.CREATE_DRAFT,
+    to: STATUS.DRAFT,
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, user, now) => buildDraftTicket(ticket, payload, user, now)
+  },
+  {
     id: 'T01',
     from: null,
     event: EVENTS.SUBMIT,
     to: STATUS.PENDING,
-    role: ROLES.REQUESTER
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, user, now) => buildSubmittedTicket(ticket, payload, user, now)
+  },
+  {
+    id: 'T01A',
+    from: STATUS.DRAFT,
+    event: EVENTS.UPDATE_DRAFT,
+    to: STATUS.DRAFT,
+    role: ROLES.REQUESTER,
+    recordTimeline: false,
+    transform: (ticket, payload, user, now) =>
+      buildDraftTicketUpdate({
+        ticket,
+        values: payload.values,
+        attachments: payload.attachments || [],
+        user,
+        updatedAt: now
+      })
+  },
+  {
+    id: 'T01B',
+    from: STATUS.DRAFT,
+    event: EVENTS.SUBMIT,
+    to: STATUS.PENDING,
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, user, now) =>
+      buildSubmittedTicket(
+        ticket,
+        {
+          ...ticket,
+          ...payload,
+          draftCreatedAt: ticket?.draftCreatedAt || ticket?.createdAt || null,
+          createdAt: payload.createdAt || now,
+          submittedAt: payload.submittedAt || now
+        },
+        user,
+        now
+      )
+  },
+  {
+    id: 'T01C',
+    from: STATUS.DRAFT,
+    event: EVENTS.AI_RESOLVE,
+    to: STATUS.CLOSED,
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, user, now) => buildAiResolvedTicket(ticket, payload, user, now)
   },
   {
     id: 'T02',
+    from: STATUS.PENDING,
+    event: EVENTS.WITHDRAW,
+    to: STATUS.DRAFT,
+    role: ROLES.REQUESTER
+  },
+  {
+    id: 'T03',
     from: STATUS.PENDING,
     event: EVENTS.ACCEPT,
     to: STATUS.PROCESSING,
@@ -64,7 +146,52 @@ export const TRANSITIONS = [
     role: ROLES.L1
   },
   {
-    id: 'T03',
+    id: 'T03A',
+    from: STATUS.PROCESSING,
+    fromSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+    event: EVENTS.TAG_DEFECT,
+    to: STATUS.PROCESSING,
+    toSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+    role: ROLES.L1,
+    recordTimeline: false,
+    transform: (ticket, payload, user, now) => ({
+      defectTag: {
+        ...payload.defectTag,
+        taggedAt: payload.defectTag?.taggedAt || now,
+        taggedBy: payload.defectTag?.taggedBy || user?.name || ticket.defectTag?.taggedBy || ''
+      },
+      updatedAt: now
+    })
+  },
+  {
+    id: 'T03B',
+    from: STATUS.PROCESSING,
+    fromSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+    event: EVENTS.UPDATE_LINKED_DEFECT,
+    to: STATUS.PROCESSING,
+    toSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+    role: ROLES.L1,
+    recordTimeline: false,
+    transform: (ticket, payload, _user, now) => ({
+      linkedDefect: payload.linkedDefect ?? null,
+      updatedAt: now
+    })
+  },
+  {
+    id: 'T03C',
+    from: STATUS.PROCESSING,
+    event: EVENTS.UPDATE_SUMMARY,
+    to: STATUS.PROCESSING,
+    role: ROLES.L1,
+    recordTimeline: false,
+    transform: (ticket, payload, _user, now) => ({
+      summary: payload.summary ?? ticket.summary ?? '',
+      summarySyncedToCorpus: payload.summarySyncedToCorpus ?? ticket.summarySyncedToCorpus ?? false,
+      updatedAt: now
+    })
+  },
+  {
+    id: 'T04',
     from: STATUS.PROCESSING,
     fromSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
     event: EVENTS.REQUEST_L2_SUPPORT,
@@ -78,14 +205,39 @@ export const TRANSITIONS = [
     }
   },
   {
-    id: 'T04',
+    id: 'T05',
     from: STATUS.PROCESSING,
     event: EVENTS.RETURN_FOR_INFO,
     to: STATUS.INFO_SUPPLEMENT,
     role: ROLES.L1
   },
   {
-    id: 'T05',
+    id: 'T05A',
+    from: STATUS.INFO_SUPPLEMENT,
+    event: EVENTS.UPDATE_INFO_SUPPLEMENT,
+    to: STATUS.INFO_SUPPLEMENT,
+    role: ROLES.REQUESTER,
+    recordTimeline: false,
+    transform: (ticket, payload, user, now) => {
+      const nextUpdate = buildDescriptionUpdate(ticket, {
+        descriptionDoc: payload.descriptionDoc,
+        descriptionHtml: payload.descriptionHtml,
+        user,
+        reason: '信息补充阶段修改工单描述'
+      });
+
+      return nextUpdate
+        ? {
+            ...nextUpdate,
+            updatedAt: now
+          }
+        : {
+            updatedAt: now
+          };
+    }
+  },
+  {
+    id: 'T06',
     from: STATUS.INFO_SUPPLEMENT,
     event: EVENTS.COMPLETE_INFO_SUPPLEMENT,
     to: STATUS.PROCESSING,
@@ -93,7 +245,7 @@ export const TRANSITIONS = [
     role: ROLES.REQUESTER
   },
   {
-    id: 'T06',
+    id: 'T07',
     from: STATUS.PROCESSING,
     fromSubStatus: PROCESSING_SUB_STATUS.L2_INVESTIGATION,
     event: EVENTS.L1_REVIEW,
@@ -106,21 +258,21 @@ export const TRANSITIONS = [
     }
   },
   {
-    id: 'T07',
+    id: 'T08',
     from: STATUS.PROCESSING,
     event: EVENTS.INITIATE_CLOSURE,
     to: STATUS.CONFIRMING,
     role: ROLES.L1
   },
   {
-    id: 'T08',
+    id: 'T09',
     from: STATUS.CONFIRMING,
     event: EVENTS.VERIFY_YES,
     to: STATUS.CLOSED,
     role: ROLES.REQUESTER
   },
   {
-    id: 'T09',
+    id: 'T10',
     from: STATUS.CONFIRMING,
     event: EVENTS.VERIFY_NO,
     to: STATUS.PROCESSING,
@@ -135,13 +287,21 @@ export const TRANSITIONS = [
 
 export const ROLE_EVENT_PERMISSIONS = {
   [ROLES.REQUESTER]: [
+    EVENTS.CREATE_DRAFT,
     EVENTS.SUBMIT,
+    EVENTS.UPDATE_DRAFT,
+    EVENTS.AI_RESOLVE,
+    EVENTS.WITHDRAW,
+    EVENTS.UPDATE_INFO_SUPPLEMENT,
     EVENTS.COMPLETE_INFO_SUPPLEMENT,
     EVENTS.VERIFY_YES,
     EVENTS.VERIFY_NO
   ],
   [ROLES.L1]: [
     EVENTS.ACCEPT,
+    EVENTS.TAG_DEFECT,
+    EVENTS.UPDATE_LINKED_DEFECT,
+    EVENTS.UPDATE_SUMMARY,
     EVENTS.REQUEST_L2_SUPPORT,
     EVENTS.RETURN_FOR_INFO,
     EVENTS.INITIATE_CLOSURE
@@ -189,40 +349,47 @@ export function applyTransition(ticket, event, payload = {}, user) {
   }
   const { transition } = check;
   const now = new Date().toISOString();
+  const currentTicket = ticket || {};
   const nextDualStatuses = getNextDualStatuses(transition.to, event);
   const nextProcessingSubStatus =
     transition.to === STATUS.PROCESSING
       ? transition.toSubStatus || getProcessingSubStatus(ticket) || PROCESSING_SUB_STATUS.L1_INVESTIGATION
       : null;
+  const nextPayload = transition.transform
+    ? transition.transform(currentTicket, payload, user, now)
+    : payload;
 
   const nextTicket = {
-    ...ticket,
-    ...payload,
+    ...currentTicket,
+    ...nextPayload,
     status: transition.to,
     requesterStatus: nextDualStatuses.requesterStatus,
     supportStatus: nextDualStatuses.supportStatus,
     processingSubStatus: nextProcessingSubStatus,
-    updatedAt: now,
-    timeline: [
-      ...(ticket?.timeline || []),
-      {
-        action: event,
-        actionLabel: EVENT_LABELS[event] || event,
-        fromStatus: ticket?.status ?? null,
-        toStatus: transition.to,
-        fromRequesterStatus: getRequesterStatus(ticket),
-        toRequesterStatus: nextDualStatuses.requesterStatus,
-        fromSupportStatus: getSupportStatus(ticket),
-        toSupportStatus: nextDualStatuses.supportStatus,
-        fromProcessingSubStatus: getProcessingSubStatus(ticket),
-        toProcessingSubStatus: nextProcessingSubStatus,
-        operator: user?.name || user?.id || '未知',
-        operatorId: user?.id || null,
-        role: user?.role || null,
-        at: now,
-        remark: payload?.__timelineRemark || ''
-      }
-    ]
+    updatedAt: nextPayload?.updatedAt || now,
+    timeline:
+      transition.recordTimeline === false
+        ? currentTicket.timeline || []
+        : [
+            ...(ticket?.timeline || []),
+            {
+              action: event,
+              actionLabel: EVENT_LABELS[event] || event,
+              fromStatus: ticket?.status ?? null,
+              toStatus: transition.to,
+              fromRequesterStatus: getRequesterStatus(ticket),
+              toRequesterStatus: nextDualStatuses.requesterStatus,
+              fromSupportStatus: getSupportStatus(ticket),
+              toSupportStatus: nextDualStatuses.supportStatus,
+              fromProcessingSubStatus: getProcessingSubStatus(ticket),
+              toProcessingSubStatus: nextProcessingSubStatus,
+              operator: user?.name || user?.id || '未知',
+              operatorId: user?.id || null,
+              role: user?.role || null,
+              at: now,
+              remark: payload?.__timelineRemark || ''
+            }
+          ]
   };
   delete nextTicket.__timelineRemark;
   return nextTicket;
@@ -246,4 +413,153 @@ export function listAvailableEvents(ticket, user) {
       transition.role === user.role &&
       (!transition.fromSubStatus || transition.fromSubStatus === getProcessingSubStatus(ticket))
   ).map((transition) => transition.event);
+}
+
+function buildSubmittedTicket(_ticket, payload = {}, user, now) {
+  const createdAt = payload.createdAt || now;
+  const submittedAt = payload.submittedAt || now;
+  const descriptionDoc =
+    payload.descriptionDoc ||
+    richTextHtmlToDoc(payload.descriptionHtml || '') ||
+    createEmptyRichTextDoc();
+  const description = payload.description || richTextToPlainText(descriptionDoc);
+  const descriptionHtml = payload.descriptionHtml || '';
+  const expiresAt = payload.expiresAt || calculateTicketExpiresAt(submittedAt, payload.priority || PRIORITIES.P4);
+
+  return {
+    ...payload,
+    isDraft: false,
+    descriptionDoc,
+    description,
+    createdAt,
+    submittedAt,
+    expiresAt,
+    updatedAt: payload.updatedAt || now,
+    requesterId: payload.requesterId || user?.id || null,
+    requesterName: payload.requesterName || user?.name || '未知用户',
+    assigneeL1Id: payload.assigneeL1Id ?? null,
+    assigneeL1Name: payload.assigneeL1Name ?? null,
+    assigneeL2Id: payload.assigneeL2Id ?? null,
+    assigneeL2Name: payload.assigneeL2Name ?? null,
+    messages: payload.messages || [],
+    defectTag: payload.defectTag ?? null,
+    linkedDefect: payload.linkedDefect ?? null,
+    l2Conclusion: payload.l2Conclusion || '',
+    summary: payload.summary || '',
+    summarySyncedToCorpus: payload.summarySyncedToCorpus ?? false,
+    rejectionReason: payload.rejectionReason || '',
+    satisfaction: payload.satisfaction ?? null,
+    descriptionHistory:
+      payload.descriptionHistory && payload.descriptionHistory.length > 0
+        ? payload.descriptionHistory
+        : [
+            buildDescriptionHistoryEntry({
+              ticket: {
+                id: payload.id,
+                requesterId: payload.requesterId || user?.id || null,
+                requesterName: payload.requesterName || user?.name || '未知用户'
+              },
+              descriptionDoc,
+              descriptionHtml,
+              description,
+              user,
+              reason: '提交工单初始版本',
+              editedAt: createdAt
+            })
+          ]
+  };
+}
+
+function buildDraftTicket(_ticket, payload = {}, user, now) {
+  const createdAt = payload.createdAt || now;
+  const priority = payload.priority || PRIORITIES.P4;
+  const systemCode = payload.systemCode || payload.systemName || '';
+  const reportForOthers = payload.reportForOthers === true;
+  const descriptionDoc =
+    payload.descriptionDoc ||
+    richTextHtmlToDoc(payload.descriptionHtml || '') ||
+    createEmptyRichTextDoc();
+  const description = payload.description || richTextToPlainText(descriptionDoc);
+  const descriptionHtml = payload.descriptionHtml || '';
+  const title = String(payload.title || '').trim() || '未填写标题';
+
+  return {
+    ...payload,
+    isDraft: true,
+    title,
+    toolType: payload.toolType || '',
+    priority,
+    priorityLabel: payload.priorityLabel || PRIORITY_LABELS[priority] || priority,
+    systemCode,
+    systemName: SYSTEM_LABELS[systemCode] || payload.systemName || payload.systemCode || '',
+    reporterPhone: String(payload.reporterPhone || '').trim(),
+    reporterEmail: String(payload.reporterEmail || '').trim(),
+    reportForOthers,
+    reportedUserName: reportForOthers ? String(payload.reportedUserName || '').trim() : '',
+    reportedUserPhone: reportForOthers ? String(payload.reportedUserPhone || '').trim() : '',
+    description,
+    descriptionDoc,
+    descriptionHtml,
+    attachments: payload.attachments || [],
+    createdAt,
+    updatedAt: now,
+    requesterId: payload.requesterId || user?.id || null,
+    requesterName: payload.requesterName || user?.name || '未知用户',
+    assigneeL1Id: null,
+    assigneeL1Name: null,
+    assigneeL2Id: null,
+    assigneeL2Name: null,
+    messages: payload.messages || [],
+    defectTag: null,
+    linkedDefect: null,
+    l2Conclusion: '',
+    summary: '',
+    summarySyncedToCorpus: false,
+    rejectionReason: '',
+    satisfaction: null,
+    descriptionHistory:
+      payload.descriptionHistory && payload.descriptionHistory.length > 0
+        ? payload.descriptionHistory
+        : [
+            buildDescriptionHistoryEntry({
+              ticket: {
+                id: payload.id,
+                requesterId: payload.requesterId || user?.id || null,
+                requesterName: payload.requesterName || user?.name || '未知用户'
+              },
+              descriptionDoc,
+              descriptionHtml,
+              description,
+              user,
+              reason: '暂存草稿初始版本',
+              editedAt: createdAt
+            })
+          ]
+  };
+}
+
+function buildAiResolvedTicket(ticket = {}, payload = {}, user, now) {
+  const aiResolution = {
+    ...(payload.aiResolution || {}),
+    answer: payload.aiResolution?.answer || '',
+    messages: Array.isArray(payload.aiResolution?.messages) ? payload.aiResolution.messages : [],
+    resolvedAt: payload.aiResolution?.resolvedAt || now,
+    resolvedBy: 'AI'
+  };
+
+  return {
+    ...ticket,
+    ...payload,
+    isDraft: false,
+    id: payload.id || ticket.id,
+    draftId: payload.draftId || ticket.draftId || null,
+    submittedAt: ticket.submittedAt || now,
+    closedAt: now,
+    aiResolved: true,
+    aiResolution,
+    summary: payload.summary || ticket.summary || aiResolution.answer,
+    updatedAt: now,
+    requesterId: ticket.requesterId || user?.id || null,
+    requesterName: ticket.requesterName || user?.name || '未知用户'
+  };
 }

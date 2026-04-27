@@ -1,4 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+'use client';
+
+import React, { useEffect, useMemo, useRef } from 'react';
+import { EditorContent, useEditor } from '@tiptap/react';
 import { Button, Select, Space, Tooltip, App as AntdApp } from 'antd';
 import {
   BoldOutlined,
@@ -12,7 +15,15 @@ import {
   RedoOutlined,
   ClearOutlined
 } from '@ant-design/icons';
-import { fileToBase64 } from '../../utils/fileUtils.js';
+import Placeholder from '@tiptap/extension-placeholder';
+
+import {
+  createEmptyRichTextDoc,
+  isRichTextDocument,
+  RICH_TEXT_EXTENSIONS,
+  richTextHtmlToDoc
+} from '../../utils/richText.js';
+import { uploadAttachmentFile } from '../../utils/fileUtils.js';
 
 const HEADING_OPTIONS = [
   { value: 'p', label: '正文' },
@@ -26,58 +37,147 @@ export default function RichTextEditor({
   disabled = false,
   placeholder = '请输入详细描述...'
 }) {
-  const editorRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const savedRangeRef = useRef(null);
   const { message } = AntdApp.useApp();
+  const fileInputRef = useRef(null);
+  const lastSerializedValueRef = useRef(null);
+
+  const extensions = useMemo(
+    () => [
+      ...RICH_TEXT_EXTENSIONS,
+      Placeholder.configure({
+        placeholder
+      })
+    ],
+    [placeholder]
+  );
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions,
+    content: normalizeEditorValue(value),
+    editable: !disabled,
+    editorProps: {
+      attributes: {
+        class: 'rich-text-content'
+      },
+      handlePaste: (_view, event) => {
+        const file = getPastedImageFile(event);
+        if (!file) {
+          return false;
+        }
+
+        event.preventDefault();
+        void uploadAndInsertImage(file);
+        return true;
+      }
+    },
+    onUpdate: ({ editor: currentEditor }) => {
+      const nextJson = currentEditor.getJSON();
+      lastSerializedValueRef.current = JSON.stringify(nextJson);
+      onChange?.(nextJson);
+    }
+  });
 
   useEffect(() => {
-    if (!editorRef.current) return;
-    const nextValue = value || '';
-    if (editorRef.current.innerHTML !== nextValue) {
-      editorRef.current.innerHTML = nextValue;
+    if (!editor) return;
+    editor.setEditable(!disabled);
+  }, [disabled, editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const nextContent = normalizeEditorValue(value);
+    const serialized = JSON.stringify(nextContent);
+    if (serialized === lastSerializedValueRef.current) {
+      return;
     }
-  }, [value]);
 
-  const saveSelection = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+    editor.commands.setContent(nextContent, false);
+    lastSerializedValueRef.current = serialized;
+  }, [editor, value]);
 
-    const range = selection.getRangeAt(0);
-    if (editorRef.current?.contains(range.commonAncestorContainer)) {
-      savedRangeRef.current = range;
+  const uploadAndInsertImage = async (file) => {
+    if (!editor || disabled) return;
+    if (!file.type.startsWith('image/')) {
+      message.error('只能在描述中插入图片文件');
+      return;
     }
-  };
 
-  const restoreSelection = () => {
-    if (!savedRangeRef.current) return;
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(savedRangeRef.current);
-  };
-
-  const emitChange = () => {
-    onChange?.(editorRef.current?.innerHTML || '');
+    try {
+      const uploaded = await uploadAttachmentFile(file);
+      editor
+        .chain()
+        .focus()
+        .setImage({
+          src: uploaded.url,
+          alt: file.name,
+          title: file.name,
+          uploadId: uploaded.uploadId
+        })
+        .run();
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '图片上传失败，请重试');
+    }
   };
 
   const executeCommand = (command, commandValue = null) => {
-    if (disabled) return;
-    editorRef.current?.focus();
-    restoreSelection();
-    document.execCommand(command, false, commandValue);
-    emitChange();
-    saveSelection();
+    if (!editor || disabled) return;
+
+    switch (command) {
+      case 'undo':
+        editor.chain().focus().undo().run();
+        break;
+      case 'redo':
+        editor.chain().focus().redo().run();
+        break;
+      case 'bold':
+        editor.chain().focus().toggleBold().run();
+        break;
+      case 'italic':
+        editor.chain().focus().toggleItalic().run();
+        break;
+      case 'underline':
+        editor.chain().focus().toggleUnderline().run();
+        break;
+      case 'insertUnorderedList':
+        editor.chain().focus().toggleBulletList().run();
+        break;
+      case 'insertOrderedList':
+        editor.chain().focus().toggleOrderedList().run();
+        break;
+      case 'removeFormat':
+        editor.chain().focus().unsetAllMarks().clearNodes().run();
+        break;
+      case 'formatBlock':
+        applyBlockType(editor, commandValue);
+        break;
+      default:
+        break;
+    }
   };
 
   const handleCreateLink = () => {
-    const url = window.prompt('请输入链接地址');
-    if (!url) return;
-    executeCommand('createLink', url);
+    if (!editor || disabled) return;
+    const currentHref = editor.getAttributes('link').href || '';
+    const url = window.prompt('请输入链接地址', currentHref);
+    if (url === null) return;
+
+    if (!url.trim()) {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+
+    editor
+      .chain()
+      .focus()
+      .extendMarkRange('link')
+      .setLink({ href: url.trim() })
+      .run();
   };
 
   const handleImageClick = () => {
     if (disabled) return;
-    saveSelection();
     fileInputRef.current?.click();
   };
 
@@ -85,27 +185,10 @@ export default function RichTextEditor({
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      message.error('只能在描述中插入图片文件');
-      return;
-    }
-
-    try {
-      const base64 = await fileToBase64(file);
-      editorRef.current?.focus();
-      restoreSelection();
-      document.execCommand(
-        'insertHTML',
-        false,
-        `<img src="${base64}" alt="${file.name}" style="max-width:100%;height:auto;" />`
-      );
-      emitChange();
-    } catch (error) {
-      console.error(error);
-      message.error('图片插入失败，请重试');
-    }
+    await uploadAndInsertImage(file);
   };
+
+  const currentBlockValue = getCurrentBlockValue(editor);
 
   return (
     <div className="rich-text-editor">
@@ -118,17 +201,32 @@ export default function RichTextEditor({
             <Button size="small" icon={<RedoOutlined />} onClick={() => executeCommand('redo')} />
           </Tooltip>
           <Tooltip title="加粗">
-            <Button size="small" icon={<BoldOutlined />} onClick={() => executeCommand('bold')} />
+            <Button
+              size="small"
+              type={editor?.isActive('bold') ? 'primary' : 'default'}
+              icon={<BoldOutlined />}
+              onClick={() => executeCommand('bold')}
+            />
           </Tooltip>
           <Tooltip title="斜体">
-            <Button size="small" icon={<ItalicOutlined />} onClick={() => executeCommand('italic')} />
+            <Button
+              size="small"
+              type={editor?.isActive('italic') ? 'primary' : 'default'}
+              icon={<ItalicOutlined />}
+              onClick={() => executeCommand('italic')}
+            />
           </Tooltip>
           <Tooltip title="下划线">
-            <Button size="small" icon={<UnderlineOutlined />} onClick={() => executeCommand('underline')} />
+            <Button
+              size="small"
+              type={editor?.isActive('underline') ? 'primary' : 'default'}
+              icon={<UnderlineOutlined />}
+              onClick={() => executeCommand('underline')}
+            />
           </Tooltip>
           <Select
             size="small"
-            defaultValue="p"
+            value={currentBlockValue}
             style={{ width: 86 }}
             options={HEADING_OPTIONS}
             onChange={(tagName) => executeCommand('formatBlock', tagName)}
@@ -137,6 +235,7 @@ export default function RichTextEditor({
           <Tooltip title="无序列表">
             <Button
               size="small"
+              type={editor?.isActive('bulletList') ? 'primary' : 'default'}
               icon={<UnorderedListOutlined />}
               onClick={() => executeCommand('insertUnorderedList')}
             />
@@ -144,12 +243,18 @@ export default function RichTextEditor({
           <Tooltip title="有序列表">
             <Button
               size="small"
+              type={editor?.isActive('orderedList') ? 'primary' : 'default'}
               icon={<OrderedListOutlined />}
               onClick={() => executeCommand('insertOrderedList')}
             />
           </Tooltip>
           <Tooltip title="链接">
-            <Button size="small" icon={<LinkOutlined />} onClick={handleCreateLink} />
+            <Button
+              size="small"
+              type={editor?.isActive('link') ? 'primary' : 'default'}
+              icon={<LinkOutlined />}
+              onClick={handleCreateLink}
+            />
           </Tooltip>
           <Tooltip title="插入图片">
             <Button size="small" icon={<PictureOutlined />} onClick={handleImageClick} />
@@ -159,17 +264,7 @@ export default function RichTextEditor({
           </Tooltip>
         </Space>
       </div>
-      <div
-        ref={editorRef}
-        className="rich-text-content"
-        contentEditable={!disabled}
-        data-placeholder={placeholder}
-        onInput={emitChange}
-        onBlur={saveSelection}
-        onMouseUp={saveSelection}
-        onKeyUp={saveSelection}
-        suppressContentEditableWarning
-      />
+      <EditorContent editor={editor} />
       <input
         ref={fileInputRef}
         type="file"
@@ -179,4 +274,45 @@ export default function RichTextEditor({
       />
     </div>
   );
+}
+
+function normalizeEditorValue(value) {
+  if (isRichTextDocument(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    return richTextHtmlToDoc(value);
+  }
+
+  return createEmptyRichTextDoc();
+}
+
+function applyBlockType(editor, tagName) {
+  if (!editor) return;
+
+  if (tagName === 'h2') {
+    editor.chain().focus().toggleHeading({ level: 2 }).run();
+    return;
+  }
+
+  if (tagName === 'blockquote') {
+    editor.chain().focus().toggleBlockquote().run();
+    return;
+  }
+
+  editor.chain().focus().setParagraph().run();
+}
+
+function getCurrentBlockValue(editor) {
+  if (!editor) return 'p';
+  if (editor.isActive('heading', { level: 2 })) return 'h2';
+  if (editor.isActive('blockquote')) return 'blockquote';
+  return 'p';
+}
+
+function getPastedImageFile(event) {
+  const items = Array.from(event?.clipboardData?.items || []);
+  const imageItem = items.find((item) => item.type?.startsWith('image/'));
+  return imageItem?.getAsFile() || null;
 }

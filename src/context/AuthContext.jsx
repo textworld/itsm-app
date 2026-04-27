@@ -1,52 +1,109 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import initialUsers from '../mock/initialUsers.json';
-import { loadCurrentUser, saveCurrentUser } from '../utils/storage.js';
+'use client';
+
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 const AuthContext = createContext(null);
 
-/**
- * AuthProvider
- * - 提供当前登录用户
- * - login(username, password, role): 校验成功后写入 localStorage
- * - logout(): 清除用户
- */
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...options,
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...options.headers
+    }
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  const data = contentType.includes('application/json') ? await response.json() : null;
+  return { response, data };
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => loadCurrentUser());
+  const [user, setUser] = useState(null);
+  const [initialized, setInitialized] = useState(false);
+
+  const refreshSession = useCallback(async () => {
+    const { response, data } = await requestJson('/api/auth/session');
+    if (!response.ok || data?.ok === false) {
+      setUser(null);
+      return null;
+    }
+    setUser(data.user || null);
+    return data.user || null;
+  }, []);
 
   useEffect(() => {
-    saveCurrentUser(user);
-  }, [user]);
+    let active = true;
 
-  const login = (username, password, role) => {
-    const hit = initialUsers.find(
-      (u) => u.username === username && u.password === password && u.role === role
-    );
-    if (!hit) {
-      return { ok: false, reason: '账号、密码或角色不匹配' };
-    }
-    const snapshot = {
-      id: hit.id,
-      username: hit.username,
-      name: hit.name,
-      role: hit.role,
-      department: hit.department
+    (async () => {
+      try {
+        const { response, data } = await requestJson('/api/auth/session');
+        if (!active) return;
+        if (!response.ok || data?.ok === false) {
+          setUser(null);
+        } else {
+          setUser(data.user || null);
+        }
+      } catch (error) {
+        if (active) {
+          console.error(error);
+          setUser(null);
+        }
+      } finally {
+        if (active) {
+          setInitialized(true);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
     };
-    setUser(snapshot);
-    return { ok: true, user: snapshot };
-  };
+  }, []);
 
-  const logout = () => {
-    setUser(null);
-  };
+  const login = useCallback(async (username, password, role) => {
+    try {
+      const { response, data } = await requestJson('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password, role })
+      });
+
+      if (!response.ok || data?.ok === false) {
+        return { ok: false, reason: data?.reason || '登录失败' };
+      }
+
+      setUser(data.user);
+      return { ok: true, user: data.user };
+    } catch (error) {
+      console.error(error);
+      return { ok: false, reason: '登录失败，请稍后重试' };
+    }
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        cache: 'no-store'
+      });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setUser(null);
+    }
+  }, []);
 
   const value = useMemo(
     () => ({
       user,
+      initialized,
       isAuthenticated: Boolean(user),
       login,
-      logout
+      logout,
+      refreshSession
     }),
-    [user]
+    [initialized, login, logout, refreshSession, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
