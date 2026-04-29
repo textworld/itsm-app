@@ -44,7 +44,6 @@ export const EVENTS = {
   NO_ACTION_SUBTASK: 'NO_ACTION_SUBTASK',
   START_SUBTASK: 'START_SUBTASK',
   COMPLETE_SUBTASK: 'COMPLETE_SUBTASK',
-  UPDATE_CUSTOM_TAGS: 'UPDATE_CUSTOM_TAGS',
   TRANSFER_TECH: 'TRANSFER_TECH',
   RETURN_FOR_INFO: 'RETURN_FOR_INFO',
   UPDATE_INFO_SUPPLEMENT: 'UPDATE_INFO_SUPPLEMENT',
@@ -80,7 +79,6 @@ export const EVENT_LABELS = {
   [EVENTS.NO_ACTION_SUBTASK]: '子任务无需处理',
   [EVENTS.START_SUBTASK]: '开始处理子任务',
   [EVENTS.COMPLETE_SUBTASK]: '完成子任务',
-  [EVENTS.UPDATE_CUSTOM_TAGS]: '更新自定义标签',
   [EVENTS.TRANSFER_TECH]: '技术支持转交',
   [EVENTS.RETURN_FOR_INFO]: '退回提交人',
   [EVENTS.UPDATE_INFO_SUPPLEMENT]: '修改补充信息',
@@ -253,26 +251,6 @@ export const TRANSITIONS = [
     event: EVENTS.CREATE_SUBTASK,
     to: STATUS.PROCESSING,
     role: ROLES.L1,
-    recordTimeline: false,
-    transform: (ticket, payload, user, now) => ({
-      subtasks: [
-        ...(ticket.subtasks || []),
-        {
-          ...(payload.subtask || {}),
-          status: 'PENDING',
-          createdAt: now,
-          createdBy: user?.name || ''
-        }
-      ],
-      updatedAt: now
-    })
-  },
-  {
-    id: 'T04A-L2',
-    from: STATUS.PROCESSING,
-    event: EVENTS.CREATE_SUBTASK,
-    to: STATUS.PROCESSING,
-    role: ROLES.L2,
     recordTimeline: false,
     transform: (ticket, payload, user, now) => ({
       subtasks: [
@@ -481,8 +459,7 @@ export const TRANSITIONS = [
       return Boolean(reason && String(reason).trim());
     }
   },
-  ...createSubtaskTicketTransitions(),
-  ...createCustomTagTransitions()
+  ...createSubtaskTicketTransitions()
 ];
 
 export const ROLE_EVENT_PERMISSIONS = {
@@ -492,12 +469,11 @@ export const ROLE_EVENT_PERMISSIONS = {
     EVENTS.UPDATE_DRAFT,
     EVENTS.AI_RESOLVE,
     EVENTS.WITHDRAW,
-    EVENTS.UPDATE_INFO_SUPPLEMENT,
-    EVENTS.COMPLETE_INFO_SUPPLEMENT,
-    EVENTS.REQUESTER_CLOSE,
-    EVENTS.UPDATE_CUSTOM_TAGS,
-    EVENTS.VERIFY_YES,
-    EVENTS.VERIFY_NO
+      EVENTS.UPDATE_INFO_SUPPLEMENT,
+      EVENTS.COMPLETE_INFO_SUPPLEMENT,
+      EVENTS.REQUESTER_CLOSE,
+      EVENTS.VERIFY_YES,
+      EVENTS.VERIFY_NO
   ],
   [ROLES.L1]: [
     EVENTS.ACCEPT,
@@ -513,21 +489,17 @@ export const ROLE_EVENT_PERMISSIONS = {
     EVENTS.CREATE_SUBTASK,
     EVENTS.START_SUBTASK,
     EVENTS.COMPLETE_SUBTASK,
-    EVENTS.UPDATE_CUSTOM_TAGS,
     EVENTS.RETURN_FOR_INFO,
     EVENTS.INITIATE_CLOSURE
   ],
   [ROLES.L2]: [
     EVENTS.L1_REVIEW,
-    EVENTS.CREATE_SUBTASK_TICKET,
     EVENTS.CLAIM_SUBTASK,
     EVENTS.TRANSFER_SUBTASK,
     EVENTS.NO_ACTION_SUBTASK,
     EVENTS.TRANSFER_TECH,
-    EVENTS.CREATE_SUBTASK,
     EVENTS.START_SUBTASK,
-    EVENTS.COMPLETE_SUBTASK,
-    EVENTS.UPDATE_CUSTOM_TAGS
+    EVENTS.COMPLETE_SUBTASK
   ]
 };
 
@@ -613,6 +585,7 @@ export function applyTransition(ticket, event, payload = {}, user) {
             }
           ]
   };
+  nextTicket.assigneeHistory = buildAssigneeHistory(currentTicket, nextTicket, now);
   delete nextTicket.__timelineRemark;
   return nextTicket;
 }
@@ -646,28 +619,33 @@ function updateSubtask(ticket, subtaskId, updater, now) {
   };
 }
 
-function createCustomTagTransitions() {
-  const statuses = [
-    STATUS.DRAFT,
-    STATUS.PENDING,
-    STATUS.PROCESSING,
-    STATUS.INFO_SUPPLEMENT,
-    STATUS.CONFIRMING,
-    STATUS.CLOSED
-  ];
-  const roles = [ROLES.REQUESTER, ROLES.L1, ROLES.L2];
+function buildAssigneeHistory(previousTicket, nextTicket, now) {
+  const history = [...(previousTicket?.assigneeHistory || [])];
+  addAssigneeHistoryEntry(history, ROLES.L1, previousTicket?.assigneeL1Id, previousTicket?.assigneeL1Name, now);
+  addAssigneeHistoryEntry(history, ROLES.L2, previousTicket?.assigneeL2Id, previousTicket?.assigneeL2Name, now);
 
-  return statuses.flatMap((status) =>
-    roles.map((role) => ({
-      id: `T-CUSTOM-TAGS-${status}-${role}`,
-      from: status,
-      event: EVENTS.UPDATE_CUSTOM_TAGS,
-      to: status,
-      role,
-      recordTimeline: false,
-      transform: (ticket, payload, user, now) => buildCustomTagUpdate(ticket, payload, user, now)
-    }))
-  );
+  if (previousTicket?.assigneeL1Id !== nextTicket?.assigneeL1Id) {
+    addAssigneeHistoryEntry(history, ROLES.L1, nextTicket?.assigneeL1Id, nextTicket?.assigneeL1Name, now);
+  }
+  if (previousTicket?.assigneeL2Id !== nextTicket?.assigneeL2Id) {
+    addAssigneeHistoryEntry(history, ROLES.L2, nextTicket?.assigneeL2Id, nextTicket?.assigneeL2Name, now);
+  }
+
+  return history;
+}
+
+function addAssigneeHistoryEntry(history, role, assigneeId, assigneeName, assignedAt) {
+  if (!assigneeId) return;
+  if (history.some((entry) => entry?.role === role && entry?.assigneeId === assigneeId)) {
+    return;
+  }
+
+  history.push({
+    role,
+    assigneeId,
+    assigneeName: assigneeName || '',
+    assignedAt
+  });
 }
 
 function createSubtaskTicketTransitions() {
@@ -675,14 +653,14 @@ function createSubtaskTicketTransitions() {
   const activeStatuses = [STATUS.PENDING, STATUS.PROCESSING];
 
   return [
-    ...techRoles.map((role) => ({
-      id: `T-SUBTASK-CREATE-${role}`,
+    {
+      id: `T-SUBTASK-CREATE-${ROLES.L1}`,
       from: null,
       event: EVENTS.CREATE_SUBTASK_TICKET,
       to: STATUS.PENDING,
-      role,
+      role: ROLES.L1,
       transform: (_ticket, payload, user, now) => buildSubtaskTicket(payload, user, now)
-    })),
+    },
     ...techRoles.map((role) => ({
       id: `T-SUBTASK-CLAIM-${role}`,
       from: STATUS.PENDING,
@@ -755,26 +733,6 @@ function createSubtaskTicketTransitions() {
       ])
     )
   ];
-}
-
-function buildCustomTagUpdate(ticket, payload, user, now) {
-  const userId = user?.id;
-  const tags = normalizeCustomTags(payload.tags);
-
-  if (!userId) {
-    return {
-      customTagsByUser: ticket.customTagsByUser || {},
-      updatedAt: now
-    };
-  }
-
-  return {
-    customTagsByUser: {
-      ...(ticket.customTagsByUser || {}),
-      [userId]: tags
-    },
-    updatedAt: now
-  };
 }
 
 function isSameRoleTransfer(payload, user) {
@@ -875,16 +833,6 @@ function buildSubtaskAssigneeUpdate(role, assigneeId, assigneeName) {
 function inferTechRoleFromUserId(userId) {
   if (String(userId || '').includes('_l2_')) return ROLES.L2;
   return ROLES.L1;
-}
-
-function normalizeCustomTags(tags) {
-  return Array.from(
-    new Set(
-      (Array.isArray(tags) ? tags : [])
-        .map((tag) => String(tag || '').trim())
-        .filter(Boolean)
-    )
-  );
 }
 
 function buildSubmittedTicket(_ticket, payload = {}, user, now) {

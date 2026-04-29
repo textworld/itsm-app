@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   Card,
   Space,
-  Input,
   Button,
   Popconfirm,
   Alert,
@@ -20,6 +19,13 @@ import {
 import { ROLES } from '../../constants/roles.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { shortId } from '../../utils/idGenerator.js';
+import {
+  richTextHasContent,
+  richTextToPlainText,
+  richTextValueToDoc,
+  richTextValueToHtml
+} from '../../utils/richText.js';
+import RichTextEditor from '../common/RichTextEditor.jsx';
 import TechTransferPanel from './TechTransferPanel.jsx';
 
 /**
@@ -31,10 +37,10 @@ export default function L2Actions({ ticket }) {
   const { user } = useAuth();
   const { dispatchEvent, addMessage } = useTickets();
   const { message } = AntdApp.useApp();
-  const [conclusion, setConclusion] = useState(ticket.l2Conclusion || '');
+  const [conclusionDoc, setConclusionDoc] = useState(richTextValueToDoc(ticket.l2Conclusion));
 
   useEffect(() => {
-    setConclusion(ticket.l2Conclusion || '');
+    setConclusionDoc(richTextValueToDoc(ticket.l2Conclusion));
   }, [ticket.id, ticket.l2Conclusion]);
 
   const processingSubStatus = getProcessingSubStatus(ticket);
@@ -51,15 +57,17 @@ export default function L2Actions({ ticket }) {
   }
 
   const handleSubmit = async () => {
-    if (!conclusion.trim()) {
+    if (!richTextHasContent(conclusionDoc)) {
       message.warning('请填写排查结论');
       return;
     }
+    const conclusionHtml = richTextValueToHtml(conclusionDoc);
+    const conclusionText = richTextToPlainText(conclusionDoc);
     const result = await dispatchEvent(
       ticket.id,
       EVENTS.L1_REVIEW,
       {
-        l2Conclusion: conclusion.trim(),
+        l2Conclusion: conclusionHtml,
         assigneeL2Id: user.id,
         assigneeL2Name: user.name,
         __timelineRemark: '二线完成排查，提交一线复核'
@@ -75,7 +83,7 @@ export default function L2Actions({ ticket }) {
       authorId: user.id,
       authorName: user.name,
       authorRole: user.role,
-      content: `【系统】二线运维给出排查结论：${conclusion.trim()}`,
+      content: `【系统】二线运维给出排查结论：${conclusionText}`,
       attachments: [],
       createdAt: new Date().toISOString()
     });
@@ -91,12 +99,9 @@ export default function L2Actions({ ticket }) {
           message="请针对一线打标的缺陷进行排查，并填写排查结论"
           description="提交后工单仍为处理中，并回到「一线排查」子状态。"
         />
-        <Input.TextArea
-          rows={8}
-          value={conclusion}
-          onChange={(e) => setConclusion(e.target.value)}
-          maxLength={1500}
-          showCount
+        <RichTextEditor
+          value={conclusionDoc}
+          onChange={setConclusionDoc}
           placeholder="请详细填写排查过程、根因分析、临时规避/修复建议..."
         />
         <Popconfirm
@@ -105,17 +110,22 @@ export default function L2Actions({ ticket }) {
           okText="确认提交"
           cancelText="取消"
           onConfirm={handleSubmit}
-          disabled={!conclusion.trim()}
+          disabled={!richTextHasContent(conclusionDoc)}
         >
           <Button
             type="primary"
             icon={<SendOutlined />}
-            disabled={!conclusion.trim()}
+            disabled={!richTextHasContent(conclusionDoc)}
           >
             一线复核
           </Button>
         </Popconfirm>
-        <TechTransferPanel ticket={ticket} role={ROLES.L2} />
+        <TechTransferPanel
+          ticket={ticket}
+          role={ROLES.L2}
+          buttonText="转给其他二线运维"
+          modalTitle="转给其他二线运维"
+        />
       </Space>
     </Card>
   );

@@ -23,6 +23,7 @@ export default function TicketInfoCard({ ticket }) {
   const [historyOpen, setHistoryOpen] = React.useState(false);
 
   if (!ticket) return null;
+  const showTechnicalTags = user?.role !== ROLES.REQUESTER;
 
   return (
     <Card
@@ -124,7 +125,7 @@ export default function TicketInfoCard({ ticket }) {
         <AttachmentList attachments={ticket.attachments} compact />
       </div>
 
-      {ticket.defectTag && (
+      {showTechnicalTags && ticket.defectTag && (
         <>
           <Divider />
           <Typography.Title level={5}>缺陷打标</Typography.Title>
@@ -139,7 +140,7 @@ export default function TicketInfoCard({ ticket }) {
         </>
       )}
 
-      {ticket.linkedDefect && (
+      {showTechnicalTags && ticket.linkedDefect && (
         <>
           <Divider />
           <Typography.Title level={5}>关联项目缺陷</Typography.Title>
@@ -167,9 +168,11 @@ export default function TicketInfoCard({ ticket }) {
         <>
           <Divider />
           <Typography.Title level={5}>二线排查结论</Typography.Title>
-          <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
-            {ticket.l2Conclusion}
-          </Typography.Paragraph>
+          <RichContentPreview
+            className="ticket-rich-l2-conclusion"
+            html={ticket.l2Conclusion}
+            text={ticket.l2Conclusion}
+          />
         </>
       )}
 

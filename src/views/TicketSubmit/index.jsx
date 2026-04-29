@@ -330,6 +330,8 @@ export function TicketSubmitForm({ draftTicket = null }) {
               >
                 <Select
                   className="reference-medium-control"
+                  showSearch
+                  optionFilterProp="label"
                   options={SYSTEM_CATEGORY_OPTIONS}
                   onChange={() => form.setFieldValue('systemName', undefined)}
                 />

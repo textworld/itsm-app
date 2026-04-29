@@ -154,6 +154,25 @@ export function TicketProvider({ children }) {
     }
   }, []);
 
+  const updateCustomTags = useCallback(async (ticketId, tags) => {
+    try {
+      const { response, data } = await requestJson(`/api/tickets/${ticketId}/custom-tags`, {
+        method: 'POST',
+        body: JSON.stringify({ tags })
+      });
+
+      if (!response.ok || data?.ok === false) {
+        return { ok: false, reason: data?.reason || '更新自定义标签失败' };
+      }
+
+      setTickets((prev) => replaceTicketInList(prev, data.ticket));
+      return { ok: true, ticket: data.ticket };
+    } catch (error) {
+      console.error(error);
+      return { ok: false, reason: error.message || '更新自定义标签失败' };
+    }
+  }, []);
+
   const addMessage = useCallback(async (ticketId, message) => {
     const { response, data } = await requestJson(`/api/tickets/${ticketId}/messages`, {
       method: 'POST',
@@ -246,6 +265,7 @@ export function TicketProvider({ children }) {
       markMessagesRead,
       addDefect,
       dispatchEvent,
+      updateCustomTags,
       resetData,
       exportData,
       refreshData
@@ -262,6 +282,7 @@ export function TicketProvider({ children }) {
       markMessagesRead,
       addDefect,
       dispatchEvent,
+      updateCustomTags,
       resetData,
       exportData,
       refreshData

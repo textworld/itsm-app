@@ -1,6 +1,8 @@
 import { applyTransition, canTransition, EVENTS } from '../state-machine/ticketStateMachine.js';
 import { withDualStatuses } from '../constants/ticketStatus.js';
 import { generateTicketId, shortId } from '../utils/idGenerator.js';
+import { buildCustomTagUpdate } from '../utils/customTicketTags.js';
+import { TICKET_ACTIONS, canPerformTicketAction } from '../permissions/ticketPermissionMatrix.js';
 import { getDb, reseedDb } from './db.js';
 
 function parseRow(row) {
@@ -77,6 +79,23 @@ export function addMessageToTicket(ticketId, message) {
     messages: [...(ticket.messages || []), message],
     updatedAt: new Date().toISOString()
   });
+}
+
+export function updateTicketCustomTags(ticketId, tags, user) {
+  const ticket = getTicketById(ticketId);
+  if (!ticket) {
+    return { ok: false, reason: '工单不存在' };
+  }
+
+  if (!canPerformTicketAction(ticket, user, TICKET_ACTIONS.UPDATE_CUSTOM_TAGS)) {
+    return { ok: false, reason: '当前状态或角色无权执行该操作' };
+  }
+
+  const nextTicket = buildCustomTagUpdate(ticket, tags, user);
+  return {
+    ok: true,
+    ticket: upsertTicket(nextTicket)
+  };
 }
 
 export function dispatchTicketEvent(ticketId, event, payload, user) {

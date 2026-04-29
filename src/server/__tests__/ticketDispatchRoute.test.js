@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import { POST as dispatchPost } from '../../../app/api/tickets/[id]/dispatch/route.js';
 import { STATUS } from '../../constants/ticketStatus.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
-import { dispatchCreateTicketEvent, dispatchTicketEvent, getTicketById } from '../store.js';
+import { dispatchCreateTicketEvent, dispatchTicketEvent, getTicketById, updateTicketCustomTags } from '../store.js';
 import { reseedDb } from '../db.js';
 
 const requesterUser = { id: 'u_requester_1', name: '张三', role: 'REQUESTER' };
+const l1User = { id: 'u_l1_1', name: '李一线', role: 'L1' };
 
 test.beforeEach(() => {
   reseedDb();
@@ -148,4 +149,35 @@ test('creating a subtask dispatch creates a child ticket using the parent ticket
   assert.equal(childTicket.parentTicketId, parentResult.ticket.id);
   assert.equal(childTicket.isSubtask, true);
   assert.equal(childTicket.subtaskStatus, 'PENDING');
+});
+
+test('自定义标签通过权限矩阵更新而不是状态机事件', () => {
+  const ticketResult = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      id: 'TKT-20260429-0099',
+      title: '自定义标签工单',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P4',
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '标签描述' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  const result = updateTicketCustomTags(
+    ticketResult.ticket.id,
+    ['  数据问题 ', '数据问题', '复盘'],
+    l1User
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.ticket.customTagsByUser.u_l1_1, ['数据问题', '复盘']);
 });

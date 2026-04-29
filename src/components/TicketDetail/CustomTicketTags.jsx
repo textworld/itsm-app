@@ -2,12 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { App as AntdApp, Select, Space, Typography } from 'antd';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
-import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { getReusableCustomTags, getUserTicketTags } from '../../utils/customTicketTags.js';
 
 export default function CustomTicketTags({ ticket }) {
   const { user } = useAuth();
-  const { tickets, dispatchEvent } = useTickets();
+  const { tickets, updateCustomTags } = useTickets();
   const { message } = AntdApp.useApp();
   const [saving, setSaving] = useState(false);
 
@@ -24,7 +23,7 @@ export default function CustomTicketTags({ ticket }) {
 
   const handleChange = async (tags) => {
     setSaving(true);
-    const result = await dispatchEvent(ticket.id, EVENTS.UPDATE_CUSTOM_TAGS, { tags });
+    const result = await updateCustomTags(ticket.id, tags);
     setSaving(false);
     if (!result.ok) {
       message.error(result.reason || '更新自定义标签失败');

@@ -8,26 +8,19 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
 import { ROLES } from '../../constants/roles.js';
 import {
-  PROCESSING_SUB_STATUS,
   PROCESSING_SUB_STATUS_LABELS,
   REQUESTER_STATUSES,
   STATUS,
   STATUS_LABELS,
-  SUPPORT_STATUSES,
-  getProcessingSubStatus,
-  getRequesterStatus,
-  getSupportStatus
+  SUPPORT_STATUSES
 } from '../../constants/ticketStatus.js';
-import {
-  TOOL_TYPES,
-  TOOL_TYPE_OPTIONS,
-  L1_ACCEPTABLE_TOOL_TYPES
-} from '../../constants/toolTypes.js';
+import { TOOL_TYPE_OPTIONS } from '../../constants/toolTypes.js';
 import { PRIORITY_OPTIONS } from '../../constants/priorities.js';
 import { SYSTEM_OPTIONS } from '../../constants/systems.js';
 import TicketTable from '../../components/TicketList/TicketTable.jsx';
 import DataActionBar from '../../components/TicketList/DataActionBar.jsx';
 import { filterTicketsBySearch } from '../../utils/ticketListFilters.js';
+import { TICKET_LIST_MODES, buildView } from '../../utils/ticketListView.js';
 
 const { RangePicker } = DatePicker;
 
@@ -63,7 +56,7 @@ const YES_NO_OPTIONS = [
  * - 二线：待排查
  * - 顶部 + 底部均提供 "初始化数据" + "导出数据"
  */
-export default function TicketListPage() {
+export default function TicketListPage({ mode = TICKET_LIST_MODES.CURRENT }) {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { tickets, messageReads } = useTickets();
@@ -72,7 +65,7 @@ export default function TicketListPage() {
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
-  const myView = useMemo(() => buildView(tickets, user), [tickets, user]);
+  const myView = useMemo(() => buildView(tickets, user, { mode }), [mode, tickets, user]);
   const statusOptions = useMemo(() => buildStatusOptions(user), [user]);
   const filteredTabs = useMemo(
     () =>
@@ -95,12 +88,12 @@ export default function TicketListPage() {
       ? tabFromUrl
       : hasActiveTab
         ? activeTab
-        : 'ALL';
+        : myView.defaultTab || 'ALL';
 
     if (nextTab !== activeTab) {
       setActiveTab(nextTab);
     }
-  }, [activeTab, myView.tabs, tabFromUrl]);
+  }, [activeTab, myView.defaultTab, myView.tabs, tabFromUrl]);
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -276,19 +269,26 @@ export default function TicketListPage() {
               />
             </Space>
           )}
-          <Tabs
-            activeKey={activeTab}
-            onChange={setActiveTab}
-            items={filteredTabs.map((t) => ({
-              key: t.key,
-              label: (
-                <span>
-                  {t.label} <Badge count={t.data.length} color={t.color || 'blue'} showZero />
-                </span>
-              ),
-              children: <TicketTable dataSource={t.data} showRequester={user.role !== ROLES.REQUESTER} />
-            }))}
-          />
+          {myView.hideTabs ? (
+            <TicketTable
+              dataSource={filteredTabs[0]?.data || []}
+              showRequester={user.role !== ROLES.REQUESTER}
+            />
+          ) : (
+            <Tabs
+              activeKey={activeTab}
+              onChange={setActiveTab}
+              items={filteredTabs.map((t) => ({
+                key: t.key,
+                label: (
+                  <span>
+                    {t.label} <Badge count={t.data.length} color={t.color || 'blue'} showZero />
+                  </span>
+                ),
+                children: <TicketTable dataSource={t.data} showRequester={user.role !== ROLES.REQUESTER} />
+              }))}
+            />
+          )}
         </Space>
       </Card>
 
@@ -308,101 +308,3 @@ function buildStatusOptions(user) {
     label: STATUS_LABELS[status] || status
   }));
 }
-
-/**
- * 根据角色生成列表视图配置
- */
-function buildView(tickets, user) {
-  if (!user) {
-    return { heading: '', subheading: '', total: 0, tabs: [] };
-  }
-
-  if (user.role === ROLES.REQUESTER) {
-    const mine = tickets.filter((t) => t.requesterId === user.id);
-    const byStatus = (s) => mine.filter((t) => getRequesterStatus(t) === s);
-    return {
-      heading: '我提交的工单',
-      subheading: '展示当前提单人账号下的所有工单',
-      total: mine.length,
-      tabs: [
-        { key: 'ALL', label: '全部', data: mine, color: 'blue' },
-        { key: STATUS.DRAFT, label: STATUS_LABELS[STATUS.DRAFT], data: byStatus(STATUS.DRAFT), color: 'default' },
-        { key: STATUS.PENDING, label: STATUS_LABELS[STATUS.PENDING], data: byStatus(STATUS.PENDING), color: 'orange' },
-        { key: STATUS.PROCESSING, label: STATUS_LABELS[STATUS.PROCESSING], data: byStatus(STATUS.PROCESSING), color: 'processing' },
-        { key: STATUS.INFO_SUPPLEMENT, label: STATUS_LABELS[STATUS.INFO_SUPPLEMENT], data: byStatus(STATUS.INFO_SUPPLEMENT), color: 'cyan' },
-        { key: STATUS.CONFIRMING, label: STATUS_LABELS[STATUS.CONFIRMING], data: byStatus(STATUS.CONFIRMING), color: 'gold' },
-        { key: STATUS.CLOSED, label: STATUS_LABELS[STATUS.CLOSED], data: byStatus(STATUS.CLOSED), color: 'green' }
-      ]
-    };
-  }
-
-  if (user.role === ROLES.L1) {
-    const allTickets = tickets.filter(
-      (t) =>
-        L1_ACCEPTABLE_TOOL_TYPES.includes(t.toolType) &&
-        getSupportStatus(t) !== STATUS.DRAFT
-    );
-    const pending = allTickets.filter((t) => getSupportStatus(t) === STATUS.PENDING);
-    const l1Processing = allTickets.filter(
-      (t) =>
-        getSupportStatus(t) === STATUS.PROCESSING &&
-        getProcessingSubStatus(t) === PROCESSING_SUB_STATUS.L1_INVESTIGATION
-    );
-    const l2Processing = allTickets.filter(
-      (t) =>
-        getSupportStatus(t) === STATUS.PROCESSING &&
-        getProcessingSubStatus(t) === PROCESSING_SUB_STATUS.L2_INVESTIGATION
-    );
-    const returned = allTickets.filter((t) => getSupportStatus(t) === STATUS.RETURNED);
-    const suspended = allTickets.filter((t) => getSupportStatus(t) === STATUS.SUSPENDED);
-    const infoSupplement = allTickets.filter((t) => getSupportStatus(t) === STATUS.INFO_SUPPLEMENT);
-    const confirming = allTickets.filter((t) => getSupportStatus(t) === STATUS.CONFIRMING);
-    const closed = allTickets.filter((t) => getSupportStatus(t) === STATUS.CLOSED);
-    return {
-      heading: '一线技术支持工作台',
-      subheading: '展示全部工单，并按当前处理阶段分类',
-      total: allTickets.length,
-      tabs: [
-        { key: 'ALL', label: '全部', data: allTickets, color: 'blue' },
-        { key: STATUS.PENDING, label: `待受理`, data: pending, color: 'orange' },
-        { key: 'PROCESSING_L1', label: `处理中·一线排查`, data: l1Processing, color: 'processing' },
-        { key: 'PROCESSING_L2', label: `处理中·二线排查`, data: l2Processing, color: 'volcano' },
-        { key: STATUS.SUSPENDED, label: `已挂起`, data: suspended, color: 'default' },
-        { key: STATUS.INFO_SUPPLEMENT, label: `信息补充`, data: infoSupplement, color: 'cyan' },
-        { key: STATUS.RETURNED, label: `已回退`, data: returned, color: 'red' },
-        { key: STATUS.CONFIRMING, label: `待确认`, data: confirming, color: 'gold' },
-        { key: STATUS.CLOSED, label: `已办结`, data: closed, color: 'green' }
-      ]
-    };
-  }
-
-  if (user.role === ROLES.L2) {
-    const investigating = tickets.filter(
-      (t) =>
-        (getSupportStatus(t) === STATUS.PROCESSING &&
-          getProcessingSubStatus(t) === PROCESSING_SUB_STATUS.L2_INVESTIGATION) ||
-        (t.isSubtask &&
-          getSupportStatus(t) !== STATUS.CLOSED &&
-          (t.assigneeL2Id === user.id || (!t.assigneeL1Id && !t.assigneeL2Id)))
-    );
-    const handled = tickets.filter(
-      (t) =>
-        t.assigneeL2Id === user.id &&
-        getProcessingSubStatus(t) !== PROCESSING_SUB_STATUS.L2_INVESTIGATION
-    );
-    return {
-      heading: '二线运维工作台',
-      subheading: '展示一线流转过来的处理中·二线排查缺陷类工单',
-      total: investigating.length,
-      tabs: [
-        { key: 'PROCESSING_L2', label: '处理中·二线排查', data: investigating, color: 'volcano' },
-        { key: 'HANDLED', label: '我已处理', data: handled, color: 'blue' }
-      ]
-    };
-  }
-
-  return { heading: '', subheading: '', total: 0, tabs: [] };
-}
-
-// 引用说明：保留 TOOL_TYPES 以便将来扩展按类型筛选（避免 lint 警告也可删除）
-void TOOL_TYPES;

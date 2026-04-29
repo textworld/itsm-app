@@ -33,3 +33,10 @@ test('顶部导航使用更收紧的后台样式类', () => {
   assert.match(globalCssSource, /\.app-shell-nav\s+\.ant-menu/);
   assert.match(globalCssSource, /\.app-shell-toolbar\s*\{/);
 });
+
+test('support roles have a history ticket list entry in the top navigation', () => {
+  assert.match(appLayoutSource, /HistoryOutlined/);
+  assert.match(appLayoutSource, /user\?\.role === ROLES\.L1 \|\| user\?\.role === ROLES\.L2/);
+  assert.match(appLayoutSource, /href="\/tickets\/history"/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/tickets\/history'\)/);
+});

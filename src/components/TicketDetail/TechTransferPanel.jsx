@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
 import { App as AntdApp, Button, Form, Modal, Radio, Select } from 'antd';
 import { SwapOutlined } from '@ant-design/icons';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { listSameRoleAssignees, routeTechTransferAssignee } from '../../utils/techTransferRouting.js';
 
-export default function TechTransferPanel({ ticket, role }) {
+export default function TechTransferPanel({
+  ticket,
+  role,
+  buttonText = '转给其他技术支持',
+  modalTitle = '转给其他技术支持'
+}) {
+  const { user } = useAuth();
   const { dispatchEvent } = useTickets();
   const { message } = AntdApp.useApp();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
-  const assignees = listSameRoleAssignees(role);
+  const assignees = listSameRoleAssignees(role).filter((assignee) => assignee.id !== user?.id);
 
   const handleOpen = () => {
     form.setFieldsValue({
@@ -24,7 +31,7 @@ export default function TechTransferPanel({ ticket, role }) {
     const values = await form.validateFields();
     const assignee = values.communicated
       ? assignees.find((item) => item.id === values.assigneeId)
-      : routeTechTransferAssignee(role);
+      : routeTechTransferAssignee(role, user?.id);
 
     const result = await dispatchEvent(ticket.id, EVENTS.TRANSFER_TECH, {
       targetRole: role,
@@ -47,10 +54,10 @@ export default function TechTransferPanel({ ticket, role }) {
   return (
     <>
       <Button icon={<SwapOutlined />} onClick={handleOpen}>
-        转给其他技术支持
+        {buttonText}
       </Button>
       <Modal
-        title="转给其他技术支持"
+        title={modalTitle}
         open={open}
         onOk={handleTransfer}
         onCancel={() => setOpen(false)}
@@ -71,7 +78,11 @@ export default function TechTransferPanel({ ticket, role }) {
             {({ getFieldValue }) =>
               getFieldValue('communicated') ? (
                 <Form.Item name="assigneeId" label="处理人" rules={[{ required: true, message: '请选择处理人' }]}>
-                  <Select options={assignees.map((item) => ({ label: item.name, value: item.id }))} />
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    options={assignees.map((item) => ({ label: item.name, value: item.id }))}
+                  />
                 </Form.Item>
               ) : null
             }

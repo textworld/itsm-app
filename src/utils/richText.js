@@ -10,6 +10,22 @@ const RichTextImage = Image.extend({
       ...this.parent?.(),
       uploadId: {
         default: null
+      },
+      widthPercent: {
+        default: null,
+        parseHTML: (element) =>
+          normalizeImageWidthPercent(
+            element.getAttribute('data-width-percent') || element.style?.width
+          ),
+        renderHTML: (attributes) => {
+          const widthPercent = normalizeImageWidthPercent(attributes.widthPercent);
+          if (!widthPercent) return {};
+
+          return {
+            'data-width-percent': String(widthPercent),
+            style: `width: ${widthPercent}%; max-width: 100%; height: auto;`
+          };
+        }
       }
     };
   }
@@ -188,4 +204,11 @@ function stripHtmlTags(html) {
 
 function containsImageTag(html) {
   return /<img\b/i.test(String(html || ''));
+}
+
+function normalizeImageWidthPercent(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number.parseInt(String(value).replace('%', ''), 10);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.min(100, Math.max(20, parsed));
 }

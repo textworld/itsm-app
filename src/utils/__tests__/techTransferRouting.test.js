@@ -1,0 +1,19 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { ROLES } from '../../constants/roles.js';
+import { listSameRoleAssignees, routeTechTransferAssignee } from '../techTransferRouting.js';
+
+test('二线转交候选人包含全部二线运维账号', () => {
+  const assignees = listSameRoleAssignees(ROLES.L2);
+
+  assert.deepEqual(
+    assignees.map((assignee) => assignee.id),
+    ['u_l2_1', 'u_l2_2', 'u_l2_3']
+  );
+  assert.equal(routeTechTransferAssignee(ROLES.L2).id, 'u_l2_1');
+});
+
+test('自动转交默认避开当前二线运维', () => {
+  assert.equal(routeTechTransferAssignee(ROLES.L2, 'u_l2_1').id, 'u_l2_2');
+});

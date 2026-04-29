@@ -96,7 +96,12 @@ export default function SubtaskActions({ ticket }) {
       >
         <Form form={transferForm} layout="vertical">
           <Form.Item name="systemCategory" label="新老系统标签" rules={[{ required: true, message: '请选择新老系统标签' }]}>
-            <Select options={SYSTEM_CATEGORY_OPTIONS} onChange={() => transferForm.setFieldValue('systemCode', undefined)} />
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={SYSTEM_CATEGORY_OPTIONS}
+              onChange={() => transferForm.setFieldValue('systemCode', undefined)}
+            />
           </Form.Item>
           <Form.Item noStyle shouldUpdate={(previous, current) => previous.systemCategory !== current.systemCategory}>
             {({ getFieldValue }) => (
@@ -127,4 +132,3 @@ export default function SubtaskActions({ ticket }) {
     </Card>
   );
 }
-

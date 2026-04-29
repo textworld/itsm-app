@@ -41,30 +41,8 @@ test('CREATE_DRAFT 通过状态机创建草稿且不进入待受理', () => {
   assert.equal(nextTicket.timeline[0].action, EVENTS.CREATE_DRAFT);
 });
 
-test('UPDATE_CUSTOM_TAGS 通过状态机按用户维度保存自定义标签', () => {
-  const nextTicket = applyTransition(
-    {
-      id: 'TKT-CUSTOM-TAGS-1',
-      status: STATUS.PROCESSING,
-      requesterStatus: STATUS.PROCESSING,
-      supportStatus: STATUS.PROCESSING,
-      processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
-      customTagsByUser: {
-        u_other: ['他人标签']
-      },
-      timeline: []
-    },
-    EVENTS.UPDATE_CUSTOM_TAGS,
-    {
-      tags: ['  数据问题 ', '数据问题', '', 'P1复盘']
-    },
-    requesterUser
-  );
-
-  assert.equal(nextTicket.status, STATUS.PROCESSING);
-  assert.deepEqual(nextTicket.customTagsByUser.u_requester_1, ['数据问题', 'P1复盘']);
-  assert.deepEqual(nextTicket.customTagsByUser.u_other, ['他人标签']);
-  assert.equal(nextTicket.timeline.length, 0);
+test('自定义标签不作为状态机事件维护', () => {
+  assert.equal(EVENTS.UPDATE_CUSTOM_TAGS, undefined);
 });
 
 test('TRANSFER_TECH 只允许技术支持同角色转交', () => {
@@ -110,6 +88,40 @@ test('TRANSFER_TECH 只允许技术支持同角色转交', () => {
         l1User
       ),
     /操作前置条件未满足/
+  );
+});
+
+test('TRANSFER_TECH records previous and next assignees in assignee history', () => {
+  const transferred = applyTransition(
+    {
+      id: 'TKT-ASSIGNEE-HISTORY-1',
+      status: STATUS.PROCESSING,
+      requesterStatus: STATUS.PROCESSING,
+      supportStatus: STATUS.PROCESSING,
+      processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+      assigneeL1Id: 'u_l1_1',
+      assigneeL1Name: 'L1 One',
+      assigneeHistory: []
+    },
+    EVENTS.TRANSFER_TECH,
+    {
+      targetRole: ROLES.L1,
+      assigneeId: 'u_l1_2',
+      assigneeName: 'L1 Two'
+    },
+    l1User
+  );
+
+  assert.deepEqual(
+    transferred.assigneeHistory.map((entry) => ({
+      role: entry.role,
+      assigneeId: entry.assigneeId,
+      assigneeName: entry.assigneeName
+    })),
+    [
+      { role: ROLES.L1, assigneeId: 'u_l1_1', assigneeName: 'L1 One' },
+      { role: ROLES.L1, assigneeId: 'u_l1_2', assigneeName: 'L1 Two' }
+    ]
   );
 });
 
@@ -464,6 +476,33 @@ test('子任务通过状态机创建、处理和完成', () => {
   assert.equal(processingSubtask.subtasks[0].status, 'PROCESSING');
   assert.equal(completedSubtask.subtasks[0].status, 'COMPLETED');
   assert.equal(completedSubtask.subtasks[0].noMainTicketActionRequired, true);
+});
+
+test('二线运维不能在父工单上创建子任务', () => {
+  assert.throws(
+    () =>
+      applyTransition(
+        {
+          id: 'TKT-SUBTASK-L2-DENIED',
+          status: STATUS.PROCESSING,
+          requesterStatus: STATUS.PROCESSING,
+          supportStatus: STATUS.PROCESSING,
+          processingSubStatus: PROCESSING_SUB_STATUS.L2_INVESTIGATION,
+          subtasks: []
+        },
+        EVENTS.CREATE_SUBTASK,
+        {
+          subtask: {
+            id: 'subtask_denied',
+            systemCode: 'OPS_MONITOR',
+            systemName: '运维监控中心',
+            description: '二线不能分派子任务'
+          }
+        },
+        l2User
+      ),
+    /当前状态或角色无权执行该操作/
+  );
 });
 
 test('创建子任务工单指定二线处理人时写入二线处理字段', () => {

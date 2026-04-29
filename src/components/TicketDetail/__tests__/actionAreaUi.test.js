@@ -31,6 +31,14 @@ const defectTagModalSource = fs.readFileSync(
   new URL('../DefectTagModal.jsx', import.meta.url),
   'utf8'
 );
+const draftTicketEditButtonSource = fs.readFileSync(
+  new URL('../DraftTicketEditButton.jsx', import.meta.url),
+  'utf8'
+);
+const ticketSubmitSource = fs.readFileSync(
+  new URL('../../../views/TicketSubmit/index.jsx', import.meta.url),
+  'utf8'
+);
 
 const l2ActionsSource = fs.readFileSync(
   new URL('../L2Actions.jsx', import.meta.url),
@@ -41,6 +49,10 @@ const subtaskPanelSource = fs.readFileSync(
   new URL('../SubtaskPanel.jsx', import.meta.url),
   'utf8'
 );
+const subtaskActionsSource = fs.readFileSync(
+  new URL('../SubtaskActions.jsx', import.meta.url),
+  'utf8'
+);
 
 const techTransferPanelSource = fs.existsSync(new URL('../TechTransferPanel.jsx', import.meta.url))
   ? fs.readFileSync(new URL('../TechTransferPanel.jsx', import.meta.url), 'utf8')
@@ -48,6 +60,10 @@ const techTransferPanelSource = fs.existsSync(new URL('../TechTransferPanel.jsx'
 
 const linkDefectPanelSource = fs.readFileSync(
   new URL('../LinkDefectPanel.jsx', import.meta.url),
+  'utf8'
+);
+const customTicketTagsSource = fs.readFileSync(
+  new URL('../CustomTicketTags.jsx', import.meta.url),
   'utf8'
 );
 
@@ -81,6 +97,8 @@ test('自定义标签放在详情页右侧操作区', () => {
   assert.match(ticketDetailSource, /import CustomTicketTags from '..\/..\/components\/TicketDetail\/CustomTicketTags\.jsx';/);
   assert.doesNotMatch(ticketInfoCardSource, /<CustomTicketTags ticket=\{ticket\}/);
   assert.match(rightColumnSource, /<Card title="自定义标签"[\s\S]*<CustomTicketTags ticket=\{ticket\} \/>[\s\S]*\{renderActions\(\)\}/);
+  assert.match(customTicketTagsSource, /updateCustomTags\(ticket\.id, tags\)/);
+  assert.doesNotMatch(customTicketTagsSource, /EVENTS\.UPDATE_CUSTOM_TAGS/);
 });
 
 test('工单总结使用富文本预览支持图片', () => {
@@ -99,11 +117,24 @@ test('工单总结使用富文本预览支持图片', () => {
 
 test('技术支持转交仅提供同角色转交并要求是否提前沟通', () => {
   assert.match(l1ActionsSource, /<TechTransferPanel ticket=\{ticket\} role=\{ROLES\.L1\}/);
-  assert.match(l2ActionsSource, /<TechTransferPanel ticket=\{ticket\} role=\{ROLES\.L2\}/);
+  assert.match(
+    l2ActionsSource,
+    /<TechTransferPanel[\s\S]*role=\{ROLES\.L2\}[\s\S]*buttonText="转给其他二线运维"[\s\S]*modalTitle="转给其他二线运维"/
+  );
   assert.match(techTransferPanelSource, /EVENTS\.TRANSFER_TECH/);
   assert.match(techTransferPanelSource, /name="communicated"/);
   assert.match(techTransferPanelSource, /name="assigneeId"/);
   assert.match(techTransferPanelSource, /targetRole: role/);
+});
+
+test('二线操作区不展示通用的转给其他技术支持按钮', () => {
+  const l2TransferStart = l2ActionsSource.indexOf('<TechTransferPanel');
+  const l2TransferEnd = l2ActionsSource.indexOf('/>', l2TransferStart);
+  const l2TransferSource = l2ActionsSource.slice(l2TransferStart, l2TransferEnd);
+
+  assert.notEqual(l2TransferStart, -1);
+  assert.match(l2TransferSource, /buttonText="转给其他二线运维"/);
+  assert.doesNotMatch(l2TransferSource, /转给其他技术支持/);
 });
 
 test('草稿状态详情页直接使用提交工单表单编辑态', () => {
@@ -201,6 +232,38 @@ test('子任务面板支持可空指定处理人并创建子任务工单', () =>
   assert.doesNotMatch(assigneeSource, /rules=\{\[\{ required: true/);
   assert.match(subtaskPanelSource, /EVENTS\.CREATE_SUBTASK/);
   assert.match(subtaskPanelSource, /subtaskTicket/);
+});
+
+test('子任务面板只有一线技术支持可以创建子任务', () => {
+  assert.match(subtaskPanelSource, /canPerformTicketAction\(ticket, user, TICKET_ACTIONS\.CREATE_SUBTASK\)/);
+  assert.match(subtaskPanelSource, /canCreateSubtask && \(/);
+});
+
+test('二线复核结论使用富文本编辑器提交 HTML', () => {
+  assert.match(l2ActionsSource, /import RichTextEditor from '..\/common\/RichTextEditor\.jsx';/);
+  assert.match(l2ActionsSource, /const \[conclusionDoc, setConclusionDoc\]/);
+  assert.match(l2ActionsSource, /<RichTextEditor[\s\S]*value=\{conclusionDoc\}/);
+  assert.match(l2ActionsSource, /l2Conclusion: conclusionHtml/);
+  assert.doesNotMatch(l2ActionsSource, /<Input\.TextArea/);
+  assert.match(ticketInfoCardSource, /<RichContentPreview[\s\S]*html=\{ticket\.l2Conclusion\}/);
+});
+
+test('技术支持手动转交处理人选择框支持搜索', () => {
+  assert.match(techTransferPanelSource, /<Select[\s\S]*showSearch[\s\S]*optionFilterProp="label"/);
+});
+
+test('所有系统名称选择框支持搜索', () => {
+  for (const source of [
+    requesterActionsSource,
+    subtaskPanelSource,
+    subtaskActionsSource,
+    draftTicketEditButtonSource,
+    ticketSubmitSource
+  ]) {
+    if (!source.includes('getSystemOptionsByCategory') && !source.includes('SYSTEM_OPTIONS')) continue;
+    assert.match(source, /showSearch/);
+    assert.match(source, /optionFilterProp="label"/);
+  }
 });
 
 test('二线操作区和缺陷关联操作带二次确认', () => {

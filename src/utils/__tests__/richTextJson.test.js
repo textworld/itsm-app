@@ -51,6 +51,29 @@ test('HTML 可转换为包含图片节点的文档', () => {
   assert.equal(doc.content[1].attrs.src, '/api/uploads/upl_1');
 });
 
+test('rich text image scale is preserved in JSON and generated HTML', () => {
+  const doc = {
+    type: 'doc',
+    content: [
+      {
+        type: 'image',
+        attrs: {
+          src: '/api/uploads/upl_scaled',
+          alt: 'scaled',
+          widthPercent: 55
+        }
+      }
+    ]
+  };
+
+  const html = richTextDocToHtml(doc);
+  const parsed = richTextHtmlToDoc('<img src="/api/uploads/upl_scaled" data-width-percent="45" />');
+
+  assert.match(html, /data-width-percent="55"/);
+  assert.match(html, /width:\s*55%/);
+  assert.equal(parsed.content[0].attrs.widthPercent, 45);
+});
+
 test('绾枃鏈姙缁撴€荤粨鍙浆涓哄瘜鏂囨湰娈佃惤', () => {
   const doc = richTextPlainTextToDoc('处理过程：已重启服务\n处理结论：问题恢复');
 

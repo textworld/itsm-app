@@ -18,6 +18,7 @@ import {
   PlusCircleOutlined,
   LogoutOutlined,
   UserOutlined,
+  HistoryOutlined,
   NodeIndexOutlined,
   ReloadOutlined
 } from '@ant-design/icons';
@@ -66,6 +67,13 @@ export default function AppLayout({ children }) {
         label: <Link href="/tickets/new">提交工单</Link>
       });
     }
+    if (user?.role === ROLES.L1 || user?.role === ROLES.L2) {
+      base.push({
+        key: '/tickets/history',
+        icon: <HistoryOutlined />,
+        label: <Link href="/tickets/history">历史工单</Link>
+      });
+    }
     base.push({
       key: '/state-machine',
       icon: <NodeIndexOutlined />,
@@ -76,12 +84,15 @@ export default function AppLayout({ children }) {
 
   const selectedKey = useMemo(() => {
     if (pathname.startsWith('/tickets/new')) return '/tickets/new';
+    if (pathname.startsWith('/tickets/history')) return '/tickets/history';
     if (pathname.startsWith('/tickets')) return '/tickets';
     if (pathname.startsWith('/state-machine')) return '/state-machine';
     return '/tickets';
   }, [pathname]);
 
-  const isTicketDetailPage = pathname.startsWith('/tickets/') && !pathname.startsWith('/tickets/new');
+  const isTicketDetailPage = pathname.startsWith('/tickets/') &&
+    !pathname.startsWith('/tickets/new') &&
+    !pathname.startsWith('/tickets/history');
 
   const handleLogout = async () => {
     await logout();
@@ -171,6 +182,8 @@ function pageTitle(key) {
   switch (key) {
     case '/tickets/new':
       return '提交工单';
+    case '/tickets/history':
+      return '历史工单';
     case '/state-machine':
       return '工单流转规则';
     case '/tickets':

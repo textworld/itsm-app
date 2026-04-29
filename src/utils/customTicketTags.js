@@ -19,3 +19,36 @@ export function getReusableCustomTags(tickets, userId) {
 
   return reusableTags;
 }
+
+export function buildCustomTagUpdate(ticket, tags, user, updatedAt = new Date().toISOString()) {
+  const userId = user?.id;
+  if (!userId) {
+    return {
+      ...ticket,
+      updatedAt
+    };
+  }
+
+  return {
+    ...ticket,
+    customTagsByUser: {
+      ...(ticket.customTagsByUser || {}),
+      [userId]: normalizeCustomTags(tags)
+    },
+    updatedAt
+  };
+}
+
+function normalizeCustomTags(tags) {
+  const normalized = [];
+  const seen = new Set();
+
+  for (const tag of Array.isArray(tags) ? tags : []) {
+    const value = String(tag || '').trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    normalized.push(value);
+  }
+
+  return normalized;
+}

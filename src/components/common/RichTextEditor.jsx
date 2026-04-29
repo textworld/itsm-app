@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
-import { Button, Select, Space, Tooltip, App as AntdApp } from 'antd';
+import { Button, Select, Slider, Space, Tooltip, App as AntdApp } from 'antd';
 import {
   BoldOutlined,
   ItalicOutlined,
@@ -11,6 +11,8 @@ import {
   UnorderedListOutlined,
   LinkOutlined,
   PictureOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
   UndoOutlined,
   RedoOutlined,
   ClearOutlined
@@ -30,6 +32,10 @@ const HEADING_OPTIONS = [
   { value: 'h2', label: '标题' },
   { value: 'blockquote', label: '引用' }
 ];
+
+const IMAGE_WIDTH_MIN = 20;
+const IMAGE_WIDTH_MAX = 100;
+const IMAGE_WIDTH_STEP = 5;
 
 export default function RichTextEditor({
   value,
@@ -112,7 +118,8 @@ export default function RichTextEditor({
           src: uploaded.url,
           alt: file.name,
           title: file.name,
-          uploadId: uploaded.uploadId
+          uploadId: uploaded.uploadId,
+          widthPercent: 100
         })
         .run();
     } catch (error) {
@@ -189,6 +196,19 @@ export default function RichTextEditor({
   };
 
   const currentBlockValue = getCurrentBlockValue(editor);
+  const isImageActive = Boolean(editor?.isActive('image'));
+  const imageWidthPercent = getCurrentImageWidthPercent(editor);
+  const setImageWidthPercent = (value) => {
+    if (!editor || disabled || !isImageActive) return;
+    editor
+      .chain()
+      .focus()
+      .updateAttributes('image', { widthPercent: clampImageWidthPercent(value) })
+      .run();
+  };
+  const adjustImageWidthPercent = (delta) => {
+    setImageWidthPercent(imageWidthPercent + delta);
+  };
 
   return (
     <div className="rich-text-editor">
@@ -259,6 +279,33 @@ export default function RichTextEditor({
           <Tooltip title="插入图片">
             <Button size="small" icon={<PictureOutlined />} onClick={handleImageClick} />
           </Tooltip>
+          <Tooltip title="缩小图片">
+            <Button
+              size="small"
+              icon={<ZoomOutOutlined />}
+              disabled={!isImageActive || disabled || imageWidthPercent <= IMAGE_WIDTH_MIN}
+              onClick={() => adjustImageWidthPercent(-IMAGE_WIDTH_STEP)}
+            />
+          </Tooltip>
+          <span className="rich-text-image-scale-control" onMouseDown={(event) => event.stopPropagation()}>
+            <Slider
+              min={IMAGE_WIDTH_MIN}
+              max={IMAGE_WIDTH_MAX}
+              step={IMAGE_WIDTH_STEP}
+              value={imageWidthPercent}
+              onChange={setImageWidthPercent}
+              disabled={!isImageActive || disabled}
+              tooltip={{ formatter: (value) => `${value}%` }}
+            />
+          </span>
+          <Tooltip title="放大图片">
+            <Button
+              size="small"
+              icon={<ZoomInOutlined />}
+              disabled={!isImageActive || disabled || imageWidthPercent >= IMAGE_WIDTH_MAX}
+              onClick={() => adjustImageWidthPercent(IMAGE_WIDTH_STEP)}
+            />
+          </Tooltip>
           <Tooltip title="清除格式">
             <Button size="small" icon={<ClearOutlined />} onClick={() => executeCommand('removeFormat')} />
           </Tooltip>
@@ -309,6 +356,17 @@ function getCurrentBlockValue(editor) {
   if (editor.isActive('heading', { level: 2 })) return 'h2';
   if (editor.isActive('blockquote')) return 'blockquote';
   return 'p';
+}
+
+function getCurrentImageWidthPercent(editor) {
+  if (!editor?.isActive('image')) return IMAGE_WIDTH_MAX;
+  return clampImageWidthPercent(editor.getAttributes('image').widthPercent || IMAGE_WIDTH_MAX);
+}
+
+function clampImageWidthPercent(value) {
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed)) return IMAGE_WIDTH_MAX;
+  return Math.min(IMAGE_WIDTH_MAX, Math.max(IMAGE_WIDTH_MIN, parsed));
 }
 
 function getPastedImageFile(event) {

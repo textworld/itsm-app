@@ -321,10 +321,12 @@ export default function RequesterActions({ ticket }) {
                 name="systemCategory"
                 rules={[{ required: true, message: '请选择新老系统标签' }]}
               >
-                <Select
-                  options={SYSTEM_CATEGORY_OPTIONS}
-                  onChange={() => infoSupplementForm.setFieldValue('systemName', undefined)}
-                />
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    options={SYSTEM_CATEGORY_OPTIONS}
+                    onChange={() => infoSupplementForm.setFieldValue('systemName', undefined)}
+                  />
               </Form.Item>
               <Form.Item noStyle shouldUpdate={(previous, current) => previous.systemCategory !== current.systemCategory}>
                 {({ getFieldValue }) => (

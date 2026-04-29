@@ -370,6 +370,18 @@ body {
   background: #fafafa;
 }
 
+.rich-text-image-scale-control {
+  display: inline-flex;
+  align-items: center;
+  width: 120px;
+  padding: 0 4px;
+}
+
+.rich-text-image-scale-control .ant-slider {
+  width: 100%;
+  margin: 3px 0;
+}
+
 .rich-text-content {
   min-height: 220px;
   padding: 12px;

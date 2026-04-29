@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getMessageReadsForUser, listDefects, listTickets } from '../../../src/server/store.js';
 import { getSessionUserFromRequest } from '../../../src/server/session.js';
+import { getVisibleTicketsForUser } from '../../../src/utils/ticketListView.js';
 
 export async function GET(request) {
   const user = getSessionUserFromRequest(request);
@@ -14,7 +15,7 @@ export async function GET(request) {
 
   return NextResponse.json({
     ok: true,
-    tickets: listTickets(),
+    tickets: getVisibleTicketsForUser(listTickets(), user),
     defects: listDefects(),
     messageReads: getMessageReadsForUser(user.id)
   });

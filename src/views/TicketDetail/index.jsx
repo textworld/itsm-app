@@ -128,9 +128,11 @@ export default function TicketDetailPage() {
         <Col xs={24} lg={8}>
           <div style={{ position: 'sticky', top: 16 }}>
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-              <Card title="自定义标签">
-                <CustomTicketTags ticket={ticket} />
-              </Card>
+              {user?.role !== ROLES.REQUESTER && (
+                <Card title="自定义标签">
+                  <CustomTicketTags ticket={ticket} />
+                </Card>
+              )}
               {renderActions()}
               {!isDraftTicket && <QuickMessageCard ticket={ticket} onViewAllMessages={handleViewAllMessages} />}
             </Space>

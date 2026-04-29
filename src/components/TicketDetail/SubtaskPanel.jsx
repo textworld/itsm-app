@@ -11,6 +11,7 @@ import {
   getSystemOptionsByCategory
 } from '../../constants/systems.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
+import { TICKET_ACTIONS, canPerformTicketAction } from '../../permissions/ticketPermissionMatrix.js';
 import { listAssignableSubtaskAssignees } from '../../utils/subtaskRouting.js';
 
 const SUBTASK_STATUS_LABELS = {
@@ -37,6 +38,7 @@ export default function SubtaskPanel({ ticket }) {
   }
 
   const subtasks = ticket.subtasks || [];
+  const canCreateSubtask = canPerformTicketAction(ticket, user, TICKET_ACTIONS.CREATE_SUBTASK);
 
   const handleCreate = async () => {
     const values = await form.validateFields();
@@ -124,7 +126,13 @@ export default function SubtaskPanel({ ticket }) {
   return (
     <Card
       title="子任务"
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>创建子任务</Button>}
+      extra={
+        canCreateSubtask && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            创建子任务
+          </Button>
+        )
+      }
     >
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         <Typography.Text type="secondary">
@@ -144,7 +152,12 @@ export default function SubtaskPanel({ ticket }) {
       >
         <Form form={form} layout="vertical" initialValues={{ systemCategory: SYSTEM_CATEGORY.OLD }}>
           <Form.Item name="systemCategory" label="新老系统标签" rules={[{ required: true, message: '请选择新老系统标签' }]}>
-            <Select options={SYSTEM_CATEGORY_OPTIONS} onChange={() => form.setFieldValue('systemName', undefined)} />
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={SYSTEM_CATEGORY_OPTIONS}
+              onChange={() => form.setFieldValue('systemName', undefined)}
+            />
           </Form.Item>
           <Form.Item noStyle shouldUpdate={(previous, current) => previous.systemCategory !== current.systemCategory}>
             {({ getFieldValue }) => (
@@ -163,6 +176,8 @@ export default function SubtaskPanel({ ticket }) {
               <Form.Item name="assigneeId" label="指定处理人">
                 <Select
                   allowClear
+                  showSearch
+                  optionFilterProp="label"
                   placeholder="可为空，留空后由对应系统技术支持认领"
                   options={listAssignableSubtaskAssignees().map((item) => ({
                     label: `${item.name} · ${item.role === ROLES.L2 ? '二线' : '一线'}`,
