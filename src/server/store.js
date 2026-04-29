@@ -92,14 +92,37 @@ export function dispatchTicketEvent(ticketId, event, payload, user) {
   }
 
   try {
+    if (event === EVENTS.CREATE_SUBTASK) {
+      const childCheck = canTransition(null, EVENTS.CREATE_SUBTASK_TICKET, user, nextPayload.subtaskTicket);
+      if (!childCheck.ok) {
+        return { ok: false, reason: childCheck.reason };
+      }
+
+      const nextParentTicket = applyTransition(ticket, event, nextPayload, user);
+      const childTicket = applyTransition(null, EVENTS.CREATE_SUBTASK_TICKET, nextPayload.subtaskTicket, user);
+      const savedParentTicket = upsertTicket(nextParentTicket);
+      const savedChildTicket = upsertTicket(childTicket);
+      return {
+        ok: true,
+        ticket: savedParentTicket,
+        tickets: [savedParentTicket, savedChildTicket]
+      };
+    }
+
     const nextTicket = applyTransition(ticket, event, nextPayload, user);
     const savedTicket = upsertTicket(nextTicket);
+    const relatedTickets = [savedTicket];
+    if (savedTicket.isSubtask) {
+      const parentTicket = syncParentSubtaskSummary(savedTicket);
+      if (parentTicket) relatedTickets.push(parentTicket);
+    }
     if (savedTicket.id !== ticketId) {
       deleteTicketById(ticketId);
     }
     return {
       ok: true,
-      ticket: savedTicket
+      ticket: savedTicket,
+      tickets: relatedTickets
     };
   } catch (error) {
     return { ok: false, reason: error.message || '状态流转失败' };
@@ -217,6 +240,29 @@ function prepareCreateTicketPayload(event, payload = {}) {
 }
 
 function prepareTicketEventPayload(ticket, event, payload = {}) {
+  if (event === EVENTS.CREATE_SUBTASK) {
+    const subtaskId = payload.subtask?.id || generateSubtaskTicketId(ticket, listTickets());
+    const subtask = {
+      ...(payload.subtask || {}),
+      id: subtaskId,
+      parentTicketId: ticket.id,
+      status: 'PENDING'
+    };
+    return {
+      ...payload,
+      subtask,
+      subtaskTicket: {
+        ...subtask,
+        title: subtask.description || `子任务 ${subtaskId}`,
+        priority: ticket.priority,
+        requesterId: ticket.requesterId,
+        requesterName: ticket.requesterName,
+        reporterPhone: ticket.reporterPhone,
+        reporterEmail: ticket.reporterEmail
+      }
+    };
+  }
+
   if ((event === EVENTS.SUBMIT || event === EVENTS.AI_RESOLVE) && isInternalDraftId(ticket.id)) {
     return {
       ...payload,
@@ -225,7 +271,54 @@ function prepareTicketEventPayload(ticket, event, payload = {}) {
     };
   }
 
+  if (event === EVENTS.WITHDRAW && !isInternalDraftId(ticket.id)) {
+    return {
+      ...payload,
+      id: isInternalDraftId(payload.id) ? payload.id : shortId('draft')
+    };
+  }
+
   return payload;
+}
+
+function syncParentSubtaskSummary(subtaskTicket) {
+  if (!subtaskTicket?.isSubtask || !subtaskTicket.parentTicketId) return null;
+  const parentTicket = getTicketById(subtaskTicket.parentTicketId);
+  if (!parentTicket) return null;
+
+  const nextParentTicket = {
+    ...parentTicket,
+    subtasks: (parentTicket.subtasks || []).map((subtask) =>
+      subtask.id === subtaskTicket.id
+        ? {
+            ...subtask,
+            systemCategory: subtaskTicket.systemCategory,
+            systemCode: subtaskTicket.systemCode,
+            systemName: subtaskTicket.systemName,
+            assigneeId: subtaskTicket.assigneeL2Id || subtaskTicket.assigneeL1Id || null,
+            assigneeName: subtaskTicket.assigneeL2Name || subtaskTicket.assigneeL1Name || null,
+            status: subtaskTicket.subtaskStatus,
+            noMainTicketActionRequired: subtaskTicket.noMainTicketActionRequired === true,
+            updatedAt: subtaskTicket.updatedAt
+          }
+        : subtask
+    ),
+    updatedAt: new Date().toISOString()
+  };
+  return upsertTicket(nextParentTicket);
+}
+
+function generateSubtaskTicketId(parentTicket, tickets) {
+  const prefix = `${parentTicket.id}-`;
+  const ids = new Set([
+    ...tickets.map((ticket) => ticket.id),
+    ...(parentTicket.subtasks || []).map((subtask) => subtask.id)
+  ]);
+  let index = 1;
+  while (ids.has(`${prefix}${index}`)) {
+    index += 1;
+  }
+  return `${prefix}${index}`;
 }
 
 function isInternalDraftId(id) {

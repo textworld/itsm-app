@@ -3,6 +3,7 @@ dist/
 .next/
 data/*.sqlite
 data/*.sqlite-*
+data/itsm-fallback.json
 data/uploads/
 
 .DS_Store
@@ -25,3 +26,4 @@ pnpm-debug.log*
 .vscode/
 *.swp
 *.swo
+*.log

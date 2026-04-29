@@ -22,6 +22,7 @@ import { formatDateTime, byCreatedAtDesc } from '../../utils/format.js';
 import { createEmptyRichTextDoc } from '../../utils/richText.js';
 import {
   buildQuotePreview,
+  getVisibleMessages,
   isTicketMessageAllowed,
   submitMessageDraft
 } from './messageComposer.js';
@@ -41,7 +42,7 @@ export default function MessageBoard({ ticket, readOnly }) {
   const sendingRef = useRef(false);
 
   const messages = useMemo(
-    () => [...(ticket?.messages || [])].sort(byCreatedAtDesc),
+    () => getVisibleMessages(ticket?.messages || []).sort(byCreatedAtDesc),
     [ticket?.messages]
   );
   const allowMessage = isTicketMessageAllowed(ticket);

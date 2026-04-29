@@ -20,7 +20,12 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
 import { TOOL_TYPES, TOOL_TYPE_OPTIONS } from '../../constants/toolTypes.js';
 import { PRIORITIES, PRIORITY_OPTIONS, PRIORITY_LABELS } from '../../constants/priorities.js';
-import { SYSTEM_OPTIONS, SYSTEM_LABELS } from '../../constants/systems.js';
+import {
+  SYSTEM_CATEGORY,
+  SYSTEM_CATEGORY_OPTIONS,
+  SYSTEM_LABELS,
+  getSystemOptionsByCategory
+} from '../../constants/systems.js';
 import { ROLES } from '../../constants/roles.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { buildAttachments, mapAttachmentsToUploadFileList } from '../../utils/fileUtils.js';
@@ -255,6 +260,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
             : {
                 toolType: TOOL_TYPES.DATA_EXTRACT,
                 priority: PRIORITIES.P4,
+                systemCategory: SYSTEM_CATEGORY.OLD,
                 reportForOthers: false
               })
         }}
@@ -306,7 +312,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
                     <Select className="reference-short-control" options={PRIORITY_OPTIONS} />
                   </Form.Item>
                   <Typography.Text type="secondary" className="priority-sla-hint">
-                    SLA时效 P1: 30分钟，P2：2小时，P3：6小时，P4：8小时
+                    工单处理时效 P1: 30分钟，P2：2小时，P3：6小时，P4：8小时
                   </Typography.Text>
                 </div>
               </Form.Item>
@@ -318,19 +324,41 @@ export function TicketSubmitForm({ draftTicket = null }) {
           <Row gutter={24}>
             <Col span={12}>
               <Form.Item
-                label="系统名称"
-                name="systemName"
-                rules={[{ required: true, message: '请选择系统名称' }]}
+                label="新老系统标签"
+                name="systemCategory"
+                rules={[{ required: true, message: '请选择新老系统标签' }]}
               >
                 <Select
                   className="reference-medium-control"
-                  placeholder="请选择..."
-                  showSearch
-                  optionFilterProp="label"
-                  options={SYSTEM_OPTIONS}
+                  options={SYSTEM_CATEGORY_OPTIONS}
+                  onChange={() => form.setFieldValue('systemName', undefined)}
                 />
               </Form.Item>
             </Col>
+            <Col span={12}>
+              <Form.Item noStyle shouldUpdate={(previous, current) => previous.systemCategory !== current.systemCategory}>
+                {({ getFieldValue }) => (
+                  <Form.Item
+                    label="系统名称"
+                    name="systemName"
+                    rules={[{ required: true, message: '请选择系统名称' }]}
+                  >
+                    <Select
+                      className="reference-medium-control"
+                      placeholder="请选择..."
+                      showSearch
+                      optionFilterProp="label"
+                      options={getSystemOptionsByCategory(getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
+                    />
+                  </Form.Item>
+                )}
+              </Form.Item>
+            </Col>
+          </Row>
+        </div>
+
+        <div className="reference-form-line">
+          <Row gutter={24}>
             <Col span={12}>
               <Form.Item
                 label="手机号码"
@@ -487,6 +515,7 @@ function buildTicketPayload(values = {}, attachments, user, now) {
     toolType: values.toolType || TOOL_TYPES.DATA_EXTRACT,
     priority,
     priorityLabel,
+    systemCategory: values.systemCategory || SYSTEM_CATEGORY.OLD,
     systemCode: values.systemName || '',
     systemName,
     reporterPhone: String(values.reporterPhone || '').trim(),

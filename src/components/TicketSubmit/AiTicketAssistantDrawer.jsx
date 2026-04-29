@@ -19,6 +19,7 @@ export default function AiTicketAssistantDrawer({
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState('');
   const startedTicketIdRef = useRef(null);
+  const streamAbortRef = useRef(null);
 
   useEffect(() => {
     if (!open || !ticket?.id || startedTicketIdRef.current === ticket.id) return;
@@ -30,7 +31,18 @@ export default function AiTicketAssistantDrawer({
     void streamAssistantReply(initialMessages);
   }, [open, ticket?.id]);
 
+  const abortStreaming = () => {
+    if (streamAbortRef.current) {
+      streamAbortRef.current.abort();
+      streamAbortRef.current = null;
+    }
+    setStreaming(false);
+  };
+
   const streamAssistantReply = async (nextMessages) => {
+    abortStreaming();
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
     setStreaming(true);
     setError('');
     setMessages([...nextMessages, { role: 'assistant', content: '' }]);
@@ -39,7 +51,8 @@ export default function AiTicketAssistantDrawer({
       const response = await fetch('/api/ai/ticket-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticket, messages: nextMessages })
+        body: JSON.stringify({ ticket, messages: nextMessages }),
+        signal: controller.signal
       });
 
       if (!response.ok) {
@@ -65,11 +78,17 @@ export default function AiTicketAssistantDrawer({
         );
       }
     } catch (streamError) {
+      if (streamError?.name === 'AbortError') {
+        return;
+      }
       console.error(streamError);
       const reason = streamError.message || '大模型解答失败';
       setError(reason);
       message.error(reason);
     } finally {
+      if (streamAbortRef.current === controller) {
+        streamAbortRef.current = null;
+      }
       setStreaming(false);
     }
   };
@@ -88,11 +107,21 @@ export default function AiTicketAssistantDrawer({
     onResolved?.({ messages, answer });
   };
 
+  const handleManualSubmit = () => {
+    abortStreaming();
+    onManual?.();
+  };
+
+  const handleClose = () => {
+    abortStreaming();
+    onClose?.();
+  };
+
   return (
     <Drawer
       title="大模型尝试解答"
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       width={640}
       destroyOnClose
       maskClosable={false}
@@ -145,8 +174,8 @@ export default function AiTicketAssistantDrawer({
             追问
           </Button>
           <Space>
-            <Button onClick={onManual} loading={confirming} disabled={streaming}>
-              人工处理
+            <Button onClick={handleManualSubmit} loading={confirming} disabled={confirming}>
+              继续提交工单
             </Button>
             <Button type="primary" onClick={handleResolved} loading={confirming} disabled={streaming || !messages.length}>
               问题已解决

@@ -17,11 +17,14 @@ import {
 } from '../constants/ticketStatus.js';
 import { ROLES } from '../constants/roles.js';
 import { PRIORITIES, PRIORITY_LABELS } from '../constants/priorities.js';
-import { SYSTEM_LABELS } from '../constants/systems.js';
+import { SUBTASK_STATUS } from '../constants/subtaskStatus.js';
+import { SYSTEM_CATEGORY, SYSTEM_LABELS } from '../constants/systems.js';
+import { TOOL_TYPES } from '../constants/toolTypes.js';
 import { buildDescriptionHistoryEntry, buildDescriptionUpdate } from '../utils/descriptionHistory.js';
 import { buildDraftTicketUpdate } from '../utils/draftTicketEditing.js';
 import { createEmptyRichTextDoc, richTextHtmlToDoc, richTextToPlainText } from '../utils/richText.js';
 import { calculateTicketExpiresAt } from '../utils/sla.js';
+import { canUserHandleSubtaskSystem } from '../utils/subtaskRouting.js';
 
 export const EVENTS = {
   CREATE_DRAFT: 'CREATE_DRAFT',
@@ -34,11 +37,21 @@ export const EVENTS = {
   UPDATE_LINKED_DEFECT: 'UPDATE_LINKED_DEFECT',
   UPDATE_SUMMARY: 'UPDATE_SUMMARY',
   REQUEST_L2_SUPPORT: 'REQUEST_L2_SUPPORT',
+  CREATE_SUBTASK: 'CREATE_SUBTASK',
+  CREATE_SUBTASK_TICKET: 'CREATE_SUBTASK_TICKET',
+  CLAIM_SUBTASK: 'CLAIM_SUBTASK',
+  TRANSFER_SUBTASK: 'TRANSFER_SUBTASK',
+  NO_ACTION_SUBTASK: 'NO_ACTION_SUBTASK',
+  START_SUBTASK: 'START_SUBTASK',
+  COMPLETE_SUBTASK: 'COMPLETE_SUBTASK',
+  UPDATE_CUSTOM_TAGS: 'UPDATE_CUSTOM_TAGS',
+  TRANSFER_TECH: 'TRANSFER_TECH',
   RETURN_FOR_INFO: 'RETURN_FOR_INFO',
   UPDATE_INFO_SUPPLEMENT: 'UPDATE_INFO_SUPPLEMENT',
   COMPLETE_INFO_SUPPLEMENT: 'COMPLETE_INFO_SUPPLEMENT',
   L1_REVIEW: 'L1_REVIEW',
   INITIATE_CLOSURE: 'INITIATE_CLOSURE',
+  REQUESTER_CLOSE: 'REQUESTER_CLOSE',
   VERIFY_YES: 'VERIFY_YES',
   VERIFY_NO: 'VERIFY_NO',
 
@@ -60,11 +73,21 @@ export const EVENT_LABELS = {
   [EVENTS.UPDATE_LINKED_DEFECT]: '更新关联缺陷',
   [EVENTS.UPDATE_SUMMARY]: '更新工单总结',
   [EVENTS.REQUEST_L2_SUPPORT]: '二线支持',
+  [EVENTS.CREATE_SUBTASK]: '创建子任务',
+  [EVENTS.CREATE_SUBTASK_TICKET]: '创建子任务工单',
+  [EVENTS.CLAIM_SUBTASK]: '认领子任务',
+  [EVENTS.TRANSFER_SUBTASK]: '转派子任务',
+  [EVENTS.NO_ACTION_SUBTASK]: '子任务无需处理',
+  [EVENTS.START_SUBTASK]: '开始处理子任务',
+  [EVENTS.COMPLETE_SUBTASK]: '完成子任务',
+  [EVENTS.UPDATE_CUSTOM_TAGS]: '更新自定义标签',
+  [EVENTS.TRANSFER_TECH]: '技术支持转交',
   [EVENTS.RETURN_FOR_INFO]: '退回提交人',
   [EVENTS.UPDATE_INFO_SUPPLEMENT]: '修改补充信息',
   [EVENTS.COMPLETE_INFO_SUPPLEMENT]: '已补充',
   [EVENTS.L1_REVIEW]: '一线复核',
   [EVENTS.INITIATE_CLOSURE]: '发起办结',
+  [EVENTS.REQUESTER_CLOSE]: '提单人主动关单',
   [EVENTS.VERIFY_YES]: '验证通过',
   [EVENTS.VERIFY_NO]: '驳回（验证未通过）'
 };
@@ -135,7 +158,14 @@ export const TRANSITIONS = [
     from: STATUS.PENDING,
     event: EVENTS.WITHDRAW,
     to: STATUS.DRAFT,
-    role: ROLES.REQUESTER
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, _user, now) => ({
+      ...payload,
+      id: payload.id || ticket.id,
+      originalTicketId: ticket.originalTicketId || ticket.id,
+      isDraft: true,
+      updatedAt: now
+    })
   },
   {
     id: 'T03',
@@ -197,19 +227,160 @@ export const TRANSITIONS = [
     event: EVENTS.REQUEST_L2_SUPPORT,
     to: STATUS.PROCESSING,
     toSubStatus: PROCESSING_SUB_STATUS.L2_INVESTIGATION,
+    role: ROLES.L1
+  },
+  {
+    id: 'T04-TRANSFER-L1',
+    from: STATUS.PROCESSING,
+    event: EVENTS.TRANSFER_TECH,
+    to: STATUS.PROCESSING,
     role: ROLES.L1,
-    guard: (ticket, payload) => {
-      const tag = payload?.defectTag ?? ticket.defectTag;
-      const link = payload?.linkedDefect ?? ticket.linkedDefect;
-      return Boolean(tag) && Boolean(link);
-    }
+    guard: (_ticket, payload, user) => isSameRoleTransfer(payload, user),
+    transform: (ticket, payload, user, now) => buildTechTransferUpdate(ticket, payload, user, now)
+  },
+  {
+    id: 'T04-TRANSFER-L2',
+    from: STATUS.PROCESSING,
+    event: EVENTS.TRANSFER_TECH,
+    to: STATUS.PROCESSING,
+    role: ROLES.L2,
+    guard: (_ticket, payload, user) => isSameRoleTransfer(payload, user),
+    transform: (ticket, payload, user, now) => buildTechTransferUpdate(ticket, payload, user, now)
+  },
+  {
+    id: 'T04A',
+    from: STATUS.PROCESSING,
+    event: EVENTS.CREATE_SUBTASK,
+    to: STATUS.PROCESSING,
+    role: ROLES.L1,
+    recordTimeline: false,
+    transform: (ticket, payload, user, now) => ({
+      subtasks: [
+        ...(ticket.subtasks || []),
+        {
+          ...(payload.subtask || {}),
+          status: 'PENDING',
+          createdAt: now,
+          createdBy: user?.name || ''
+        }
+      ],
+      updatedAt: now
+    })
+  },
+  {
+    id: 'T04A-L2',
+    from: STATUS.PROCESSING,
+    event: EVENTS.CREATE_SUBTASK,
+    to: STATUS.PROCESSING,
+    role: ROLES.L2,
+    recordTimeline: false,
+    transform: (ticket, payload, user, now) => ({
+      subtasks: [
+        ...(ticket.subtasks || []),
+        {
+          ...(payload.subtask || {}),
+          status: 'PENDING',
+          createdAt: now,
+          createdBy: user?.name || ''
+        }
+      ],
+      updatedAt: now
+    })
+  },
+  {
+    id: 'T04B',
+    from: STATUS.PROCESSING,
+    event: EVENTS.START_SUBTASK,
+    to: STATUS.PROCESSING,
+    role: ROLES.L1,
+    recordTimeline: false,
+    transform: (ticket, payload, user, now) =>
+      updateSubtask(
+        ticket,
+        payload.subtaskId,
+        (subtask) => ({
+          ...subtask,
+          status: 'PROCESSING',
+          startedAt: subtask.startedAt || now,
+          startedBy: user?.name || ''
+        }),
+        now
+      )
+  },
+  {
+    id: 'T04B-L2',
+    from: STATUS.PROCESSING,
+    event: EVENTS.START_SUBTASK,
+    to: STATUS.PROCESSING,
+    role: ROLES.L2,
+    recordTimeline: false,
+    transform: (ticket, payload, user, now) =>
+      updateSubtask(
+        ticket,
+        payload.subtaskId,
+        (subtask) => ({
+          ...subtask,
+          status: 'PROCESSING',
+          startedAt: subtask.startedAt || now,
+          startedBy: user?.name || ''
+        }),
+        now
+      )
+  },
+  {
+    id: 'T04C',
+    from: STATUS.PROCESSING,
+    event: EVENTS.COMPLETE_SUBTASK,
+    to: STATUS.PROCESSING,
+    role: ROLES.L1,
+    recordTimeline: false,
+    transform: (ticket, payload, user, now) =>
+      updateSubtask(
+        ticket,
+        payload.subtaskId,
+        (subtask) => ({
+          ...subtask,
+          status: 'COMPLETED',
+          noMainTicketActionRequired: payload.noMainTicketActionRequired === true,
+          completedAt: now,
+          completedBy: user?.name || ''
+        }),
+        now
+      )
+  },
+  {
+    id: 'T04C-L2',
+    from: STATUS.PROCESSING,
+    event: EVENTS.COMPLETE_SUBTASK,
+    to: STATUS.PROCESSING,
+    role: ROLES.L2,
+    recordTimeline: false,
+    transform: (ticket, payload, user, now) =>
+      updateSubtask(
+        ticket,
+        payload.subtaskId,
+        (subtask) => ({
+          ...subtask,
+          status: 'COMPLETED',
+          noMainTicketActionRequired: payload.noMainTicketActionRequired === true,
+          completedAt: now,
+          completedBy: user?.name || ''
+        }),
+        now
+      )
   },
   {
     id: 'T05',
     from: STATUS.PROCESSING,
     event: EVENTS.RETURN_FOR_INFO,
     to: STATUS.INFO_SUPPLEMENT,
-    role: ROLES.L1
+    role: ROLES.L1,
+    transform: (ticket, payload, _user, now) => ({
+      ...payload,
+      infoSupplementReturnStatus: ticket.status,
+      infoSupplementReturnSubStatus: getProcessingSubStatus(ticket),
+      updatedAt: now
+    })
   },
   {
     id: 'T05A',
@@ -225,13 +396,22 @@ export const TRANSITIONS = [
         user,
         reason: '信息补充阶段修改工单描述'
       });
+      const systemUpdate = payload.systemName
+        ? {
+            systemCategory: payload.systemCategory || ticket.systemCategory || SYSTEM_CATEGORY.OLD,
+            systemCode: payload.systemName,
+            systemName: SYSTEM_LABELS[payload.systemName] || payload.systemName
+          }
+        : {};
 
       return nextUpdate
         ? {
             ...nextUpdate,
+            ...systemUpdate,
             updatedAt: now
           }
         : {
+            ...systemUpdate,
             updatedAt: now
           };
     }
@@ -241,8 +421,12 @@ export const TRANSITIONS = [
     from: STATUS.INFO_SUPPLEMENT,
     event: EVENTS.COMPLETE_INFO_SUPPLEMENT,
     to: STATUS.PROCESSING,
-    toSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
-    role: ROLES.REQUESTER
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, _user, now) => ({
+      ...payload,
+      processingSubStatus: ticket.infoSupplementReturnSubStatus || PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+      updatedAt: now
+    })
   },
   {
     id: 'T07',
@@ -262,7 +446,21 @@ export const TRANSITIONS = [
     from: STATUS.PROCESSING,
     event: EVENTS.INITIATE_CLOSURE,
     to: STATUS.CONFIRMING,
-    role: ROLES.L1
+    role: ROLES.L1,
+    guard: (ticket) => (ticket.subtasks || []).every((subtask) => subtask.status === 'COMPLETED')
+  },
+  {
+    id: 'T08A',
+    from: STATUS.PROCESSING,
+    event: EVENTS.REQUESTER_CLOSE,
+    to: STATUS.CLOSED,
+    role: ROLES.REQUESTER,
+    transform: (_ticket, payload, _user, now) => ({
+      satisfaction: payload.satisfaction ?? null,
+      closedAt: now,
+      closeReason: payload.closeReason || '提单人主动关单',
+      updatedAt: now
+    })
   },
   {
     id: 'T09',
@@ -282,7 +480,9 @@ export const TRANSITIONS = [
       const reason = payload?.rejectionReason;
       return Boolean(reason && String(reason).trim());
     }
-  }
+  },
+  ...createSubtaskTicketTransitions(),
+  ...createCustomTagTransitions()
 ];
 
 export const ROLE_EVENT_PERMISSIONS = {
@@ -294,6 +494,8 @@ export const ROLE_EVENT_PERMISSIONS = {
     EVENTS.WITHDRAW,
     EVENTS.UPDATE_INFO_SUPPLEMENT,
     EVENTS.COMPLETE_INFO_SUPPLEMENT,
+    EVENTS.REQUESTER_CLOSE,
+    EVENTS.UPDATE_CUSTOM_TAGS,
     EVENTS.VERIFY_YES,
     EVENTS.VERIFY_NO
   ],
@@ -303,10 +505,30 @@ export const ROLE_EVENT_PERMISSIONS = {
     EVENTS.UPDATE_LINKED_DEFECT,
     EVENTS.UPDATE_SUMMARY,
     EVENTS.REQUEST_L2_SUPPORT,
+    EVENTS.CREATE_SUBTASK_TICKET,
+    EVENTS.CLAIM_SUBTASK,
+    EVENTS.TRANSFER_SUBTASK,
+    EVENTS.NO_ACTION_SUBTASK,
+    EVENTS.TRANSFER_TECH,
+    EVENTS.CREATE_SUBTASK,
+    EVENTS.START_SUBTASK,
+    EVENTS.COMPLETE_SUBTASK,
+    EVENTS.UPDATE_CUSTOM_TAGS,
     EVENTS.RETURN_FOR_INFO,
     EVENTS.INITIATE_CLOSURE
   ],
-  [ROLES.L2]: [EVENTS.L1_REVIEW]
+  [ROLES.L2]: [
+    EVENTS.L1_REVIEW,
+    EVENTS.CREATE_SUBTASK_TICKET,
+    EVENTS.CLAIM_SUBTASK,
+    EVENTS.TRANSFER_SUBTASK,
+    EVENTS.NO_ACTION_SUBTASK,
+    EVENTS.TRANSFER_TECH,
+    EVENTS.CREATE_SUBTASK,
+    EVENTS.START_SUBTASK,
+    EVENTS.COMPLETE_SUBTASK,
+    EVENTS.UPDATE_CUSTOM_TAGS
+  ]
 };
 
 export function findTransition(ticket, event, user) {
@@ -332,7 +554,7 @@ export function canTransition(ticket, event, user, payload) {
       reason: '当前状态或角色无权执行该操作'
     };
   }
-  if (transition.guard && !transition.guard(ticket, payload)) {
+  if (transition.guard && !transition.guard(ticket, payload, user)) {
     return {
       ok: false,
       reason: '操作前置条件未满足',
@@ -350,14 +572,14 @@ export function applyTransition(ticket, event, payload = {}, user) {
   const { transition } = check;
   const now = new Date().toISOString();
   const currentTicket = ticket || {};
-  const nextDualStatuses = getNextDualStatuses(transition.to, event);
-  const nextProcessingSubStatus =
-    transition.to === STATUS.PROCESSING
-      ? transition.toSubStatus || getProcessingSubStatus(ticket) || PROCESSING_SUB_STATUS.L1_INVESTIGATION
-      : null;
   const nextPayload = transition.transform
     ? transition.transform(currentTicket, payload, user, now)
     : payload;
+  const nextDualStatuses = getNextDualStatuses(transition.to, event);
+  const nextProcessingSubStatus =
+    transition.to === STATUS.PROCESSING
+      ? transition.toSubStatus || nextPayload?.processingSubStatus || getProcessingSubStatus(ticket) || PROCESSING_SUB_STATUS.L1_INVESTIGATION
+      : null;
 
   const nextTicket = {
     ...currentTicket,
@@ -413,6 +635,256 @@ export function listAvailableEvents(ticket, user) {
       transition.role === user.role &&
       (!transition.fromSubStatus || transition.fromSubStatus === getProcessingSubStatus(ticket))
   ).map((transition) => transition.event);
+}
+
+function updateSubtask(ticket, subtaskId, updater, now) {
+  return {
+    subtasks: (ticket.subtasks || []).map((subtask) =>
+      subtask.id === subtaskId ? updater(subtask) : subtask
+    ),
+    updatedAt: now
+  };
+}
+
+function createCustomTagTransitions() {
+  const statuses = [
+    STATUS.DRAFT,
+    STATUS.PENDING,
+    STATUS.PROCESSING,
+    STATUS.INFO_SUPPLEMENT,
+    STATUS.CONFIRMING,
+    STATUS.CLOSED
+  ];
+  const roles = [ROLES.REQUESTER, ROLES.L1, ROLES.L2];
+
+  return statuses.flatMap((status) =>
+    roles.map((role) => ({
+      id: `T-CUSTOM-TAGS-${status}-${role}`,
+      from: status,
+      event: EVENTS.UPDATE_CUSTOM_TAGS,
+      to: status,
+      role,
+      recordTimeline: false,
+      transform: (ticket, payload, user, now) => buildCustomTagUpdate(ticket, payload, user, now)
+    }))
+  );
+}
+
+function createSubtaskTicketTransitions() {
+  const techRoles = [ROLES.L1, ROLES.L2];
+  const activeStatuses = [STATUS.PENDING, STATUS.PROCESSING];
+
+  return [
+    ...techRoles.map((role) => ({
+      id: `T-SUBTASK-CREATE-${role}`,
+      from: null,
+      event: EVENTS.CREATE_SUBTASK_TICKET,
+      to: STATUS.PENDING,
+      role,
+      transform: (_ticket, payload, user, now) => buildSubtaskTicket(payload, user, now)
+    })),
+    ...techRoles.map((role) => ({
+      id: `T-SUBTASK-CLAIM-${role}`,
+      from: STATUS.PENDING,
+      event: EVENTS.CLAIM_SUBTASK,
+      to: STATUS.PROCESSING,
+      role,
+      guard: (ticket, _payload, user) =>
+        Boolean(ticket?.isSubtask) && canUserHandleSubtaskSystem(user, ticket.systemCode),
+      transform: (_ticket, _payload, user, now) => ({
+        ...buildSubtaskAssigneeUpdate(user.role, user.id, user.name),
+        subtaskStatus: SUBTASK_STATUS.PROCESSING,
+        startedAt: now,
+        startedBy: user?.name || '',
+        updatedAt: now
+      })
+    })),
+    ...activeStatuses.flatMap((status) =>
+      techRoles.map((role) => ({
+        id: `T-SUBTASK-TRANSFER-${status}-${role}`,
+        from: status,
+        event: EVENTS.TRANSFER_SUBTASK,
+        to: status,
+        role,
+        guard: (ticket) => Boolean(ticket?.isSubtask),
+        transform: (ticket, payload, user, now) => ({
+          systemCategory: payload.systemCategory || ticket.systemCategory,
+          systemCode: payload.systemCode || ticket.systemCode,
+          systemName: payload.systemName || ticket.systemName,
+          ...buildExplicitSubtaskAssigneeUpdate(payload),
+          transferredAt: now,
+          transferredBy: user?.name || '',
+          updatedAt: now
+        })
+      }))
+    ),
+    ...activeStatuses.flatMap((status) =>
+      techRoles.flatMap((role) => [
+        {
+          id: `T-SUBTASK-COMPLETE-${status}-${role}`,
+          from: status,
+          event: EVENTS.COMPLETE_SUBTASK,
+          to: STATUS.CLOSED,
+          role,
+          guard: (ticket) => Boolean(ticket?.isSubtask),
+          transform: (_ticket, _payload, user, now) => ({
+            subtaskStatus: SUBTASK_STATUS.COMPLETED,
+            noMainTicketActionRequired: false,
+            completedAt: now,
+            completedBy: user?.name || '',
+            closedAt: now,
+            updatedAt: now
+          })
+        },
+        {
+          id: `T-SUBTASK-NO-ACTION-${status}-${role}`,
+          from: status,
+          event: EVENTS.NO_ACTION_SUBTASK,
+          to: STATUS.CLOSED,
+          role,
+          guard: (ticket) => Boolean(ticket?.isSubtask),
+          transform: (_ticket, _payload, user, now) => ({
+            subtaskStatus: SUBTASK_STATUS.COMPLETED,
+            noMainTicketActionRequired: true,
+            completedAt: now,
+            completedBy: user?.name || '',
+            closedAt: now,
+            updatedAt: now
+          })
+        }
+      ])
+    )
+  ];
+}
+
+function buildCustomTagUpdate(ticket, payload, user, now) {
+  const userId = user?.id;
+  const tags = normalizeCustomTags(payload.tags);
+
+  if (!userId) {
+    return {
+      customTagsByUser: ticket.customTagsByUser || {},
+      updatedAt: now
+    };
+  }
+
+  return {
+    customTagsByUser: {
+      ...(ticket.customTagsByUser || {}),
+      [userId]: tags
+    },
+    updatedAt: now
+  };
+}
+
+function isSameRoleTransfer(payload, user) {
+  return Boolean(
+    user?.role &&
+      [ROLES.L1, ROLES.L2].includes(user.role) &&
+      (!payload?.targetRole || payload.targetRole === user.role)
+  );
+}
+
+function buildTechTransferUpdate(_ticket, payload, user, now) {
+  const assigneeId = payload.assigneeId || null;
+  const assigneeName = payload.assigneeName || null;
+  const techTransfer = {
+    role: user.role,
+    assigneeId,
+    assigneeName,
+    communicated: payload.communicated === true,
+    transferredBy: user?.name || '',
+    transferredAt: now
+  };
+
+  if (user.role === ROLES.L1) {
+    return {
+      assigneeL1Id: assigneeId,
+      assigneeL1Name: assigneeName,
+      techTransfer,
+      updatedAt: now
+    };
+  }
+
+  return {
+    assigneeL2Id: assigneeId,
+    assigneeL2Name: assigneeName,
+    techTransfer,
+    updatedAt: now
+  };
+}
+
+function buildSubtaskTicket(payload = {}, user, now) {
+  const description = String(payload.description || payload.title || '子任务').trim();
+
+  return {
+    ...payload,
+    isSubtask: true,
+    parentTicketId: payload.parentTicketId || null,
+    title: payload.title || description,
+    toolType: TOOL_TYPES.SUBTASK,
+    priority: payload.priority || PRIORITIES.P4,
+    priorityLabel: payload.priorityLabel || PRIORITY_LABELS[payload.priority || PRIORITIES.P4],
+    systemCategory: payload.systemCategory || SYSTEM_CATEGORY.OLD,
+    systemCode: payload.systemCode || payload.systemName || '',
+    systemName: payload.systemName || SYSTEM_LABELS[payload.systemCode] || payload.systemCode || '',
+    description,
+    descriptionDoc: payload.descriptionDoc || createEmptyRichTextDoc(),
+    descriptionHtml: payload.descriptionHtml || '',
+    attachments: payload.attachments || [],
+    createdAt: payload.createdAt || now,
+    submittedAt: payload.submittedAt || now,
+    expiresAt: payload.expiresAt || calculateTicketExpiresAt(now, payload.priority || PRIORITIES.P4),
+    requesterId: payload.requesterId || null,
+    requesterName: payload.requesterName || '',
+    ...buildExplicitSubtaskAssigneeUpdate(payload),
+    messages: payload.messages || [],
+    subtasks: [],
+    subtaskStatus: SUBTASK_STATUS.PENDING,
+    noMainTicketActionRequired: false,
+    createdBy: user?.name || '',
+    updatedAt: now
+  };
+}
+
+function buildExplicitSubtaskAssigneeUpdate(payload = {}) {
+  const assigneeId = payload.assigneeId || null;
+  const assigneeName = payload.assigneeName || null;
+  const assigneeRole = payload.assigneeRole || inferTechRoleFromUserId(assigneeId);
+  return buildSubtaskAssigneeUpdate(assigneeRole, assigneeId, assigneeName);
+}
+
+function buildSubtaskAssigneeUpdate(role, assigneeId, assigneeName) {
+  if (role === ROLES.L2) {
+    return {
+      assigneeL1Id: null,
+      assigneeL1Name: null,
+      assigneeL2Id: assigneeId || null,
+      assigneeL2Name: assigneeName || null
+    };
+  }
+
+  return {
+    assigneeL1Id: assigneeId || null,
+    assigneeL1Name: assigneeName || null,
+    assigneeL2Id: null,
+    assigneeL2Name: null
+  };
+}
+
+function inferTechRoleFromUserId(userId) {
+  if (String(userId || '').includes('_l2_')) return ROLES.L2;
+  return ROLES.L1;
+}
+
+function normalizeCustomTags(tags) {
+  return Array.from(
+    new Set(
+      (Array.isArray(tags) ? tags : [])
+        .map((tag) => String(tag || '').trim())
+        .filter(Boolean)
+    )
+  );
 }
 
 function buildSubmittedTicket(_ticket, payload = {}, user, now) {
@@ -490,6 +962,7 @@ function buildDraftTicket(_ticket, payload = {}, user, now) {
     toolType: payload.toolType || '',
     priority,
     priorityLabel: payload.priorityLabel || PRIORITY_LABELS[priority] || priority,
+    systemCategory: payload.systemCategory || SYSTEM_CATEGORY.OLD,
     systemCode,
     systemName: SYSTEM_LABELS[systemCode] || payload.systemName || payload.systemCode || '',
     reporterPhone: String(payload.reporterPhone || '').trim(),

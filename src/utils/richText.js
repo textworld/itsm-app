@@ -80,6 +80,27 @@ export function richTextHtmlToDoc(html) {
   }
 }
 
+export function richTextPlainTextToDoc(text) {
+  const lines = String(text || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n');
+
+  const content = lines.length > 0
+    ? lines.map((line) => {
+        const paragraph = { type: 'paragraph' };
+        if (line) {
+          paragraph.content = [{ type: 'text', text: line }];
+        }
+        return paragraph;
+      })
+    : [{ type: 'paragraph' }];
+
+  return {
+    type: 'doc',
+    content
+  };
+}
+
 export function richTextValueToDoc(value) {
   if (isRichTextDocument(value)) {
     return value;

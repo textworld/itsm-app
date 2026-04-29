@@ -81,6 +81,8 @@ export default function AppLayout({ children }) {
     return '/tickets';
   }, [pathname]);
 
+  const isTicketDetailPage = pathname.startsWith('/tickets/') && !pathname.startsWith('/tickets/new');
+
   const handleLogout = async () => {
     await logout();
     router.replace('/login');
@@ -153,9 +155,11 @@ export default function AppLayout({ children }) {
       </Header>
       <Content className="app-shell-content">
         <div className="app-shell-content-inner">
-          <Typography.Title level={4} className="app-shell-page-title">
-            {pageTitle(selectedKey)}
-          </Typography.Title>
+          {!isTicketDetailPage && (
+            <Typography.Title level={4} className="app-shell-page-title">
+              {pageTitle(selectedKey)}
+            </Typography.Title>
+          )}
           {children}
         </div>
       </Content>

@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PRIORITIES } from '../../constants/priorities.js';
+import { ROLES } from '../../constants/roles.js';
 import { PROCESSING_SUB_STATUS, STATUS } from '../../constants/ticketStatus.js';
 import { EVENTS, applyTransition } from '../ticketStateMachine.js';
+const l2User = { id: 'u_l2_1', name: 'ops', role: 'L2' };
 
 const requesterUser = { id: 'u_requester_1', name: '张三', role: 'REQUESTER' };
 const l1User = { id: 'u_l1_1', name: '李工', role: 'L1' };
@@ -37,6 +39,78 @@ test('CREATE_DRAFT 通过状态机创建草稿且不进入待受理', () => {
   assert.equal(nextTicket.description, '草稿描述');
   assert.equal(nextTicket.timeline.length, 1);
   assert.equal(nextTicket.timeline[0].action, EVENTS.CREATE_DRAFT);
+});
+
+test('UPDATE_CUSTOM_TAGS 通过状态机按用户维度保存自定义标签', () => {
+  const nextTicket = applyTransition(
+    {
+      id: 'TKT-CUSTOM-TAGS-1',
+      status: STATUS.PROCESSING,
+      requesterStatus: STATUS.PROCESSING,
+      supportStatus: STATUS.PROCESSING,
+      processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+      customTagsByUser: {
+        u_other: ['他人标签']
+      },
+      timeline: []
+    },
+    EVENTS.UPDATE_CUSTOM_TAGS,
+    {
+      tags: ['  数据问题 ', '数据问题', '', 'P1复盘']
+    },
+    requesterUser
+  );
+
+  assert.equal(nextTicket.status, STATUS.PROCESSING);
+  assert.deepEqual(nextTicket.customTagsByUser.u_requester_1, ['数据问题', 'P1复盘']);
+  assert.deepEqual(nextTicket.customTagsByUser.u_other, ['他人标签']);
+  assert.equal(nextTicket.timeline.length, 0);
+});
+
+test('TRANSFER_TECH 只允许技术支持同角色转交', () => {
+  const transferred = applyTransition(
+    {
+      id: 'TKT-TRANSFER-L1-1',
+      status: STATUS.PROCESSING,
+      requesterStatus: STATUS.PROCESSING,
+      supportStatus: STATUS.PROCESSING,
+      processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+      assigneeL1Id: 'u_l1_old',
+      assigneeL1Name: '旧一线',
+      assigneeL2Id: 'u_l2_1',
+      assigneeL2Name: '王二线',
+      timeline: []
+    },
+    EVENTS.TRANSFER_TECH,
+    {
+      targetRole: 'L1',
+      assigneeId: 'u_l1_1',
+      assigneeName: '李一线',
+      communicated: true
+    },
+    l1User
+  );
+
+  assert.equal(transferred.status, STATUS.PROCESSING);
+  assert.equal(transferred.assigneeL1Id, 'u_l1_1');
+  assert.equal(transferred.assigneeL1Name, '李一线');
+  assert.equal(transferred.assigneeL2Id, 'u_l2_1');
+  assert.equal(transferred.techTransfer?.communicated, true);
+
+  assert.throws(
+    () =>
+      applyTransition(
+        transferred,
+        EVENTS.TRANSFER_TECH,
+        {
+          targetRole: 'L2',
+          assigneeId: 'u_l2_1',
+          assigneeName: '王二线'
+        },
+        l1User
+      ),
+    /操作前置条件未满足/
+  );
 });
 
 test('SUBMIT 通过状态机创建待受理工单', () => {
@@ -219,6 +293,61 @@ test('UPDATE_INFO_SUPPLEMENT 通过状态机保持信息补充状态并写入描
   assert.equal(nextTicket.descriptionHistory.length, 1);
 });
 
+test('UPDATE_INFO_SUPPLEMENT 允许信息补充阶段修改系统', () => {
+  const nextTicket = applyTransition(
+    {
+      id: 'TKT-INFO-SYSTEM-1',
+      status: STATUS.INFO_SUPPLEMENT,
+      requesterStatus: STATUS.INFO_SUPPLEMENT,
+      supportStatus: STATUS.INFO_SUPPLEMENT,
+      systemCategory: 'OLD',
+      systemCode: 'ERP_CORE',
+      systemName: 'ERP 核心系统',
+      description: '描述',
+      descriptionHistory: []
+    },
+    EVENTS.UPDATE_INFO_SUPPLEMENT,
+    {
+      systemCategory: 'NEW',
+      systemName: 'OPS_MONITOR'
+    },
+    requesterUser
+  );
+
+  assert.equal(nextTicket.status, STATUS.INFO_SUPPLEMENT);
+  assert.equal(nextTicket.systemCategory, 'NEW');
+  assert.equal(nextTicket.systemCode, 'OPS_MONITOR');
+  assert.equal(nextTicket.systemName, '运维监控中心');
+});
+
+test('信息补充完成后回到退回前的处理子状态', () => {
+  const returnedTicket = applyTransition(
+    {
+      id: 'TKT-INFO-RETURN-1',
+      status: STATUS.PROCESSING,
+      requesterStatus: STATUS.PROCESSING,
+      supportStatus: STATUS.PROCESSING,
+      processingSubStatus: PROCESSING_SUB_STATUS.L2_INVESTIGATION
+    },
+    EVENTS.RETURN_FOR_INFO,
+    {},
+    l1User
+  );
+
+  const completedTicket = applyTransition(
+    returnedTicket,
+    EVENTS.COMPLETE_INFO_SUPPLEMENT,
+    {},
+    requesterUser
+  );
+
+  assert.equal(returnedTicket.status, STATUS.INFO_SUPPLEMENT);
+  assert.equal(returnedTicket.infoSupplementReturnStatus, STATUS.PROCESSING);
+  assert.equal(returnedTicket.infoSupplementReturnSubStatus, PROCESSING_SUB_STATUS.L2_INVESTIGATION);
+  assert.equal(completedTicket.status, STATUS.PROCESSING);
+  assert.equal(completedTicket.processingSubStatus, PROCESSING_SUB_STATUS.L2_INVESTIGATION);
+});
+
 test('TAG_DEFECT 和 UPDATE_LINKED_DEFECT 通过状态机更新处理中工单附属信息', () => {
   const baseTicket = {
     id: 'TKT-PROCESSING-1',
@@ -265,6 +394,120 @@ test('TAG_DEFECT 和 UPDATE_LINKED_DEFECT 通过状态机更新处理中工单�
   assert.equal(linkedTicket.linkedDefect.defectId, 'BUG-2026-0001');
 });
 
+test('REQUEST_L2_SUPPORT 允许一线处理中直接转给二线', () => {
+  const nextTicket = applyTransition(
+    {
+      id: 'TKT-L2-DIRECT-1',
+      status: STATUS.PROCESSING,
+      requesterStatus: STATUS.PROCESSING,
+      supportStatus: STATUS.PROCESSING,
+      processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+      defectTag: null,
+      linkedDefect: null
+    },
+    EVENTS.REQUEST_L2_SUPPORT,
+    {
+      assigneeL2Id: 'u_l2_1',
+      assigneeL2Name: '王工'
+    },
+    l1User
+  );
+
+  assert.equal(nextTicket.status, STATUS.PROCESSING);
+  assert.equal(nextTicket.processingSubStatus, PROCESSING_SUB_STATUS.L2_INVESTIGATION);
+  assert.equal(nextTicket.assigneeL2Name, '王工');
+});
+
+test('子任务通过状态机创建、处理和完成', () => {
+  const baseTicket = {
+    id: 'TKT-SUBTASK-1',
+    status: STATUS.PROCESSING,
+    requesterStatus: STATUS.PROCESSING,
+    supportStatus: STATUS.PROCESSING,
+    processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+    subtasks: []
+  };
+
+  const withSubtask = applyTransition(
+    baseTicket,
+    EVENTS.CREATE_SUBTASK,
+    {
+      subtask: {
+        id: 'subtask_1',
+        systemCategory: 'NEW',
+        systemCode: 'OPS_MONITOR',
+        systemName: '运维监控中心',
+        description: '请协助排查监控告警',
+        assigneeId: 'u_l2_1',
+        assigneeName: '王二线 (二线运维)'
+      }
+    },
+    l1User
+  );
+  const processingSubtask = applyTransition(
+    withSubtask,
+    EVENTS.START_SUBTASK,
+    { subtaskId: 'subtask_1' },
+    l1User
+  );
+  const completedSubtask = applyTransition(
+    processingSubtask,
+    EVENTS.COMPLETE_SUBTASK,
+    {
+      subtaskId: 'subtask_1',
+      noMainTicketActionRequired: true
+    },
+    l1User
+  );
+
+  assert.equal(withSubtask.subtasks[0].status, 'PENDING');
+  assert.equal(processingSubtask.subtasks[0].status, 'PROCESSING');
+  assert.equal(completedSubtask.subtasks[0].status, 'COMPLETED');
+  assert.equal(completedSubtask.subtasks[0].noMainTicketActionRequired, true);
+});
+
+test('创建子任务工单指定二线处理人时写入二线处理字段', () => {
+  const subtaskTicket = applyTransition(
+    null,
+    EVENTS.CREATE_SUBTASK_TICKET,
+    {
+      id: 'subtask-ticket-l2',
+      parentTicketId: 'TKT-SUBTASK-PARENT',
+      title: '二线子任务',
+      systemCode: 'ERP_CORE',
+      assigneeId: 'u_l2_2',
+      assigneeName: '郑二线 (二线运维)',
+      assigneeRole: ROLES.L2
+    },
+    l1User
+  );
+
+  assert.equal(subtaskTicket.assigneeL1Id, null);
+  assert.equal(subtaskTicket.assigneeL1Name, null);
+  assert.equal(subtaskTicket.assigneeL2Id, 'u_l2_2');
+  assert.equal(subtaskTicket.assigneeL2Name, '郑二线 (二线运维)');
+});
+
+test('存在未完成子任务时一线不能发起办结', () => {
+  assert.throws(
+    () =>
+      applyTransition(
+        {
+          id: 'TKT-SUBTASK-CLOSE-1',
+          status: STATUS.PROCESSING,
+          requesterStatus: STATUS.PROCESSING,
+          supportStatus: STATUS.PROCESSING,
+          processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+          subtasks: [{ id: 'subtask_open', status: 'PENDING' }]
+        },
+        EVENTS.INITIATE_CLOSURE,
+        { summary: '处理总结已填写' },
+        l1User
+      ),
+    /操作前置条件未满足/
+  );
+});
+
 test('UPDATE_SUMMARY 通过状态机保持处理中状态并更新总结字段', () => {
   const nextTicket = applyTransition(
     {
@@ -287,4 +530,97 @@ test('UPDATE_SUMMARY 通过状态机保持处理中状态并更新总结字段',
   assert.equal(nextTicket.status, STATUS.PROCESSING);
   assert.equal(nextTicket.summary, '处理完成，总结如下');
   assert.equal(nextTicket.summarySyncedToCorpus, true);
+});
+
+test('REQUESTER_CLOSE 允许提单人在处理中主动关单', () => {
+  const nextTicket = applyTransition(
+    {
+      id: 'TKT-REQUESTER-CLOSE-1',
+      status: STATUS.PROCESSING,
+      requesterStatus: STATUS.PROCESSING,
+      supportStatus: STATUS.PROCESSING,
+      processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+      summary: ''
+    },
+    EVENTS.REQUESTER_CLOSE,
+    {
+      satisfaction: {
+        rating: 5,
+        comment: '问题已自行确认解决'
+      },
+      __timelineRemark: '提单人主动关单'
+    },
+    requesterUser
+  );
+
+  assert.equal(nextTicket.status, STATUS.CLOSED);
+  assert.equal(nextTicket.requesterStatus, STATUS.CLOSED);
+  assert.equal(nextTicket.supportStatus, STATUS.CLOSED);
+  assert.equal(nextTicket.processingSubStatus, null);
+  assert.equal(nextTicket.satisfaction.rating, 5);
+  assert.equal(nextTicket.timeline.at(-1).action, EVENTS.REQUESTER_CLOSE);
+});
+
+test('WITHDRAW 允许撤回时改为草稿编号并保留原工单编号', () => {
+  const nextTicket = applyTransition(
+    {
+      id: 'TKT-WITHDRAW-1',
+      status: STATUS.PENDING,
+      requesterStatus: STATUS.PENDING,
+      supportStatus: STATUS.PENDING,
+      title: '待撤回工单'
+    },
+    EVENTS.WITHDRAW,
+    {
+      id: 'draft_withdraw_1',
+      withdrawalReason: '信息需要重填',
+      __timelineRemark: '提单人撤回至草稿箱'
+    },
+    requesterUser
+  );
+
+  assert.equal(nextTicket.status, STATUS.DRAFT);
+  assert.equal(nextTicket.requesterStatus, STATUS.DRAFT);
+  assert.equal(nextTicket.supportStatus, STATUS.DRAFT);
+  assert.equal(nextTicket.id, 'draft_withdraw_1');
+  assert.equal(nextTicket.originalTicketId, 'TKT-WITHDRAW-1');
+  assert.equal(nextTicket.withdrawalReason, '信息需要重填');
+});
+test('subtask tickets use independent claim complete no-action and transfer events', () => {
+  const pendingSubtask = applyTransition(
+    null,
+    EVENTS.CREATE_SUBTASK_TICKET,
+    {
+      id: 'TKT-20260429-0001-1',
+      parentTicketId: 'TKT-20260429-0001',
+      title: '协助排查监控告警',
+      systemCode: 'OPS_MONITOR',
+      systemName: '运维监控中心',
+      requesterId: 'u_requester_1',
+      requesterName: '张三'
+    },
+    l1User
+  );
+  const claimedSubtask = applyTransition(pendingSubtask, EVENTS.CLAIM_SUBTASK, {}, l2User);
+  const transferredSubtask = applyTransition(
+    claimedSubtask,
+    EVENTS.TRANSFER_SUBTASK,
+    {
+      systemCode: 'ERP_CORE',
+      systemName: 'ERP核心',
+      assigneeId: 'u_l1_1',
+      assigneeName: '李一线'
+    },
+    l2User
+  );
+  const completedSubtask = applyTransition(transferredSubtask, EVENTS.NO_ACTION_SUBTASK, {}, l1User);
+
+  assert.equal(pendingSubtask.isSubtask, true);
+  assert.equal(pendingSubtask.subtaskStatus, 'PENDING');
+  assert.equal(claimedSubtask.subtaskStatus, 'PROCESSING');
+  assert.equal(claimedSubtask.assigneeL2Id, 'u_l2_1');
+  assert.equal(transferredSubtask.systemCode, 'ERP_CORE');
+  assert.equal(transferredSubtask.assigneeL1Id, 'u_l1_1');
+  assert.equal(completedSubtask.subtaskStatus, 'COMPLETED');
+  assert.equal(completedSubtask.noMainTicketActionRequired, true);
 });

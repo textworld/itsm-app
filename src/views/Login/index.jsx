@@ -18,6 +18,7 @@ import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { ROLES, ROLE_OPTIONS } from '../../constants/roles.js';
+import { getDemoLoginAccountsByRole } from './demoAccounts.js';
 
 /**
  * 登录页
@@ -59,13 +60,17 @@ export default function LoginPage() {
     router.replace(getRedirectTarget());
   };
 
-  const fillDemo = (role) => {
-    let username = '';
-    if (role === ROLES.REQUESTER) username = 'test_user';
-    if (role === ROLES.L1) username = 'support1';
-    if (role === ROLES.L2) username = 'ops1';
-    form.setFieldsValue({ role, username, password: '123456' });
+  const fillDemo = (account) => {
+    form.setFieldsValue({
+      role: account.role,
+      username: account.username,
+      password: account.password
+    });
   };
+
+  const requesterAccounts = getDemoLoginAccountsByRole(ROLES.REQUESTER);
+  const l1Accounts = getDemoLoginAccountsByRole(ROLES.L1);
+  const l2Accounts = getDemoLoginAccountsByRole(ROLES.L2);
 
   return (
     <div
@@ -143,31 +148,34 @@ export default function LoginPage() {
           <Descriptions.Item
             label={<Tag color="blue">提单人</Tag>}
           >
-            <Space>
-              <span>test_user / 123456</span>
-              <Button size="small" onClick={() => fillDemo(ROLES.REQUESTER)}>
-                一键填充
-              </Button>
+            <Space wrap>
+              {requesterAccounts.map((account) => (
+                <Button key={account.username} size="small" onClick={() => fillDemo(account)}>
+                  {account.username} / {account.password}
+                </Button>
+              ))}
             </Space>
           </Descriptions.Item>
           <Descriptions.Item
             label={<Tag color="geekblue">一线技术支持</Tag>}
           >
-            <Space>
-              <span>support1 / 123456</span>
-              <Button size="small" onClick={() => fillDemo(ROLES.L1)}>
-                一键填充
-              </Button>
+            <Space wrap>
+              {l1Accounts.map((account) => (
+                <Button key={account.username} size="small" onClick={() => fillDemo(account)}>
+                  {account.username} / {account.password}
+                </Button>
+              ))}
             </Space>
           </Descriptions.Item>
           <Descriptions.Item
             label={<Tag color="purple">二线运维</Tag>}
           >
-            <Space>
-              <span>ops1 / 123456</span>
-              <Button size="small" onClick={() => fillDemo(ROLES.L2)}>
-                一键填充
-              </Button>
+            <Space wrap>
+              {l2Accounts.map((account) => (
+                <Button key={account.username} size="small" onClick={() => fillDemo(account)}>
+                  {account.username} / {account.password}
+                </Button>
+              ))}
             </Space>
           </Descriptions.Item>
         </Descriptions>

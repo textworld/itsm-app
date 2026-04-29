@@ -114,3 +114,39 @@ test('草稿由大模型解决时生成正式工单号并进入已办结', () =>
   assert.equal(resolvedResult.ticket.draftId, draftResult.ticket.id);
   assert.equal(getTicketById(draftResult.ticket.id), null);
 });
+
+test('正式工单撤回到草稿箱时生成草稿编号并移除原正式编号记录', () => {
+  const submitResult = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      title: '待撤回正式工单',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P2',
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '提交后撤回' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  const withdrawResult = dispatchTicketEvent(
+    submitResult.ticket.id,
+    EVENTS.WITHDRAW,
+    { withdrawalReason: '信息填错' },
+    requesterUser
+  );
+
+  assert.equal(withdrawResult.ok, true);
+  assert.equal(withdrawResult.ticket.status, STATUS.DRAFT);
+  assert.match(withdrawResult.ticket.id, /^draft_/);
+  assert.doesNotMatch(withdrawResult.ticket.id, /^TKT-/);
+  assert.equal(withdrawResult.ticket.originalTicketId, submitResult.ticket.id);
+  assert.equal(getTicketById(submitResult.ticket.id), null);
+  assert.equal(getTicketById(withdrawResult.ticket.id)?.id, withdrawResult.ticket.id);
+});

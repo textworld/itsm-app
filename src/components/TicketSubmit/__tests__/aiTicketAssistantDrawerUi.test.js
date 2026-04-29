@@ -17,3 +17,14 @@ test('大模型抽屉使用左右气泡式对话布局', () => {
   assert.match(indexCssSource, /\.ai-ticket-chat-user[\s\S]*\.ai-ticket-chat-bubble/);
   assert.match(indexCssSource, /\.ai-ticket-chat-assistant[\s\S]*\.ai-ticket-chat-bubble/);
 });
+
+test('大模型抽屉转人工按钮文案为继续提交工单', () => {
+  assert.match(drawerSource, /继续提交工单/);
+  assert.doesNotMatch(drawerSource, />\s*人工处理\s*</);
+});
+test('AI streaming still allows manual ticket submission', () => {
+  assert.match(drawerSource, /const abortStreaming = /);
+  assert.match(drawerSource, /const handleManualSubmit = \(\) => \{[\s\S]*abortStreaming\(\);[\s\S]*onManual\?\.\(\);[\s\S]*\}/);
+  assert.match(drawerSource, /<Button onClick=\{handleManualSubmit\} loading=\{confirming\} disabled=\{confirming\}>/);
+  assert.doesNotMatch(drawerSource, /<Button onClick=\{onManual\} loading=\{confirming\} disabled=\{streaming\}>/);
+});

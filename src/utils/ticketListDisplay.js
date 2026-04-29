@@ -18,12 +18,12 @@ export function getTitleColumnWidth(user) {
 }
 
 export function getAssigneeColumnTitle(user) {
-  return user?.role === ROLES.REQUESTER ? '受理人' : '处理人';
+  return user?.role === ROLES.REQUESTER ? '技术支持' : '处理人';
 }
 
 export function getTicketNumberDisplay(ticket) {
   if (isInternalDraftId(ticket?.id) && getRequesterStatus(ticket) === STATUS.DRAFT) {
-    return '草稿';
+    return ticket.id;
   }
   return ticket?.id || '-';
 }

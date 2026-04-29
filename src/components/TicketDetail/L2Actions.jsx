@@ -17,8 +17,10 @@ import {
   STATUS,
   getProcessingSubStatus
 } from '../../constants/ticketStatus.js';
+import { ROLES } from '../../constants/roles.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { shortId } from '../../utils/idGenerator.js';
+import TechTransferPanel from './TechTransferPanel.jsx';
 
 /**
  * 二线运维操作区
@@ -113,6 +115,7 @@ export default function L2Actions({ ticket }) {
             一线复核
           </Button>
         </Popconfirm>
+        <TechTransferPanel ticket={ticket} role={ROLES.L2} />
       </Space>
     </Card>
   );

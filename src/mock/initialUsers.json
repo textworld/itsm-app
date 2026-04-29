@@ -8,6 +8,22 @@
     "department": "业务运营部"
   },
   {
+    "id": "u_requester_2",
+    "username": "test_user2",
+    "password": "123456",
+    "name": "赵四 (提单人)",
+    "role": "REQUESTER",
+    "department": "财务共享中心"
+  },
+  {
+    "id": "u_requester_3",
+    "username": "test_user3",
+    "password": "123456",
+    "name": "钱五 (提单人)",
+    "role": "REQUESTER",
+    "department": "人力资源部"
+  },
+  {
     "id": "u_l1_1",
     "username": "support1",
     "password": "123456",
@@ -16,10 +32,42 @@
     "department": "技术支持中心"
   },
   {
+    "id": "u_l1_2",
+    "username": "support2",
+    "password": "123456",
+    "name": "周一线 (一线技术支持)",
+    "role": "L1",
+    "department": "技术支持中心"
+  },
+  {
+    "id": "u_l1_3",
+    "username": "support3",
+    "password": "123456",
+    "name": "吴一线 (一线技术支持)",
+    "role": "L1",
+    "department": "技术支持中心"
+  },
+  {
     "id": "u_l2_1",
     "username": "ops1",
     "password": "123456",
     "name": "王二线 (二线运维)",
+    "role": "L2",
+    "department": "系统运维部"
+  },
+  {
+    "id": "u_l2_2",
+    "username": "ops2",
+    "password": "123456",
+    "name": "郑二线 (二线运维)",
+    "role": "L2",
+    "department": "系统运维部"
+  },
+  {
+    "id": "u_l2_3",
+    "username": "ops3",
+    "password": "123456",
+    "name": "孙二线 (二线运维)",
     "role": "L2",
     "department": "系统运维部"
   }

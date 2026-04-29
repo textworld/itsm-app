@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { POST as dispatchPost } from '../../../app/api/tickets/[id]/dispatch/route.js';
 import { STATUS } from '../../constants/ticketStatus.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
-import { dispatchCreateTicketEvent } from '../store.js';
+import { dispatchCreateTicketEvent, dispatchTicketEvent, getTicketById } from '../store.js';
 import { reseedDb } from '../db.js';
 
 const requesterUser = { id: 'u_requester_1', name: '张三', role: 'REQUESTER' };
@@ -93,3 +93,59 @@ function buildMockRequest(body) {
     json: async () => body
   };
 }
+
+test('creating a subtask dispatch creates a child ticket using the parent ticket number', () => {
+  const parentResult = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      id: 'TKT-20260429-0001',
+      title: '父工单',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P4',
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '父工单描述' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  dispatchTicketEvent(
+    parentResult.ticket.id,
+    EVENTS.ACCEPT,
+    {
+      assigneeL1Id: 'u_l1_1',
+      assigneeL1Name: 'support'
+    },
+    { id: 'u_l1_1', name: 'support', role: 'L1' }
+  );
+
+  const result = dispatchTicketEvent(
+    parentResult.ticket.id,
+    EVENTS.CREATE_SUBTASK,
+    {
+      subtask: {
+        systemCategory: 'NEW',
+        systemCode: 'OPS_MONITOR',
+        systemName: '运维监控中心',
+        description: '协助排查告警',
+        assigneeId: '',
+        assigneeName: ''
+      }
+    },
+    { id: 'u_l1_1', name: 'support', role: 'L1' }
+  );
+  const childTicket = getTicketById('TKT-20260429-0001-1');
+
+  assert.equal(result.ok, true);
+  assert.equal(result.ticket.subtasks[0].id, 'TKT-20260429-0001-1');
+  assert.equal(childTicket.id, 'TKT-20260429-0001-1');
+  assert.equal(childTicket.parentTicketId, parentResult.ticket.id);
+  assert.equal(childTicket.isSubtask, true);
+  assert.equal(childTicket.subtaskStatus, 'PENDING');
+});

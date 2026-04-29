@@ -11,6 +11,7 @@ test('一键生成模拟工单会填充提交表单所有核心字段', () => {
 
   assert.equal(values.toolType, TOOL_TYPES.DATA_FIX);
   assert.equal(values.priority, PRIORITIES.P2);
+  assert.equal(values.systemCategory, 'OLD');
   assert.equal(values.systemName, 'ERP_CORE');
   assert.equal(values.reporterPhone, '13800138000');
   assert.equal(values.reporterEmail, 'mock.requester@example.com');

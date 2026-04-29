@@ -141,7 +141,12 @@ export function TicketProvider({ children }) {
         return { ok: false, reason: data?.reason || '状态流转失败' };
       }
 
-      setTickets((prev) => replaceTicketInList(prev, data.ticket, ticketId));
+      setTickets((prev) =>
+        (data.tickets || [data.ticket]).reduce(
+          (nextTickets, ticket) => replaceTicketInList(nextTickets, ticket, ticket.id === data.ticket?.id ? ticketId : ticket.id),
+          prev
+        )
+      );
       return { ok: true, ticket: data.ticket };
     } catch (error) {
       console.error(error);

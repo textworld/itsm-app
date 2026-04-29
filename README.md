@@ -172,6 +172,163 @@ src/
 - 登录通过 Next Route Handler 校验测试账号，并使用 HttpOnly Cookie 维持会话。
 - 菜单 / 列表 / 操作按钮 均基于 `user.role` 动态渲染，未登录自动跳转 `/login`。
 
-## 八、License
+## 八、生产服务器部署
+
+以下示例以 Linux 服务器为例，使用 `pnpm build` 生成 Next.js 生产构建，并通过 PM2 常驻运行。项目使用 SQLite，运行期数据默认写入项目根目录下的 `data/itsm.sqlite` 和 `data/uploads/`，生产环境必须持久化并备份该目录。
+
+### 1. 服务器环境准备
+
+建议使用 Node.js 20 LTS 或 22 LTS。项目依赖 `better-sqlite3`，需要 native 模块支持；不要使用过新的非 LTS Node 版本部署。
+
+```bash
+# 安装 Node.js 后启用 pnpm
+corepack enable
+corepack prepare pnpm@10.27.0 --activate
+
+# 可选：安装 PM2
+pnpm add -g pm2
+```
+
+如果服务器需要从源码编译 `better-sqlite3`，还需要安装编译工具：
+
+```bash
+# Ubuntu / Debian
+sudo apt update
+sudo apt install -y build-essential python3 make g++
+```
+
+### 2. 上传代码并安装依赖
+
+```bash
+cd /opt
+git clone <你的仓库地址> itsm-app-nextjs
+cd /opt/itsm-app-nextjs
+
+pnpm install --frozen-lockfile
+```
+
+如果不是通过 Git 发布，也可以将项目目录上传到服务器，但需要包含 `package.json`、`pnpm-lock.yaml`、`app/`、`src/`、`public/`（如存在）、`next.config.mjs` 等源码和配置文件。
+
+### 3. 配置环境变量
+
+在项目根目录创建 `.env.production`：
+
+```bash
+OPENAI_API_KEY=你的服务端密钥
+OPENAI_BASE_URL=https://api.codexzh.com/v1
+OPENAI_MODEL=gpt-5.4
+```
+
+如果暂时不使用大模型能力，可以不配置 `OPENAI_API_KEY`，但访问智能解答接口时会返回未配置提示。
+
+### 4. 构建生产产物
+
+```bash
+pnpm build
+```
+
+构建成功后会生成 `.next/` 目录。生产启动命令：
+
+```bash
+pnpm start
+```
+
+默认监听 `3000` 端口。如需指定端口：
+
+```bash
+PORT=3001 pnpm start
+```
+
+### 5. 使用 PM2 常驻运行
+
+```bash
+cd /opt/itsm-app-nextjs
+
+pm2 start pnpm --name itsm-app-nextjs -- start
+pm2 save
+pm2 startup
+```
+
+如果需要指定端口：
+
+```bash
+PORT=3001 pm2 start pnpm --name itsm-app-nextjs -- start
+```
+
+常用运维命令：
+
+```bash
+pm2 status
+pm2 logs itsm-app-nextjs
+pm2 restart itsm-app-nextjs
+pm2 stop itsm-app-nextjs
+```
+
+### 6. 配置 Nginx 反向代理
+
+示例配置：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.example.com;
+
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+启用配置后检查并重载 Nginx：
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+生产环境建议再使用 Certbot 或云厂商证书配置 HTTPS。
+
+### 7. 数据持久化与备份
+
+生产数据位于：
+
+```text
+data/itsm.sqlite
+data/itsm.sqlite-wal
+data/itsm.sqlite-shm
+data/uploads/
+```
+
+部署新版本时不要删除 `data/` 目录。建议定时备份整个 `data/` 目录：
+
+```bash
+mkdir -p /opt/backups/itsm
+tar -czf /opt/backups/itsm/data-$(date +%Y%m%d-%H%M%S).tar.gz -C /opt/itsm-app-nextjs data
+```
+
+如果使用容器、CI/CD 或重新拉取代码发布，请将 `data/` 挂载到独立磁盘或宿主机目录，避免发布时覆盖数据库和附件。
+
+### 8. 更新发布流程
+
+```bash
+cd /opt/itsm-app-nextjs
+git pull
+pnpm install --frozen-lockfile
+pnpm build
+pm2 restart itsm-app-nextjs
+```
+
+更新前建议先备份 `data/` 目录；如果依赖版本发生变化，确认 `pnpm install` 没有 native 模块编译失败。
+
+## 九、License
 
 仅用于原型演示与学习。

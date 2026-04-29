@@ -1,52 +1,78 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Card,
   Space,
   Button,
   Popconfirm,
+  Modal,
+  Form,
   Typography,
   Alert,
-  Divider,
-  Tag,
   App as AntdApp
 } from 'antd';
 import {
   CheckOutlined,
   RollbackOutlined,
-  FlagOutlined,
-  SendOutlined
+  SendOutlined,
+  StopOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
 import {
   PROCESSING_SUB_STATUS,
-  PROCESSING_SUB_STATUS_LABELS,
   STATUS,
   getProcessingSubStatus
 } from '../../constants/ticketStatus.js';
+import { ROLES } from '../../constants/roles.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
-import DefectTagModal from './DefectTagModal.jsx';
-import { generateSummary } from '../../utils/summaryGenerator.js';
 import { shortId } from '../../utils/idGenerator.js';
+import {
+  createEmptyRichTextDoc,
+  richTextHasContent,
+  richTextPlainTextToDoc,
+  richTextToPlainText,
+  richTextValueToDoc,
+  richTextValueToHtml
+} from '../../utils/richText.js';
+import {
+  clearClosureSummaryDraft,
+  readClosureSummaryDraft,
+  writeCompletedClosureSummaryDraft
+} from '../../utils/closureSummaryDraft.js';
+import RichTextEditor from '../common/RichTextEditor.jsx';
+import TechTransferPanel from './TechTransferPanel.jsx';
+
+const TYPEWRITER_DELAY_MS = 18;
 
 /**
  * 一线技术支持操作区
  * 按工单状态分支：
- * - PENDING       : 「受理」按钮 (ACCEPT → PROCESSING)
- * - PROCESSING    : 「打标为缺陷」+「关联缺陷」，两者齐全 → 「二线支持」(状态仍为 PROCESSING)
- * - PROCESSING    : 一线排查 / 二线排查 子状态切换；一线可发起办结
+ * - PENDING       : 「受理」按钮 (ACCEPT -> PROCESSING)
+ * - PROCESSING    : PMS 缺陷/故障入口、退回补充、二线支持、发起办结
  */
 export default function L1Actions({ ticket }) {
   const { user } = useAuth();
   const { dispatchEvent, addMessage } = useTickets();
   const { message } = AntdApp.useApp();
-  const [tagOpen, setTagOpen] = useState(false);
+  const [closureOpen, setClosureOpen] = useState(false);
   const [editSummary, setEditSummary] = useState(ticket.summary || '');
+  const [closureSummaryDoc, setClosureSummaryDoc] = useState(createEmptyRichTextDoc());
+  const [closureSummaryError, setClosureSummaryError] = useState('');
+  const [closureGenerating, setClosureGenerating] = useState(false);
+  const [closureForm] = Form.useForm();
+  const generationAbortRef = useRef(null);
+  const generationIdRef = useRef(0);
+  const generatedSummaryTextRef = useRef('');
 
-  // 工单切换时同步 summary 输入框
   React.useEffect(() => {
     setEditSummary(ticket.summary || '');
   }, [ticket.id, ticket.summary]);
+
+  React.useEffect(() => {
+    return () => {
+      abortClosureSummaryGeneration(false);
+    };
+  }, []);
 
   const pushSystemMessage = async (content) => {
     await addMessage(ticket.id, {
@@ -60,7 +86,6 @@ export default function L1Actions({ ticket }) {
     });
   };
 
-  // ---------- 受理 ----------
   const handleAccept = async () => {
     const result = await dispatchEvent(
       ticket.id,
@@ -97,44 +122,15 @@ export default function L1Actions({ ticket }) {
     message.success('已退回提单人，工单进入信息补充');
   };
 
-  // ---------- 打标为缺陷 ----------
-  const handleTagOk = async (values) => {
-    try {
-      const result = await dispatchEvent(ticket.id, EVENTS.TAG_DEFECT, {
-        defectTag: {
-          type: values.type,
-          description: values.description,
-          taggedAt: new Date().toISOString(),
-          taggedBy: user.name
-        }
-      });
-      if (!result.ok) {
-        throw new Error(result.reason || '缺陷打标失败');
-      }
-      setTagOpen(false);
-      message.success('已保存缺陷打标');
-    } catch (error) {
-      console.error(error);
-      message.error(error.message || '缺陷打标失败');
-    }
+  const openPmsCreate = (type) => {
+    const params = new URLSearchParams({
+      type,
+      ticketId: ticket.id,
+      title: ticket.title || ''
+    });
+    window.open(`/pms/create?${params.toString()}`, '_blank', 'noopener,noreferrer');
   };
 
-  // ---------- 关联/取消关联缺陷 ----------
-  const handleLinkChange = async (linked) => {
-    try {
-      const result = await dispatchEvent(ticket.id, EVENTS.UPDATE_LINKED_DEFECT, {
-        linkedDefect: linked
-      });
-      if (!result.ok) {
-        throw new Error(result.reason || '更新关联缺陷失败');
-      }
-    } catch (error) {
-      console.error(error);
-      message.error(error.message || '更新关联缺陷失败');
-    }
-  };
-
-  // ---------- 流转给二线 ----------
   const handleFlowToL2 = async () => {
     const result = await dispatchEvent(
       ticket.id,
@@ -143,82 +139,142 @@ export default function L1Actions({ ticket }) {
         assigneeL2Id: null,
         assigneeL2Name: null,
         l2SupportRequested: true,
-        __timelineRemark: `已关联缺陷 ${ticket.linkedDefect?.defectId || ''}`
+        __timelineRemark: '一线直接转交二线支持'
       },
       user
     );
     if (!result.ok) {
-      message.error(result.reason || '流转失败：需要先完成打标 + 关联缺陷');
+      message.error(result.reason || '流转失败');
       return;
     }
-    await pushSystemMessage(
-      `【系统】已将工单标记为【${ticket.defectTag?.type}】缺陷并关联到 ${ticket.linkedDefect?.defectId}，请求二线运维支持。`
-    );
+    await pushSystemMessage('【系统】一线已将工单转交二线支持。');
     message.success('已请求二线支持，工单仍为处理中');
   };
 
-  // ---------- 生成 / 修改 / 同步 / 提交复核 ----------
-  const handleGenSummary = async () => {
-    const text = generateSummary(ticket);
-    setEditSummary(text);
-    try {
-      const result = await dispatchEvent(ticket.id, EVENTS.UPDATE_SUMMARY, {
-        summary: text,
-        summarySyncedToCorpus: false
-      });
-      if (!result.ok) {
-        throw new Error(result.reason || '生成工单总结失败');
-      }
-      message.success('工单总结已自动生成，您可以进一步修改');
-    } catch (error) {
-      console.error(error);
-      message.error(error.message || '生成工单总结失败');
-    }
-  };
+  const openClosureModal = () => {
+    abortClosureSummaryGeneration();
+    setClosureSummaryError('');
+    setClosureGenerating(false);
 
-  const handleSaveSummary = async () => {
-    try {
-      const result = await dispatchEvent(ticket.id, EVENTS.UPDATE_SUMMARY, {
-        summary: editSummary,
-        summarySyncedToCorpus: false
-      });
-      if (!result.ok) {
-        throw new Error(result.reason || '保存总结失败');
-      }
-      message.success('总结已保存（尚未同步语料库）');
-    } catch (error) {
-      console.error(error);
-      message.error(error.message || '保存总结失败');
-    }
-  };
-
-  const handleSyncCorpus = async () => {
-    if (!editSummary.trim()) {
-      message.warning('请先生成或填写工单总结');
+    const cachedSummary = readClosureSummaryDraft(window.localStorage, ticket.id, user?.id);
+    if (cachedSummary) {
+      setClosureSummaryDoc(richTextPlainTextToDoc(cachedSummary.text));
+      closureForm.setFieldsValue({ summary: cachedSummary.text });
+      setClosureOpen(true);
       return;
     }
+
+    const initialSummary = ticket.summary || editSummary || '';
+    setClosureSummaryDoc(initialSummary ? richTextValueToDoc(initialSummary) : createEmptyRichTextDoc());
+    closureForm.setFieldsValue({ summary: initialSummary });
+    setClosureOpen(true);
+    startClosureSummaryGeneration();
+  };
+
+  const closeClosureModal = () => {
+    abortClosureSummaryGeneration();
+    setClosureOpen(false);
+  };
+
+  const handleStopClosureSummaryGeneration = () => {
+    abortClosureSummaryGeneration();
+  };
+
+  const abortClosureSummaryGeneration = (updateState = true) => {
+    generationIdRef.current += 1;
+    if (generationAbortRef.current) {
+      generationAbortRef.current.abort();
+      generationAbortRef.current = null;
+    }
+    if (updateState) {
+      setClosureGenerating(false);
+    }
+  };
+
+  const startClosureSummaryGeneration = async () => {
+    const generationId = generationIdRef.current + 1;
+    generationIdRef.current = generationId;
+    generatedSummaryTextRef.current = '';
+
+    const controller = new AbortController();
+    generationAbortRef.current = controller;
+    setClosureGenerating(true);
+
     try {
-      const result = await dispatchEvent(ticket.id, EVENTS.UPDATE_SUMMARY, {
-        summary: editSummary,
-        summarySyncedToCorpus: true
+      const response = await fetch('/api/ai/ticket-closure-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket }),
+        signal: controller.signal
       });
-      if (!result.ok) {
-        throw new Error(result.reason || '同步语料库失败');
+
+      if (!response.ok || !response.body) {
+        const data = await tryReadJson(response);
+        throw new Error(data?.reason || '大模型总结生成失败');
       }
-      message.success('已同步至大模型语料库');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        await typeSummaryText(decoder.decode(value, { stream: true }), generationId, controller.signal);
+      }
+      await typeSummaryText(decoder.decode(), generationId, controller.signal);
+
+      if (generationIdRef.current === generationId && !controller.signal.aborted) {
+        writeCompletedClosureSummaryDraft(
+          window.localStorage,
+          ticket.id,
+          user?.id,
+          generatedSummaryTextRef.current
+        );
+      }
     } catch (error) {
-      console.error(error);
-      message.error(error.message || '同步语料库失败');
+      if (error?.name !== 'AbortError') {
+        console.error(error);
+        setClosureSummaryError(error.message || '大模型总结生成失败，请手动填写');
+      }
+    } finally {
+      if (generationIdRef.current === generationId) {
+        setClosureGenerating(false);
+        generationAbortRef.current = null;
+      }
+    }
+  };
+
+  const typeSummaryText = async (text, generationId, signal) => {
+    for (const character of text) {
+      if (signal.aborted || generationIdRef.current !== generationId) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
+      generatedSummaryTextRef.current += character;
+      const nextDoc = richTextPlainTextToDoc(generatedSummaryTextRef.current);
+      setClosureSummaryDoc(nextDoc);
+      closureForm.setFieldsValue({ summary: generatedSummaryTextRef.current });
+      await delay(TYPEWRITER_DELAY_MS);
     }
   };
 
   const handleSubmitReview = async () => {
+    const summaryPlainText = richTextToPlainText(closureSummaryDoc);
+    if (!richTextHasContent(closureSummaryDoc)) {
+      setClosureSummaryError('请填写工单处理总结');
+      return;
+    }
+    if (summaryPlainText.length < 5) {
+      setClosureSummaryError('总结至少 5 个字符');
+      return;
+    }
+
+    const summaryHtml = richTextValueToHtml(closureSummaryDoc);
     const result = await dispatchEvent(
       ticket.id,
       EVENTS.INITIATE_CLOSURE,
       {
-        summary: editSummary,
-        summarySyncedToCorpus: Boolean(editSummary.trim()),
+        summary: summaryHtml,
+        summarySyncedToCorpus: Boolean(summaryPlainText.trim()),
         __timelineRemark: '一线发起办结，总结已同步语料库'
       },
       user
@@ -228,10 +284,12 @@ export default function L1Actions({ ticket }) {
       return;
     }
     await pushSystemMessage('【系统】一线已发起办结，请提单人确认。');
+    clearClosureSummaryDraft(window.localStorage, ticket.id, user?.id);
+    abortClosureSummaryGeneration();
+    setClosureOpen(false);
     message.success('已发起办结，工单进入待确认');
   };
 
-  // ---------- 渲染 ----------
   const { status } = ticket;
 
   if (status === STATUS.PENDING) {
@@ -260,35 +318,21 @@ export default function L1Actions({ ticket }) {
   }
 
   if (status === STATUS.PROCESSING) {
-    const readyToFlow = Boolean(ticket.defectTag) && Boolean(ticket.linkedDefect);
     const processingSubStatus = getProcessingSubStatus(ticket);
     const isL2Investigation = processingSubStatus === PROCESSING_SUB_STATUS.L2_INVESTIGATION;
     return (
       <Card title="一线操作区 · 处理中">
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Alert
-            type="info"
-            showIcon
-            message="本工单处理中"
-            description={`当前子状态：${PROCESSING_SUB_STATUS_LABELS[processingSubStatus] || '-'}。如判定为缺陷，请【打标为缺陷】并【关联缺陷】，随后点击二线支持，工单状态仍保持处理中。`}
-          />
+        <Space wrap>
+          <Button
+            type="primary"
+            onClick={() => openPmsCreate('defect')}
+          >
+            关联缺陷
+          </Button>
+          <Button onClick={() => openPmsCreate('incident')}>
+            故障应急
+          </Button>
 
-          <Space wrap>
-            <Button
-              icon={<FlagOutlined />}
-              onClick={() => setTagOpen(true)}
-              type={ticket.defectTag ? 'default' : 'primary'}
-            >
-              {ticket.defectTag ? '修改缺陷打标' : '打标为缺陷'}
-            </Button>
-            {ticket.defectTag && (
-              <Tag color="volcano">
-                已打标：{ticket.defectTag.type}
-              </Tag>
-            )}
-          </Space>
-
-          <Divider />
           <Popconfirm
             title="确认退回提单人补充信息？"
             description="退回后工单会进入信息补充状态，等待提单人修改后再继续处理。"
@@ -301,39 +345,22 @@ export default function L1Actions({ ticket }) {
             </Button>
           </Popconfirm>
 
-          <Divider />
-          <Space direction="vertical" size={4} style={{ width: '100%' }}>
-            <Typography.Text strong>发起办结</Typography.Text>
-            <Typography.Text type="secondary">
-              若本次问题已处理完毕，可生成/维护工单总结后发起办结，工单将进入提单人待确认。
-            </Typography.Text>
-            <Popconfirm
-              title="确认发起办结？"
-              description="发起后工单会进入提单人待确认，请确认总结内容已准备好。"
-              okText="确认发起"
-              cancelText="取消"
-              onConfirm={handleSubmitReview}
-              disabled={!editSummary.trim()}
-            >
-              <Button disabled={!editSummary.trim()}>
-                发起办结
-              </Button>
-            </Popconfirm>
-          </Space>
-	
-          <Divider />
+          <Button onClick={openClosureModal}>
+            发起办结
+          </Button>
+
           <Popconfirm
             title="确认发起二线支持？"
             description="发起后工单会保留处理中状态，并切换到二线排查。"
             okText="确认发起"
             cancelText="取消"
             onConfirm={handleFlowToL2}
-            disabled={!readyToFlow || isL2Investigation}
+            disabled={isL2Investigation}
           >
             <Button
               type="primary"
               icon={<SendOutlined />}
-              disabled={!readyToFlow || isL2Investigation}
+              disabled={isL2Investigation}
             >
               二线支持
             </Button>
@@ -343,21 +370,59 @@ export default function L1Actions({ ticket }) {
               当前子状态为「二线排查」，请等待二线运维触发「一线复核」。
             </Typography.Text>
           )}
-          {!readyToFlow && (
-            <Typography.Text type="secondary">
-              需先完成【打标为缺陷】+【关联缺陷】才能流转至二线。
-            </Typography.Text>
-          )}
+          <TechTransferPanel ticket={ticket} role={ROLES.L1} />
         </Space>
-
-        <DefectTagModal
-          open={tagOpen}
-          ticket={ticket}
-          initialValue={ticket.defectTag}
-          onLinkChange={handleLinkChange}
-          onOk={handleTagOk}
-          onCancel={() => setTagOpen(false)}
-        />
+        <Modal
+          title={
+            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+              <span>发起办结</span>
+              {closureGenerating && (
+                <Button size="small" icon={<StopOutlined />} onClick={handleStopClosureSummaryGeneration}>
+                  停止生成
+                </Button>
+              )}
+            </Space>
+          }
+          open={closureOpen}
+          onOk={handleSubmitReview}
+          onCancel={closeClosureModal}
+          okText="确认发起"
+          cancelText="取消"
+          destroyOnClose
+          confirmLoading={closureGenerating}
+          okButtonProps={{ disabled: closureGenerating }}
+        >
+          <Form form={closureForm} layout="vertical">
+            {closureGenerating && (
+              <Alert
+                type="info"
+                showIcon
+                message="大模型正在生成工单总结"
+                description="生成内容会以打字机效果逐步填入，完成后会暂存在当前浏览器。"
+                style={{ marginBottom: 12 }}
+              />
+            )}
+            {closureSummaryError && (
+              <Alert
+                type="warning"
+                showIcon
+                message={closureSummaryError}
+                style={{ marginBottom: 12 }}
+              />
+            )}
+            <Form.Item name="summary" label="工单处理总结">
+              <RichTextEditor
+                value={closureSummaryDoc}
+                onChange={(nextDoc) => {
+                  setClosureSummaryDoc(nextDoc);
+                  setClosureSummaryError('');
+                }}
+                disabled={closureGenerating}
+                placeholder="正在生成或手动填写工单处理总结，支持富文本和图片..."
+              />
+            </Form.Item>
+          </Form>
+        </Modal>
       </Card>
     );
   }
@@ -402,4 +467,18 @@ export default function L1Actions({ ticket }) {
   }
 
   return null;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function tryReadJson(response) {
+  try {
+    return await response.json();
+  } catch (_error) {
+    return null;
+  }
 }

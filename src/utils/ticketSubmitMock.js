@@ -1,11 +1,13 @@
 import { TOOL_TYPES } from '../constants/toolTypes.js';
 import { PRIORITIES } from '../constants/priorities.js';
+import { SYSTEM_CATEGORY } from '../constants/systems.js';
 
 export function buildMockTicketFormValues() {
   return {
     toolType: TOOL_TYPES.DATA_FIX,
     title: '【模拟】ERP 订单状态批量修正申请',
     priority: PRIORITIES.P2,
+    systemCategory: SYSTEM_CATEGORY.OLD,
     systemName: 'ERP_CORE',
     reporterPhone: '13800138000',
     reporterEmail: 'mock.requester@example.com',

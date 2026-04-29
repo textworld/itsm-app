@@ -31,8 +31,8 @@ test('提单人待受理工单显示等待技术支持受理中', () => {
   );
 });
 
-test('提单人列表字段标题显示为受理人', () => {
-  assert.equal(getAssigneeColumnTitle({ role: ROLES.REQUESTER }), '受理人');
+test('提单人列表字段标题显示为技术支持', () => {
+  assert.equal(getAssigneeColumnTitle({ role: ROLES.REQUESTER }), '技术支持');
 });
 
 test('提单人列表不显示二线运维人员姓名', () => {
@@ -75,10 +75,10 @@ test('技术支持工单列表继续展示状态子状态', () => {
   assert.equal(shouldShowStatusSubLabel({ role: ROLES.L1 }), true);
 });
 
-test('内部草稿编号在列表中显示为草稿', () => {
+test('内部草稿编号在列表中显示草稿编号', () => {
   assert.equal(
     getTicketNumberDisplay({ id: 'draft_abc_123', requesterStatus: STATUS.DRAFT }),
-    '草稿'
+    'draft_abc_123'
   );
 });
 

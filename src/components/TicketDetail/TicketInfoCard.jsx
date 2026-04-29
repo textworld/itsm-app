@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Card, Descriptions, Typography, Timeline, Space, Divider, Tag } from 'antd';
+import { Button, Card, Descriptions, Typography, Space, Divider, Tag } from 'antd';
 import StatusTag from '../common/StatusTag.jsx';
 import AttachmentList from '../common/AttachmentList.jsx';
 import RichContentPreview from '../common/RichContentPreview.jsx';
@@ -14,7 +14,7 @@ import {
 } from '../../constants/ticketStatus.js';
 import { TOOL_TYPE_LABELS } from '../../constants/toolTypes.js';
 import { PRIORITY_LABELS } from '../../constants/priorities.js';
-import { ROLE_LABELS, ROLES } from '../../constants/roles.js';
+import { ROLES } from '../../constants/roles.js';
 import { formatDateTime } from '../../utils/format.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
@@ -28,7 +28,23 @@ export default function TicketInfoCard({ ticket }) {
     <Card
       title="工单基本信息"
       extra={<DraftTicketEditButton ticket={ticket} />}
-    >
+      >
+      <div className="ticket-assignee-summary">
+        <div className="ticket-assignee-summary-item">
+          <Typography.Text type="secondary">一线处理人</Typography.Text>
+          <Typography.Text strong className="ticket-assignee-highlight">
+            {ticket.assigneeL1Name || '-'}
+          </Typography.Text>
+        </div>
+        {user?.role !== ROLES.REQUESTER && (
+          <div className="ticket-assignee-summary-item">
+            <Typography.Text type="secondary">二线处理人</Typography.Text>
+            <Typography.Text strong className="ticket-assignee-highlight">
+              {ticket.assigneeL2Name || '-'}
+            </Typography.Text>
+          </div>
+        )}
+      </div>
       <Descriptions column={2} size="small" bordered>
         <Descriptions.Item label="工单编号">{ticket.id}</Descriptions.Item>
         <Descriptions.Item label="提单人状态">
@@ -70,14 +86,6 @@ export default function TicketInfoCard({ ticket }) {
         <Descriptions.Item label="上报人手机">
           {ticket.reportForOthers ? ticket.reportedUserPhone || '-' : '-'}
         </Descriptions.Item>
-        <Descriptions.Item label="一线处理人">
-          {ticket.assigneeL1Name || '-'}
-        </Descriptions.Item>
-        {user?.role !== ROLES.REQUESTER && (
-          <Descriptions.Item label="二线处理人">
-            {ticket.assigneeL2Name || '-'}
-          </Descriptions.Item>
-        )}
         <Descriptions.Item label="创建时间">
           {formatDateTime(ticket.createdAt)}
         </Descriptions.Item>
@@ -171,9 +179,11 @@ export default function TicketInfoCard({ ticket }) {
           <Typography.Title level={5}>
             工单总结{ticket.summarySyncedToCorpus ? '（已同步语料库）' : ''}
           </Typography.Title>
-          <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
-            {ticket.summary}
-          </Typography.Paragraph>
+          <RichContentPreview
+            className="ticket-rich-summary"
+            html={ticket.summary}
+            text={ticket.summary}
+          />
         </>
       )}
 
@@ -229,36 +239,6 @@ export default function TicketInfoCard({ ticket }) {
         </>
       )}
 
-      <Divider />
-      <Typography.Title level={5}>流转轨迹</Typography.Title>
-      <Timeline
-        items={(ticket.timeline || []).map((timelineItem) => ({
-          color: colorOfRole(timelineItem.role),
-          children: (
-            <Space direction="vertical" size={0}>
-              <Typography.Text strong>{timelineItem.actionLabel || timelineItem.action}</Typography.Text>
-              <Typography.Text type="secondary">
-                {formatDateTime(timelineItem.at)} · {timelineItem.operator}
-                {timelineItem.role ? `（${ROLE_LABELS[timelineItem.role] || timelineItem.role}）` : ''}
-              </Typography.Text>
-              {timelineItem.remark && <Typography.Text>{timelineItem.remark}</Typography.Text>}
-            </Space>
-          )
-        }))}
-      />
     </Card>
   );
-}
-
-function colorOfRole(role) {
-  switch (role) {
-    case 'REQUESTER':
-      return 'blue';
-    case 'L1':
-      return 'green';
-    case 'L2':
-      return 'red';
-    default:
-      return 'gray';
-  }
 }

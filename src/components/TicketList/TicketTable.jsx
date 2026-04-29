@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Table, Typography, Button, Tag, Space, Badge, Dropdown, App as AntdApp } from 'antd';
-import { MoreOutlined } from '@ant-design/icons';
+import { Table, Typography, Button, Tag, Space, Badge, message } from 'antd';
+import { CopyOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
@@ -16,6 +16,7 @@ import {
   getSupportStatus
 } from '../../constants/ticketStatus.js';
 import { TOOL_TYPE_LABELS } from '../../constants/toolTypes.js';
+import { SUBTASK_STATUS_LABELS } from '../../constants/subtaskStatus.js';
 import { PRIORITIES, PRIORITY_LABELS, PRIORITY_ORDER } from '../../constants/priorities.js';
 import { formatDateTime } from '../../utils/format.js';
 import {
@@ -34,56 +35,17 @@ import {
   shouldShowStatusSubLabel,
   shouldShowSlaColumn
 } from '../../utils/ticketListDisplay.js';
-import { getTicketListActions } from '../../utils/ticketListActions.js';
-import { shortId } from '../../utils/idGenerator.js';
 
 export default function TicketTable({ dataSource = [], showRequester = true }) {
   const router = useRouter();
   const { user } = useAuth();
-  const { messageReads, dispatchEvent, addMessage } = useTickets();
-  const { message, modal } = AntdApp.useApp();
+  const { messageReads } = useTickets();
   const sortedDataSource = useMemo(
     () => sortTicketsByPriorityAndCreatedAt(dataSource),
     [dataSource]
   );
   const { now, pulse } = useSlaClock(sortedDataSource);
   const showSlaColumn = shouldShowSlaColumn(user);
-
-  const handleTicketAction = (record, action) => {
-    if (!user || action.disabled) return;
-
-    modal.confirm({
-      title: action.confirmTitle,
-      content: action.confirmDescription,
-      okText: action.okText || '确认',
-      cancelText: '取消',
-      onOk: async () => {
-        const result = await dispatchEvent(record.id, action.event, action.payload || {}, user);
-        if (!result.ok) {
-          message.error(result.reason || `${action.label}失败`);
-          return;
-        }
-
-        const targetTicketId = result.ticket?.id || record.id;
-        if (action.systemMessage) {
-          await addMessage(targetTicketId, {
-            id: shortId('m'),
-            authorId: user.id,
-            authorName: user.name,
-            authorRole: user.role,
-            content: action.systemMessage,
-            attachments: [],
-            createdAt: new Date().toISOString()
-          });
-        }
-
-        message.success(action.successMessage || `${action.label}成功`);
-        if (action.key === 'accept') {
-          router.push(`/tickets/${targetTicketId}`);
-        }
-      }
-    });
-  };
 
   const columns = [
     {
@@ -93,9 +55,12 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
       fixed: 'left',
       render: (id, record) => (
         <Space size={8} wrap>
-          <Button type="link" style={{ padding: 0 }} onClick={() => router.push(`/tickets/${id}`)}>
-            {getTicketNumberDisplay(record)}
-          </Button>
+          <Space size={4} wrap={false}>
+            <Button type="link" style={{ padding: 0 }} onClick={() => router.push(`/tickets/${id}`)}>
+              {getTicketNumberDisplay(record)}
+            </Button>
+            <CopyTextButton copyableText={getTicketNumberDisplay(record)} label="工单编号" />
+          </Space>
           <UnreadMessageBadge
             ticket={record}
             user={user}
@@ -111,9 +76,12 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
       dataIndex: 'title',
       ellipsis: true,
       render: (text, record) => (
-        <Typography.Link onClick={() => router.push(`/tickets/${record.id}`)}>
-          {text}
-        </Typography.Link>
+        <Space size={4} wrap={false}>
+          <Typography.Link onClick={() => router.push(`/tickets/${record.id}`)}>
+            {text}
+          </Typography.Link>
+          <CopyTextButton copyableText={text} label="工单标题" />
+        </Space>
       )
     },
     {
@@ -127,7 +95,7 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
       title: '工单类型',
       dataIndex: 'toolType',
       width: 150,
-      render: (type) => TOOL_TYPE_LABELS[type] || type
+      render: (_, record) => getTicketTypeDisplay(record)
     },
     {
       title: '状态',
@@ -191,45 +159,14 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
     {
       title: '操作',
       fixed: 'right',
-      width: 200,
-      render: (_, record) => {
-        const ticketActions = getTicketListActions(record, user);
-        const directActions = ticketActions.slice(0, 2);
-        const overflowActions = ticketActions.slice(2);
-
-        return (
-          <Space size={2} wrap>
-            <Button type="link" size="small" onClick={() => router.push(`/tickets/${record.id}`)}>
-              查看
-            </Button>
-            {directActions.map((action) => (
-              <Button
-                key={action.key}
-                type="link"
-                size="small"
-                disabled={action.disabled}
-                onClick={() => handleTicketAction(record, action)}
-              >
-                {action.label}
-              </Button>
-            ))}
-            {overflowActions.length > 0 && (
-              <Dropdown
-                menu={{
-                  items: overflowActions.map((action) => ({
-                    key: action.key,
-                    label: action.label,
-                    disabled: action.disabled,
-                    onClick: () => handleTicketAction(record, action)
-                  }))
-                }}
-              >
-                <Button type="text" size="small" icon={<MoreOutlined />} />
-              </Dropdown>
-            )}
-          </Space>
-        );
-      }
+      width: 90,
+      render: (_, record) => (
+        <Space size={2} wrap>
+          <Button type="link" size="small" onClick={() => router.push(`/tickets/${record.id}`)}>
+            查看
+          </Button>
+        </Space>
+      )
     }
   ];
 
@@ -251,7 +188,64 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
   );
 }
 
+function CopyTextButton({ copyableText, label }) {
+  return (
+    <Button
+      type="text"
+      size="small"
+      icon={<CopyOutlined />}
+      aria-label={`复制${label}`}
+      title={`复制${label}`}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        handleCopyText(copyableText, label);
+      }}
+    />
+  );
+}
+
+async function handleCopyText(text, label) {
+  const value = String(text || '');
+  if (!value) {
+    message.warning(`${label}为空，无法复制`);
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(value);
+    message.success(`${label}已复制`);
+  } catch (error) {
+    console.error(error);
+    message.error(`${label}复制失败`);
+  }
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error('copy command failed');
+  }
+}
+
 function getVisibleStatus(ticket, user) {
+  if (ticket?.isSubtask) {
+    return ticket.subtaskStatus;
+  }
   if (user?.role === ROLES.REQUESTER) {
     return getRequesterStatus(ticket);
   }
@@ -260,6 +254,9 @@ function getVisibleStatus(ticket, user) {
 
 function VisibleStatus({ ticket, user }) {
   const status = getVisibleStatus(ticket, user);
+  if (ticket?.isSubtask) {
+    return <Tag color={status === 'COMPLETED' ? 'success' : status === 'PROCESSING' ? 'processing' : 'warning'}>{SUBTASK_STATUS_LABELS[status] || status}</Tag>;
+  }
   const subStatus =
     shouldShowStatusSubLabel(user) && status === STATUS.PROCESSING
       ? getProcessingSubStatus(ticket)
@@ -274,6 +271,11 @@ function VisibleStatus({ ticket, user }) {
       )}
     </Space>
   );
+}
+
+function getTicketTypeDisplay(ticket) {
+  if (ticket?.isSubtask) return '子任务';
+  return TOOL_TYPE_LABELS[ticket?.toolType] || ticket?.toolType;
 }
 
 function UnreadMessageBadge({ ticket, user, messageReads, compact = false }) {

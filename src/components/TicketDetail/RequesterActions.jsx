@@ -7,6 +7,7 @@ import {
   Modal,
   Input,
   Form,
+  Select,
   Typography,
   Alert,
   App as AntdApp
@@ -28,6 +29,12 @@ import RichTextEditor from '../common/RichTextEditor.jsx';
 import AiTicketAssistantDrawer from '../TicketSubmit/AiTicketAssistantDrawer.jsx';
 import { buildDescriptionUpdate } from '../../utils/descriptionHistory.js';
 import { richTextHasContent, richTextValueToDoc } from '../../utils/richText.js';
+import {
+  SYSTEM_CATEGORY,
+  SYSTEM_CATEGORY_OPTIONS,
+  getSystemCategoryByCode,
+  getSystemOptionsByCategory
+} from '../../constants/systems.js';
 
 /**
  * 提单人操作区
@@ -43,6 +50,7 @@ export default function RequesterActions({ ticket }) {
   const { message } = AntdApp.useApp();
   const [rejectOpen, setRejectOpen] = useState(false);
   const [satOpen, setSatOpen] = useState(false);
+  const [requesterCloseOpen, setRequesterCloseOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
@@ -53,6 +61,7 @@ export default function RequesterActions({ ticket }) {
   const [savingDescription, setSavingDescription] = useState(false);
   const [rejectForm] = Form.useForm();
   const [withdrawForm] = Form.useForm();
+  const [infoSupplementForm] = Form.useForm();
 
   React.useEffect(() => {
     setEditingDescriptionDoc(ticket.descriptionDoc || richTextValueToDoc(ticket.descriptionHtml));
@@ -135,13 +144,13 @@ export default function RequesterActions({ ticket }) {
 
     return (
       <>
-        <Card title="提单人操作区">
+        <Card title="草稿箱操作">
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Alert
               type="info"
               showIcon
-              message="工单已撤回至草稿箱"
-              description="该工单当前保存在草稿箱中，暂未进入受理流程。再次提交时会先由大模型尝试解答，您可选择已解决或转人工。"
+              message="草稿箱工单"
+              description="该工单仍在草稿箱中，继续提交后会先由大模型尝试解答，也可转人工进入待受理。"
             />
             <Button type="primary" icon={<CheckCircleOutlined />} onClick={handleStartDraftAiSubmit}>
               提交工单
@@ -180,10 +189,15 @@ export default function RequesterActions({ ticket }) {
   if (requesterStatus === STATUS.INFO_SUPPLEMENT) {
     const handleOpenDescriptionEdit = () => {
       setEditingDescriptionDoc(ticket.descriptionDoc || richTextValueToDoc(ticket.descriptionHtml));
+      infoSupplementForm.setFieldsValue({
+        systemCategory: ticket.systemCategory || getSystemCategoryByCode(ticket.systemCode || ticket.systemName),
+        systemName: ticket.systemCode || ticket.systemName || undefined
+      });
       setEditOpen(true);
     };
 
     const handleSaveDescription = async () => {
+      const values = await infoSupplementForm.validateFields();
       if (!richTextHasContent(editingDescriptionDoc)) {
         message.warning('问题描述不能为空');
         return;
@@ -204,7 +218,9 @@ export default function RequesterActions({ ticket }) {
       setSavingDescription(true);
       try {
         const result = await dispatchEvent(ticket.id, EVENTS.UPDATE_INFO_SUPPLEMENT, {
-          descriptionDoc: editingDescriptionDoc
+          descriptionDoc: editingDescriptionDoc,
+          systemCategory: values.systemCategory,
+          systemName: values.systemName
         });
         if (!result.ok) {
           throw new Error(result.reason || '更新工单描述失败');
@@ -295,6 +311,38 @@ export default function RequesterActions({ ticket }) {
               disabled={savingDescription}
               placeholder="请补充或修改问题描述..."
             />
+            <Form
+              form={infoSupplementForm}
+              layout="vertical"
+              initialValues={{ systemCategory: SYSTEM_CATEGORY.OLD }}
+            >
+              <Form.Item
+                label="新老系统标签"
+                name="systemCategory"
+                rules={[{ required: true, message: '请选择新老系统标签' }]}
+              >
+                <Select
+                  options={SYSTEM_CATEGORY_OPTIONS}
+                  onChange={() => infoSupplementForm.setFieldValue('systemName', undefined)}
+                />
+              </Form.Item>
+              <Form.Item noStyle shouldUpdate={(previous, current) => previous.systemCategory !== current.systemCategory}>
+                {({ getFieldValue }) => (
+                  <Form.Item
+                    label="系统名称"
+                    name="systemName"
+                    rules={[{ required: true, message: '请选择系统名称' }]}
+                  >
+                    <Select
+                      placeholder="请选择..."
+                      showSearch
+                      optionFilterProp="label"
+                      options={getSystemOptionsByCategory(getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
+                    />
+                  </Form.Item>
+                )}
+              </Form.Item>
+            </Form>
           </Space>
         </Modal>
       </Card>
@@ -378,6 +426,60 @@ export default function RequesterActions({ ticket }) {
             </Form>
           </Space>
         </Modal>
+      </Card>
+    );
+  }
+
+  if (requesterStatus === STATUS.PROCESSING) {
+    const handleRequesterCloseSubmit = async (satisfaction) => {
+      const result = await dispatchEvent(
+        ticket.id,
+        EVENTS.REQUESTER_CLOSE,
+        {
+          satisfaction,
+          closeReason: '提单人主动关单',
+          __timelineRemark: `提单人主动关单，满意度 ${satisfaction.rating} 星`
+        },
+        user
+      );
+      if (!result.ok) {
+        message.error(result.reason || '主动关单失败');
+        return;
+      }
+      await addMessage(ticket.id, {
+        id: shortId('m'),
+        authorId: user.id,
+        authorName: user.name,
+        authorRole: user.role,
+        content: `【系统】提单人主动关单，工单办结。满意度 ★${satisfaction.rating}/5${satisfaction.comment ? '，评价：' + satisfaction.comment : ''}`,
+        attachments: [],
+        createdAt: new Date().toISOString()
+      });
+      setRequesterCloseOpen(false);
+      message.success('工单已主动关单');
+    };
+
+    return (
+      <Card title="提单人操作区">
+        <Alert
+          type="info"
+          showIcon
+          message="工单已受理并处理中"
+          description="如果问题已经解决，您可以主动关单并提交满意度评价。"
+          style={{ marginBottom: 16 }}
+        />
+        <Button
+          type="primary"
+          icon={<CheckCircleOutlined />}
+          onClick={() => setRequesterCloseOpen(true)}
+        >
+          主动关单
+        </Button>
+        <SatisfactionModal
+          open={requesterCloseOpen}
+          onOk={handleRequesterCloseSubmit}
+          onCancel={() => setRequesterCloseOpen(false)}
+        />
       </Card>
     );
   }

@@ -26,6 +26,7 @@ test('草稿工单可生成编辑表单初始值', () => {
     toolType: 'DATA_EXTRACT',
     title: '原始标题',
     priority: PRIORITIES.P2,
+    systemCategory: 'OLD',
     systemName: 'ERP',
     reporterPhone: '13800138000',
     reporterEmail: 'draft@example.com',

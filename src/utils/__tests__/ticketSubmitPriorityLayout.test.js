@@ -34,3 +34,18 @@ test('优先级控件容器支持行内布局和换行', () => {
     /\.reference-priority-inline\s*\{[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;[\s\S]*flex-wrap:\s*wrap;/
   );
 });
+
+test('提交页 SLA 文案改为工单处理时效', () => {
+  assert.match(ticketSubmitView, /工单处理时效 P1: 30分钟/);
+  assert.doesNotMatch(ticketSubmitView, /SLA时效/);
+});
+
+test('提交页先选择新老系统标签再选择系统名称', () => {
+  const categoryIndex = ticketSubmitView.indexOf('name="systemCategory"');
+  const systemNameIndex = ticketSubmitView.indexOf('name="systemName"');
+
+  assert.notEqual(categoryIndex, -1);
+  assert.notEqual(systemNameIndex, -1);
+  assert.ok(categoryIndex < systemNameIndex);
+  assert.match(ticketSubmitView, /getSystemOptionsByCategory/);
+});

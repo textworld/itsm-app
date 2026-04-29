@@ -12,23 +12,23 @@ test('工单列表操作列主按钮文案为查看，不再展示查看处理',
   assert.doesNotMatch(ticketTableSource, /查看\/处理/);
 });
 
-test('工单列表操作列支持更多下拉，并限制最多展示三个按钮', () => {
-  assert.match(ticketTableSource, /<Dropdown/);
-  assert.match(ticketTableSource, /const directActions = ticketActions\.slice\(0,\s*2\)/);
-  assert.match(ticketTableSource, /const overflowActions = ticketActions\.slice\(2\)/);
+test('工单编号和标题列提供复制文本按钮', () => {
+  assert.match(ticketTableSource, /CopyOutlined/);
+  assert.match(ticketTableSource, /copyableText=\{getTicketNumberDisplay\(record\)\}/);
+  assert.match(ticketTableSource, /copyableText=\{text\}/);
+  assert.match(ticketTableSource, /handleCopyText/);
+});
+
+test('工单列表操作列只保留查看按钮', () => {
+  assert.doesNotMatch(ticketTableSource, /<Dropdown/);
+  assert.doesNotMatch(ticketTableSource, /getTicketListActions/);
+  assert.doesNotMatch(ticketTableSource, /handleTicketAction/);
 });
 
 test('工单列表操作列宽度和按钮间距进一步收紧', () => {
-  assert.match(ticketTableSource, /title:\s*'操作'[\s\S]*width:\s*200/);
+  assert.match(ticketTableSource, /title:\s*'操作'[\s\S]*width:\s*90/);
   assert.match(ticketTableSource, /<Space size=\{2\} wrap>/);
   assert.match(ticketTableSource, /<Button type="link" size="small"/);
-});
-
-test('技术支持在列表页受理成功后会进入对应工单详情', () => {
-  assert.match(
-    ticketTableSource,
-    /if\s*\(action\.key === 'accept'\)\s*\{[\s\S]*router\.push\(`\/tickets\/\$\{targetTicketId\}`\);[\s\S]*\}/
-  );
 });
 
 test('工单标题列使用角色化列宽', () => {
@@ -37,4 +37,9 @@ test('工单标题列使用角色化列宽', () => {
     ticketTableSource,
     /title:\s*getTitleColumnTitle\(user\)[\s\S]*width:\s*getTitleColumnWidth\(user\)[\s\S]*dataIndex:\s*'title'/
   );
+});
+test('ticket list displays subtask ticket type', () => {
+  assert.match(ticketTableSource, /getTicketTypeDisplay/);
+  assert.match(ticketTableSource, /isSubtask/);
+  assert.match(ticketTableSource, /子任务/);
 });

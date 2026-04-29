@@ -22,6 +22,14 @@ export function isTicketMessageAllowed(ticket) {
   );
 }
 
+export function isSystemMessage(messageItem) {
+  return typeof messageItem?.content === 'string' && messageItem.content.trim().startsWith('【系统】');
+}
+
+export function getVisibleMessages(messages = []) {
+  return messages.filter((messageItem) => !isSystemMessage(messageItem));
+}
+
 export async function buildMessagePayload({
   content = '',
   contentDoc = null,
