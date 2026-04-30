@@ -166,14 +166,19 @@ function buildHistoryView(tickets, user) {
   const historyTickets =
     user.role === ROLES.REQUESTER
       ? source.filter((ticket) => ticket.requesterId === user.id)
-      : source.filter((ticket) => wasTicketHandledByUser(ticket, user) && getSupportStatus(ticket) !== STATUS.DRAFT);
+      : source.filter(
+          (ticket) =>
+            wasTicketHandledByUser(ticket, user) &&
+            !isCurrentAssigneeForUser(ticket, user) &&
+            getSupportStatus(ticket) !== STATUS.DRAFT
+        );
 
   return {
     heading: user.role === ROLES.REQUESTER ? '我的历史工单' : '历史工单列表',
     subheading:
       user.role === ROLES.REQUESTER
         ? '展示当前提单人账号下的历史工单'
-        : '展示当前账号曾经处理过的工单，包含已转交给其他人的工单',
+        : '展示当前账号曾经处理且已转交给其他人的工单',
     total: historyTickets.length,
     defaultTab: 'HISTORY',
     hideTabs: true,

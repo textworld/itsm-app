@@ -167,6 +167,14 @@ test('L2 workbench only shows tickets currently assigned to the signed-in L2 use
 test('history view shows tickets once handled by the signed-in support user without status tabs', () => {
   const tickets = [
     {
+      id: 'TKT-CURRENT',
+      toolType: 'DATA_EXTRACT',
+      status: STATUS.PROCESSING,
+      supportStatus: STATUS.PROCESSING,
+      assigneeL1Id: 'u_l1_1',
+      assigneeHistory: [{ role: ROLES.L1, assigneeId: 'u_l1_1' }]
+    },
+    {
       id: 'TKT-TRANSFERRED',
       toolType: 'DATA_EXTRACT',
       status: STATUS.PROCESSING,

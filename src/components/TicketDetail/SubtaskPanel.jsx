@@ -92,6 +92,16 @@ export default function SubtaskPanel({ ticket }) {
 
   const columns = [
     {
+      title: '子任务单号',
+      dataIndex: 'id',
+      width: 220,
+      render: (_, subtask) => (
+        <Typography.Text copyable={{ text: subtask.id, tooltips: ['复制工单号', '已复制'] }}>
+          {subtask.id}
+        </Typography.Text>
+      )
+    },
+    {
       title: '系统',
       dataIndex: 'systemName',
       width: 180

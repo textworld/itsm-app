@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Row, Col, Button, Result, Space, Spin, Tabs, Card, Timeline, Typography, Empty } from 'antd';
+import { Row, Col, Button, Result, Space, Spin, Tabs, Card, Timeline, Typography, Empty, Tag } from 'antd';
 import { useTickets } from '../../context/TicketContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import TicketInfoCard from '../../components/TicketDetail/TicketInfoCard.jsx';
@@ -98,7 +98,7 @@ export default function TicketDetailPage() {
       label: '流转轨迹',
       children: <TicketTimeline ticket={ticket} />
     },
-    {
+    user?.role !== ROLES.REQUESTER && {
       key: 'subtasks',
       label: '子任务',
       children: ticket.isSubtask ? (
@@ -111,7 +111,7 @@ export default function TicketDetailPage() {
         <SubtaskPanel ticket={ticket} />
       )
     }
-  ];
+  ].filter(Boolean);
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -149,10 +149,16 @@ function TicketTimeline({ ticket }) {
     children: (
       <Space direction="vertical" size={0}>
         <Typography.Text strong>{timelineItem.actionLabel || timelineItem.action}</Typography.Text>
-        <Typography.Text type="secondary">
-          {formatDateTime(timelineItem.at)} · {timelineItem.operator}
-          {timelineItem.role ? `（${ROLE_LABELS[timelineItem.role] || timelineItem.role}）` : ''}
-        </Typography.Text>
+        <Space size={6} wrap>
+          <Typography.Text type="secondary">
+            {formatDateTime(timelineItem.at)} · {timelineItem.operator}
+          </Typography.Text>
+          {timelineItem.role && (
+            <Tag color={colorOfRole(timelineItem.role)} style={{ marginInlineEnd: 0 }}>
+              {ROLE_LABELS[timelineItem.role] || timelineItem.role}
+            </Tag>
+          )}
+        </Space>
         {timelineItem.remark && <Typography.Text>{timelineItem.remark}</Typography.Text>}
       </Space>
     )

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { Card, Descriptions, Table, Tag, Space, Typography, Alert } from 'antd';
+import { Card, Descriptions, Table, Tag, Space, Typography, Alert, Tabs } from 'antd';
 import {
   TRANSITIONS,
   EVENT_LABELS,
@@ -47,6 +47,41 @@ export default function StateMachinePage() {
   const permissionRows = Object.entries(ROLE_EVENT_PERMISSIONS).map(([role, events]) => ({
     role,
     events
+  }));
+
+  const statusPermissionTabs = Array.from(new Set([...REQUESTER_STATUSES, ...SUPPORT_STATUSES])).map((status) => ({
+    key: status,
+    label: STATUS_LABELS[status] || status,
+    children: (
+      <Descriptions column={1} bordered size="small">
+        {permissionRows.map((r) => {
+          const transitions = TRANSITIONS.filter(
+            (transition) =>
+              transition.from === status &&
+              transition.role === r.role &&
+              r.events.includes(transition.event)
+          );
+
+          return (
+            <Descriptions.Item label={ROLE_LABELS[r.role] || r.role} key={`${status}_${r.role}`}>
+              {transitions.length ? (
+                <Space wrap>
+                  {transitions.map((transition) => (
+                    <Tag key={transition.id || `${status}_${r.role}_${transition.event}`} color="purple">
+                      {EVENT_LABELS[transition.event] || transition.event}
+                      {transition.fromSubStatus ? ` · ${PROCESSING_SUB_STATUS_LABELS[transition.fromSubStatus]}` : ''}
+                      {transition.to ? ` → ${STATUS_LABELS[transition.to] || transition.to}` : ''}
+                    </Tag>
+                  ))}
+                </Space>
+              ) : (
+                <Typography.Text type="secondary">暂无可操作事件</Typography.Text>
+              )}
+            </Descriptions.Item>
+          );
+        })}
+      </Descriptions>
+    )
   }));
 
   return (
@@ -113,17 +148,7 @@ export default function StateMachinePage() {
       </Card>
 
       <Card title="角色-事件权限矩阵">
-        <Descriptions column={1} bordered size="small">
-          {permissionRows.map((r) => (
-            <Descriptions.Item label={ROLE_LABELS[r.role] || r.role} key={r.role}>
-              <Space wrap>
-                {r.events.map((e) => (
-                  <Tag key={e} color="purple">{EVENT_LABELS[e] || e}</Tag>
-                ))}
-              </Space>
-            </Descriptions.Item>
-          ))}
-        </Descriptions>
+        <Tabs items={statusPermissionTabs} />
       </Card>
     </Space>
   );

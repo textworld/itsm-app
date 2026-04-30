@@ -36,6 +36,8 @@ export const EVENTS = {
   TAG_DEFECT: 'TAG_DEFECT',
   UPDATE_LINKED_DEFECT: 'UPDATE_LINKED_DEFECT',
   UPDATE_SUMMARY: 'UPDATE_SUMMARY',
+  SUSPEND: 'SUSPEND',
+  RESUME_FROM_SUSPEND: 'RESUME_FROM_SUSPEND',
   REQUEST_L2_SUPPORT: 'REQUEST_L2_SUPPORT',
   CREATE_SUBTASK: 'CREATE_SUBTASK',
   CREATE_SUBTASK_TICKET: 'CREATE_SUBTASK_TICKET',
@@ -71,6 +73,8 @@ export const EVENT_LABELS = {
   [EVENTS.TAG_DEFECT]: '缺陷打标',
   [EVENTS.UPDATE_LINKED_DEFECT]: '更新关联缺陷',
   [EVENTS.UPDATE_SUMMARY]: '更新工单总结',
+  [EVENTS.SUSPEND]: '挂起工单',
+  [EVENTS.RESUME_FROM_SUSPEND]: '取消挂起',
   [EVENTS.REQUEST_L2_SUPPORT]: '二线支持',
   [EVENTS.CREATE_SUBTASK]: '创建子任务',
   [EVENTS.CREATE_SUBTASK_TICKET]: '创建子任务工单',
@@ -215,6 +219,35 @@ export const TRANSITIONS = [
     transform: (ticket, payload, _user, now) => ({
       summary: payload.summary ?? ticket.summary ?? '',
       summarySyncedToCorpus: payload.summarySyncedToCorpus ?? ticket.summarySyncedToCorpus ?? false,
+      updatedAt: now
+    })
+  },
+  {
+    id: 'T03D',
+    from: STATUS.PROCESSING,
+    event: EVENTS.SUSPEND,
+    to: STATUS.SUSPENDED,
+    role: ROLES.L1,
+    transform: (ticket, payload, user, now) => ({
+      ...payload,
+      suspendedAt: now,
+      suspendedBy: user?.name || '',
+      suspendedReturnSubStatus: getProcessingSubStatus(ticket) || PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+      updatedAt: now
+    })
+  },
+  {
+    id: 'T03E',
+    from: STATUS.SUSPENDED,
+    event: EVENTS.RESUME_FROM_SUSPEND,
+    to: STATUS.PROCESSING,
+    role: ROLES.L1,
+    transform: (ticket, payload, user, now) => ({
+      ...payload,
+      resumedAt: now,
+      resumedBy: user?.name || '',
+      processingSubStatus: ticket.suspendedReturnSubStatus || PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+      suspendedReturnSubStatus: null,
       updatedAt: now
     })
   },
@@ -480,6 +513,8 @@ export const ROLE_EVENT_PERMISSIONS = {
     EVENTS.TAG_DEFECT,
     EVENTS.UPDATE_LINKED_DEFECT,
     EVENTS.UPDATE_SUMMARY,
+    EVENTS.SUSPEND,
+    EVENTS.RESUME_FROM_SUSPEND,
     EVENTS.REQUEST_L2_SUPPORT,
     EVENTS.CREATE_SUBTASK_TICKET,
     EVENTS.CLAIM_SUBTASK,

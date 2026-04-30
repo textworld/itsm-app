@@ -600,6 +600,51 @@ test('REQUESTER_CLOSE 允许提单人在处理中主动关单', () => {
   assert.equal(nextTicket.timeline.at(-1).action, EVENTS.REQUESTER_CLOSE);
 });
 
+test('SUSPEND 和 RESUME_FROM_SUSPEND 仅允许一线在处理中工单上挂起并恢复处理', () => {
+  const suspendedTicket = applyTransition(
+    {
+      id: 'TKT-SUSPEND-1',
+      status: STATUS.PROCESSING,
+      requesterStatus: STATUS.PROCESSING,
+      supportStatus: STATUS.PROCESSING,
+      processingSubStatus: PROCESSING_SUB_STATUS.L2_INVESTIGATION,
+      timeline: []
+    },
+    EVENTS.SUSPEND,
+    {
+      __timelineRemark: '一线挂起工单'
+    },
+    l1User
+  );
+
+  assert.equal(suspendedTicket.status, STATUS.SUSPENDED);
+  assert.equal(suspendedTicket.requesterStatus, STATUS.PROCESSING);
+  assert.equal(suspendedTicket.supportStatus, STATUS.SUSPENDED);
+  assert.equal(suspendedTicket.processingSubStatus, null);
+  assert.equal(suspendedTicket.suspendedReturnSubStatus, PROCESSING_SUB_STATUS.L2_INVESTIGATION);
+  assert.equal(suspendedTicket.timeline.at(-1).action, EVENTS.SUSPEND);
+
+  assert.throws(
+    () => applyTransition(suspendedTicket, EVENTS.RESUME_FROM_SUSPEND, {}, l2User),
+    /当前状态或角色无权执行该操作/
+  );
+
+  const resumedTicket = applyTransition(
+    suspendedTicket,
+    EVENTS.RESUME_FROM_SUSPEND,
+    {
+      __timelineRemark: '一线取消挂起'
+    },
+    l1User
+  );
+
+  assert.equal(resumedTicket.status, STATUS.PROCESSING);
+  assert.equal(resumedTicket.requesterStatus, STATUS.PROCESSING);
+  assert.equal(resumedTicket.supportStatus, STATUS.PROCESSING);
+  assert.equal(resumedTicket.processingSubStatus, PROCESSING_SUB_STATUS.L2_INVESTIGATION);
+  assert.equal(resumedTicket.timeline.at(-1).action, EVENTS.RESUME_FROM_SUSPEND);
+});
+
 test('WITHDRAW 允许撤回时改为草稿编号并保留原工单编号', () => {
   const nextTicket = applyTransition(
     {

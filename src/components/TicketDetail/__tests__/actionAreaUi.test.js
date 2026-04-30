@@ -22,6 +22,11 @@ const appLayoutSource = fs.readFileSync(
   'utf8'
 );
 
+const stateMachinePageSource = fs.readFileSync(
+  new URL('../../../views/StateMachine/index.jsx', import.meta.url),
+  'utf8'
+);
+
 const l1ActionsSource = fs.readFileSync(
   new URL('../L1Actions.jsx', import.meta.url),
   'utf8'
@@ -164,6 +169,62 @@ test('工单详情页使用 tabs 承载流转轨迹和子任务', () => {
   assert.doesNotMatch(ticketInfoCardSource, /<Typography\.Title level=\{5\}>流转轨迹<\/Typography\.Title>/);
 });
 
+test('流转轨迹将操作人角色展示为独立标签', () => {
+  assert.match(ticketDetailSource, /import[\s\S]*Tag[\s\S]*from 'antd'/);
+  assert.match(ticketDetailSource, /<Tag[\s\S]*ROLE_LABELS\[timelineItem\.role\]/);
+  assert.doesNotMatch(ticketDetailSource, /timelineItem\.role \? `（\$\{ROLE_LABELS\[timelineItem\.role\]/);
+});
+
+test('提单人查看工单详情时不展示子任务 tab', () => {
+  assert.match(ticketDetailSource, /user\?\.role !== ROLES\.REQUESTER[\s\S]*key:\s*'subtasks'/);
+});
+
+test('子任务面板展示子任务单号并支持一键复制', () => {
+  assert.match(subtaskPanelSource, /title:\s*'子任务单号'/);
+  assert.match(subtaskPanelSource, /copyable=\{\{[\s\S]*text:\s*subtask\.id/);
+});
+
+test('一线操作区通过状态机事件提供挂起和取消挂起按钮', () => {
+  assert.match(l1ActionsSource, /EVENTS\.SUSPEND/);
+  assert.match(l1ActionsSource, /EVENTS\.RESUME_FROM_SUSPEND/);
+  assert.match(l1ActionsSource, /status === STATUS\.SUSPENDED/);
+  assert.match(l1ActionsSource, /取消挂起/);
+});
+
+test('一线处理中操作区按钮按业务动作分组展示', () => {
+  const processingStart = l1ActionsSource.indexOf('if (status === STATUS.PROCESSING)');
+  const processingEnd = l1ActionsSource.indexOf('  if (status === STATUS.SUSPENDED)', processingStart);
+  const processingSource = l1ActionsSource.slice(processingStart, processingEnd);
+  const pmsGroupStart = processingSource.indexOf('title="PMS 处理"');
+  const ticketGroupStart = processingSource.indexOf('title="工单处理"');
+  const transferGroupStart = processingSource.indexOf('title="协同转交"');
+
+  assert.notEqual(pmsGroupStart, -1);
+  assert.notEqual(ticketGroupStart, -1);
+  assert.notEqual(transferGroupStart, -1);
+  assert.ok(pmsGroupStart < ticketGroupStart);
+  assert.ok(ticketGroupStart < transferGroupStart);
+
+  assert.match(
+    processingSource.slice(pmsGroupStart, ticketGroupStart),
+    /关联缺陷[\s\S]*故障应急/
+  );
+  assert.match(
+    processingSource.slice(ticketGroupStart, transferGroupStart),
+    /挂起[\s\S]*退回提单人-信息补充[\s\S]*发起办结/
+  );
+  assert.match(
+    processingSource.slice(transferGroupStart),
+    /二线支持[\s\S]*<TechTransferPanel/
+  );
+});
+
+test('角色事件权限矩阵按工单状态拆分为 tabs', () => {
+  assert.match(stateMachinePageSource, /statusPermissionTabs/);
+  assert.match(stateMachinePageSource, /<Tabs[\s\S]*items=\{statusPermissionTabs\}/);
+  assert.match(stateMachinePageSource, /STATUS_LABELS\[status\]/);
+});
+
 test('提单人操作区的直接动作按钮带二次确认', () => {
   assert.match(
     requesterActionsSource,
@@ -197,13 +258,18 @@ test('一线操作区的直接动作按钮带二次确认', () => {
 
 test('一线发起办结前通过弹窗填写工单处理总结', () => {
   assert.match(l1ActionsSource, /const \[closureOpen, setClosureOpen\]/);
-  assert.match(l1ActionsSource, /<Modal[\s\S]*title=\{[\s\S]*发起办结[\s\S]*onOk=\{handleSubmitReview\}/);
+  assert.match(l1ActionsSource, /<Modal[\s\S]*title="发起办结"[\s\S]*open=\{closureOpen\}/);
   assert.match(l1ActionsSource, /name="summary"[\s\S]*label="工单处理总结"/);
   assert.match(l1ActionsSource, /<RichTextEditor[\s\S]*value=\{closureSummaryDoc\}/);
   assert.match(l1ActionsSource, /fetch\('\/api\/ai\/ticket-closure-summary'/);
   assert.match(l1ActionsSource, /readClosureSummaryDraft\(window\.localStorage/);
   assert.match(l1ActionsSource, /writeCompletedClosureSummaryDraft\([\s\S]*window\.localStorage/);
   assert.match(l1ActionsSource, /EVENTS\.INITIATE_CLOSURE[\s\S]*summary: summaryHtml/);
+});
+
+test('存在未完成子任务时发起办结按钮禁用并提示原因', () => {
+  assert.match(l1ActionsSource, /const hasIncompleteSubtasks = \(ticket\.subtasks \|\| \[\]\)\.some/);
+  assert.match(l1ActionsSource, /<Tooltip[\s\S]*存在子任务未完结[\s\S]*<Button[\s\S]*disabled=\{hasIncompleteSubtasks\}[\s\S]*发起办结/);
 });
 
 test('一线处理中操作区提供 PMS 缺陷和故障入口且不展示处理中提示', () => {
@@ -340,9 +406,12 @@ test('工单详情页 tabs 导航滚动到顶部后吸顶', () => {
   assert.match(cssSource, /\.ticket-detail-sticky-tabs\s*>\s*\.ant-tabs-nav[\s\S]*z-index:\s*\d+/);
 });
 test('L1 closure summary generation can be stopped before editing and submission', () => {
+  const modalStart = l1ActionsSource.indexOf('<Modal');
+  const modalEnd = l1ActionsSource.indexOf('</Modal>', modalStart);
+  const closureModalSource = l1ActionsSource.slice(modalStart, modalEnd);
+
   assert.match(l1ActionsSource, /const handleStopClosureSummaryGeneration = \(\) => \{[\s\S]*abortClosureSummaryGeneration\(\);[\s\S]*\}/);
-  assert.match(l1ActionsSource, /title=\{[\s\S]*closureGenerating && \([\s\S]*<Button[\s\S]*onClick=\{handleStopClosureSummaryGeneration\}[\s\S]*\)[\s\S]*\}/);
-  assert.match(l1ActionsSource, /confirmLoading=\{closureGenerating\}/);
-  assert.match(l1ActionsSource, /okButtonProps=\{\{ disabled: closureGenerating \}\}/);
+  assert.match(closureModalSource, /footer=\{\[[\s\S]*handleStopClosureSummaryGeneration[\s\S]*取消[\s\S]*handleSubmitReview[\s\S]*确认发起[\s\S]*\]\.filter\(Boolean\)\}/);
+  assert.doesNotMatch(closureModalSource, /title=\{[\s\S]*handleStopClosureSummaryGeneration[\s\S]*\}/);
   assert.match(l1ActionsSource, /<RichTextEditor[\s\S]*disabled=\{closureGenerating\}/);
 });

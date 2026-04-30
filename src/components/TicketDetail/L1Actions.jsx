@@ -8,10 +8,13 @@ import {
   Form,
   Typography,
   Alert,
+  Tooltip,
   App as AntdApp
 } from 'antd';
 import {
   CheckOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
   RollbackOutlined,
   SendOutlined,
   StopOutlined
@@ -149,6 +152,40 @@ export default function L1Actions({ ticket }) {
     }
     await pushSystemMessage('【系统】一线已将工单转交二线支持。');
     message.success('已请求二线支持，工单仍为处理中');
+  };
+
+  const handleSuspend = async () => {
+    const result = await dispatchEvent(
+      ticket.id,
+      EVENTS.SUSPEND,
+      {
+        __timelineRemark: '一线挂起工单'
+      },
+      user
+    );
+    if (!result.ok) {
+      message.error(result.reason || '挂起失败');
+      return;
+    }
+    await pushSystemMessage(`【系统】一线技术支持 ${user.name} 已挂起本工单。`);
+    message.success('工单已挂起');
+  };
+
+  const handleResumeFromSuspend = async () => {
+    const result = await dispatchEvent(
+      ticket.id,
+      EVENTS.RESUME_FROM_SUSPEND,
+      {
+        __timelineRemark: '一线取消挂起'
+      },
+      user
+    );
+    if (!result.ok) {
+      message.error(result.reason || '取消挂起失败');
+      return;
+    }
+    await pushSystemMessage(`【系统】一线技术支持 ${user.name} 已取消挂起，工单恢复处理中。`);
+    message.success('工单已恢复处理中');
   };
 
   const openClosureModal = () => {
@@ -320,77 +357,107 @@ export default function L1Actions({ ticket }) {
   if (status === STATUS.PROCESSING) {
     const processingSubStatus = getProcessingSubStatus(ticket);
     const isL2Investigation = processingSubStatus === PROCESSING_SUB_STATUS.L2_INVESTIGATION;
+    const hasIncompleteSubtasks = (ticket.subtasks || []).some((subtask) => subtask.status !== 'COMPLETED');
     return (
       <Card title="一线操作区 · 处理中">
-        <Space wrap>
-          <Button
-            type="primary"
-            onClick={() => openPmsCreate('defect')}
-          >
-            关联缺陷
-          </Button>
-          <Button onClick={() => openPmsCreate('incident')}>
-            故障应急
-          </Button>
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space wrap align="start" size="large">
+            <ActionButtonGroup title="PMS 处理">
+              <Button
+                type="primary"
+                onClick={() => openPmsCreate('defect')}
+              >
+                关联缺陷
+              </Button>
+              <Button onClick={() => openPmsCreate('incident')}>
+                故障应急
+              </Button>
+            </ActionButtonGroup>
 
-          <Popconfirm
-            title="确认退回提单人补充信息？"
-            description="退回后工单会进入信息补充状态，等待提单人修改后再继续处理。"
-            okText="确认退回"
-            cancelText="取消"
-            onConfirm={handleReturnForInfo}
-          >
-            <Button icon={<RollbackOutlined />}>
-              退回提单人-信息补充
-            </Button>
-          </Popconfirm>
+            <ActionButtonGroup title="工单处理">
+              <Popconfirm
+                title="确认挂起该工单？"
+                description="挂起后工单会进入已挂起状态，后续可由一线取消挂起并恢复处理中。"
+                okText="确认挂起"
+                cancelText="取消"
+                onConfirm={handleSuspend}
+              >
+                <Button icon={<PauseCircleOutlined />}>
+                  挂起
+                </Button>
+              </Popconfirm>
 
-          <Button onClick={openClosureModal}>
-            发起办结
-          </Button>
+              <Popconfirm
+                title="确认退回提单人补充信息？"
+                description="退回后工单会进入信息补充状态，等待提单人修改后再继续处理。"
+                okText="确认退回"
+                cancelText="取消"
+                onConfirm={handleReturnForInfo}
+              >
+                <Button icon={<RollbackOutlined />}>
+                  退回提单人-信息补充
+                </Button>
+              </Popconfirm>
 
-          <Popconfirm
-            title="确认发起二线支持？"
-            description="发起后工单会保留处理中状态，并切换到二线排查。"
-            okText="确认发起"
-            cancelText="取消"
-            onConfirm={handleFlowToL2}
-            disabled={isL2Investigation}
-          >
-            <Button
-              type="primary"
-              icon={<SendOutlined />}
-              disabled={isL2Investigation}
-            >
-              二线支持
-            </Button>
-          </Popconfirm>
+              <Tooltip title={hasIncompleteSubtasks ? '存在子任务未完结' : ''}>
+                <span>
+                  <Button disabled={hasIncompleteSubtasks} onClick={openClosureModal}>
+                    发起办结
+                  </Button>
+                </span>
+              </Tooltip>
+            </ActionButtonGroup>
+
+            <ActionButtonGroup title="协同转交">
+              <Popconfirm
+                title="确认发起二线支持？"
+                description="发起后工单会保留处理中状态，并切换到二线排查。"
+                okText="确认发起"
+                cancelText="取消"
+                onConfirm={handleFlowToL2}
+                disabled={isL2Investigation}
+              >
+                <Button
+                  type="primary"
+                  icon={<SendOutlined />}
+                  disabled={isL2Investigation}
+                >
+                  二线支持
+                </Button>
+              </Popconfirm>
+              <TechTransferPanel ticket={ticket} role={ROLES.L1} />
+            </ActionButtonGroup>
+          </Space>
           {isL2Investigation && (
             <Typography.Text type="secondary">
               当前子状态为「二线排查」，请等待二线运维触发「一线复核」。
             </Typography.Text>
           )}
-          <TechTransferPanel ticket={ticket} role={ROLES.L1} />
         </Space>
         <Modal
-          title={
-            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-              <span>发起办结</span>
-              {closureGenerating && (
-                <Button size="small" icon={<StopOutlined />} onClick={handleStopClosureSummaryGeneration}>
-                  停止生成
-                </Button>
-              )}
-            </Space>
-          }
+          title="发起办结"
           open={closureOpen}
-          onOk={handleSubmitReview}
           onCancel={closeClosureModal}
-          okText="确认发起"
-          cancelText="取消"
           destroyOnClose
-          confirmLoading={closureGenerating}
-          okButtonProps={{ disabled: closureGenerating }}
+          footer={[
+            closureGenerating && (
+              <Button key="stop" icon={<StopOutlined />} onClick={handleStopClosureSummaryGeneration}>
+                停止生成
+              </Button>
+            ),
+            <Button key="cancel" onClick={closeClosureModal}>
+              取消
+            </Button>,
+            <Button
+              key="submit"
+              type="primary"
+              loading={closureGenerating}
+              disabled={closureGenerating}
+              onClick={handleSubmitReview}
+            >
+              确认发起
+            </Button>
+          ].filter(Boolean)}
         >
           <Form form={closureForm} layout="vertical">
             {closureGenerating && (
@@ -423,6 +490,32 @@ export default function L1Actions({ ticket }) {
             </Form.Item>
           </Form>
         </Modal>
+      </Card>
+    );
+  }
+
+  if (status === STATUS.SUSPENDED) {
+    return (
+      <Card title="一线操作区 · 已挂起">
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Alert
+            type="warning"
+            showIcon
+            message="工单已挂起"
+            description="取消挂起后，工单会恢复到处理中状态，并回到挂起前的处理子状态。"
+          />
+          <Popconfirm
+            title="确认取消挂起？"
+            description="取消挂起后工单会恢复到处理中。"
+            okText="确认取消挂起"
+            cancelText="取消"
+            onConfirm={handleResumeFromSuspend}
+          >
+            <Button type="primary" icon={<PlayCircleOutlined />}>
+              取消挂起
+            </Button>
+          </Popconfirm>
+        </Space>
       </Card>
     );
   }
@@ -467,6 +560,17 @@ export default function L1Actions({ ticket }) {
   }
 
   return null;
+}
+
+function ActionButtonGroup({ title, children }) {
+  return (
+    <Space direction="vertical" size={8} style={{ minWidth: 220, maxWidth: '100%' }}>
+      <Typography.Text type="secondary">{title}</Typography.Text>
+      <Space wrap>
+        {children}
+      </Space>
+    </Space>
+  );
 }
 
 function delay(ms) {
