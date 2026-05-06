@@ -302,7 +302,11 @@ export default function TicketListPage({ mode = TICKET_LIST_MODES.CURRENT }) {
 }
 
 function buildStatusOptions(user) {
-  const statuses = user?.role === ROLES.REQUESTER ? REQUESTER_STATUSES : SUPPORT_STATUSES;
+  const statuses = user?.role === ROLES.ADMIN
+    ? Array.from(new Set([...REQUESTER_STATUSES, ...SUPPORT_STATUSES]))
+    : user?.role === ROLES.REQUESTER
+      ? REQUESTER_STATUSES
+      : SUPPORT_STATUSES;
   return statuses.map((status) => ({
     value: status,
     label: STATUS_LABELS[status] || status

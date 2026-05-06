@@ -70,5 +70,13 @@
     "name": "孙二线 (二线运维)",
     "role": "L2",
     "department": "系统运维部"
+  },
+  {
+    "id": "u_admin_1",
+    "username": "admin",
+    "password": "123456",
+    "name": "管理员",
+    "role": "ADMIN",
+    "department": "服务台管理部"
   }
 ]

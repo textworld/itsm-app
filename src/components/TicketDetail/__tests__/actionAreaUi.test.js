@@ -132,6 +132,22 @@ test('技术支持转交仅提供同角色转交并要求是否提前沟通', ()
   assert.match(techTransferPanelSource, /targetRole: role/);
 });
 
+test('一线自动派工转交时按新老系统标签级联选择其他系统', () => {
+  assert.match(techTransferPanelSource, /SYSTEM_CATEGORY_OPTIONS/);
+  assert.match(techTransferPanelSource, /getSystemOptionsByCategory/);
+  assert.match(techTransferPanelSource, /name="targetSystemCategory"/);
+  assert.match(techTransferPanelSource, /name="targetSystemCode"/);
+  assert.match(techTransferPanelSource, /targetSystemCode[\s\S]*ticket\.systemCode/);
+  assert.match(techTransferPanelSource, /targetSystemCategory:\s*values\.targetSystemCategory/);
+  assert.match(techTransferPanelSource, /targetSystemCode:\s*values\.targetSystemCode/);
+  assert.match(techTransferPanelSource, /targetSystemName:\s*targetSystem\?\.label/);
+});
+
+test('automatic tech transfer leaves assignee selection to the backend', () => {
+  assert.doesNotMatch(techTransferPanelSource, /routeTechTransferAssignee/);
+  assert.match(techTransferPanelSource, /autoAssign:\s*values\.communicated !== true/);
+});
+
 test('二线操作区不展示通用的转给其他技术支持按钮', () => {
   const l2TransferStart = l2ActionsSource.indexOf('<TechTransferPanel');
   const l2TransferEnd = l2ActionsSource.indexOf('/>', l2TransferStart);

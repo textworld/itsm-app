@@ -4,7 +4,9 @@ import { SwapOutlined } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
-import { listSameRoleAssignees, routeTechTransferAssignee } from '../../utils/techTransferRouting.js';
+import { ROLES } from '../../constants/roles.js';
+import { SYSTEM_CATEGORY_OPTIONS, getSystemOptionsByCategory } from '../../constants/systems.js';
+import { listSameRoleAssignees } from '../../utils/techTransferRouting.js';
 
 export default function TechTransferPanel({
   ticket,
@@ -18,11 +20,14 @@ export default function TechTransferPanel({
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
   const assignees = listSameRoleAssignees(role).filter((assignee) => assignee.id !== user?.id);
+  const requiresTargetSystem = role === ROLES.L1;
 
   const handleOpen = () => {
     form.setFieldsValue({
       communicated: false,
-      assigneeId: undefined
+      assigneeId: undefined,
+      targetSystemCategory: undefined,
+      targetSystemCode: undefined
     });
     setOpen(true);
   };
@@ -31,16 +36,27 @@ export default function TechTransferPanel({
     const values = await form.validateFields();
     const assignee = values.communicated
       ? assignees.find((item) => item.id === values.assigneeId)
-      : routeTechTransferAssignee(role, user?.id);
+      : null;
+    const targetSystem = !values.communicated && requiresTargetSystem
+      ? getSystemOptionsByCategory(values.targetSystemCategory).find((item) => item.value === values.targetSystemCode)
+      : null;
 
     const result = await dispatchEvent(ticket.id, EVENTS.TRANSFER_TECH, {
       targetRole: role,
-      assigneeId: assignee?.id || null,
-      assigneeName: assignee?.name || null,
+      assigneeId: values.communicated ? assignee?.id || null : null,
+      assigneeName: values.communicated ? assignee?.name || null : null,
       communicated: values.communicated === true,
+      autoAssign: values.communicated !== true,
+      ...(targetSystem
+        ? {
+            targetSystemCategory: values.targetSystemCategory,
+            targetSystemCode: values.targetSystemCode,
+            targetSystemName: targetSystem?.label
+          }
+        : {}),
       __timelineRemark: values.communicated
         ? `技术支持已提前沟通并转交给 ${assignee?.name || '指定处理人'}`
-        : `技术支持按系统默认派工转交给 ${assignee?.name || '默认处理人'}`
+        : `技术支持选择系统自动派工${targetSystem ? `，目标系统：${targetSystem.label}` : ''}`
     });
 
     if (!result.ok) {
@@ -86,6 +102,51 @@ export default function TechTransferPanel({
                 </Form.Item>
               ) : null
             }
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(previous, current) =>
+              previous.communicated !== current.communicated ||
+              previous.targetSystemCategory !== current.targetSystemCategory
+            }
+          >
+            {({ getFieldValue }) => {
+              if (getFieldValue('communicated') || !requiresTargetSystem) {
+                return null;
+              }
+
+              const targetSystemCategory = getFieldValue('targetSystemCategory');
+              const targetSystemOptions = targetSystemCategory
+                ? getSystemOptionsByCategory(targetSystemCategory).filter((option) => option.value !== ticket.systemCode)
+                : [];
+
+              return (
+                <>
+                  <Form.Item
+                    name="targetSystemCategory"
+                    label="新老系统标签"
+                    rules={[{ required: true, message: '请选择新老系统标签' }]}
+                  >
+                    <Select
+                      options={SYSTEM_CATEGORY_OPTIONS}
+                      onChange={() => form.setFieldValue('targetSystemCode', undefined)}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name="targetSystemCode"
+                    label="系统名称"
+                    rules={[{ required: true, message: '请选择其他系统' }]}
+                  >
+                    <Select
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder="请选择其他系统"
+                      options={targetSystemOptions}
+                    />
+                  </Form.Item>
+                </>
+              );
+            }}
           </Form.Item>
         </Form>
       </Modal>

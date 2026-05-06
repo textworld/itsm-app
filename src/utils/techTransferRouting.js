@@ -23,3 +23,16 @@ export function routeTechTransferAssignee(role, excludedUserId = null) {
     { id: null, name: null }
   );
 }
+
+export function routeRandomTechTransferAssignee(role, excludedUserId = null, random = Math.random) {
+  const candidates = listSameRoleAssignees(role).filter((assignee) => assignee.id !== excludedUserId);
+  if (!candidates.length) {
+    return { id: null, name: null };
+  }
+
+  const randomValue = Number(random());
+  const boundedRandom = Number.isFinite(randomValue)
+    ? Math.min(Math.max(randomValue, 0), 0.999999999)
+    : 0;
+  return candidates[Math.floor(boundedRandom * candidates.length)];
+}

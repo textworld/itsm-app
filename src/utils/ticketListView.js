@@ -19,6 +19,10 @@ export function buildView(tickets, user, options = {}) {
     return { heading: '', subheading: '', total: 0, defaultTab: 'ALL', tabs: [] };
   }
 
+  if (user.role === ROLES.ADMIN) {
+    return buildAdminView(tickets);
+  }
+
   if (options.mode === TICKET_LIST_MODES.HISTORY) {
     return buildHistoryView(tickets, user);
   }
@@ -44,12 +48,12 @@ export function buildView(tickets, user, options = {}) {
   }
 
   if (user.role === ROLES.L1) {
-    const allTickets = tickets.filter(
-      (t) =>
-        isCurrentAssigneeForUser(t, user) &&
-        L1_ACCEPTABLE_TOOL_TYPES.includes(t.toolType) &&
-        getSupportStatus(t) !== STATUS.DRAFT
-    );
+    const allTickets = tickets.filter((ticket) => {
+      const supportStatus = getSupportStatus(ticket);
+      if (supportStatus === STATUS.DRAFT) return false;
+      if (supportStatus === STATUS.PENDING) return true;
+      return isCurrentAssigneeForUser(ticket, user) && L1_ACCEPTABLE_TOOL_TYPES.includes(ticket.toolType);
+    });
     const pending = allTickets.filter((t) => getSupportStatus(t) === STATUS.PENDING);
     const l1Processing = allTickets.filter(
       (t) =>
@@ -126,7 +130,20 @@ export function getVisibleTicketsForUser(tickets, user) {
     return source.filter((ticket) => ticket.requesterId === user.id);
   }
 
-  if (user.role === ROLES.L1 || user.role === ROLES.L2) {
+  if (user.role === ROLES.ADMIN) {
+    return source;
+  }
+
+  if (user.role === ROLES.L1) {
+    return source.filter(
+      (ticket) =>
+        isPendingSupportTicket(ticket) ||
+        isCurrentAssigneeForUser(ticket, user) ||
+        wasTicketHandledByUser(ticket, user)
+    );
+  }
+
+  if (user.role === ROLES.L2) {
     return source.filter(
       (ticket) =>
         isCurrentAssigneeForUser(ticket, user) ||
@@ -159,6 +176,29 @@ export function wasTicketHandledByUser(ticket, user) {
       (entry) => entry?.role === user.role && entry?.operatorId === user.id
     )
   );
+}
+
+function isPendingSupportTicket(ticket) {
+  return getSupportStatus(ticket) === STATUS.PENDING;
+}
+
+function buildAdminView(tickets) {
+  const source = Array.isArray(tickets) ? tickets : [];
+  return {
+    heading: '管理员工单列表',
+    subheading: '展示系统内全部工单',
+    total: source.length,
+    defaultTab: 'ALL',
+    hideTabs: true,
+    tabs: [
+      {
+        key: 'ALL',
+        label: '全部',
+        data: source,
+        color: 'blue'
+      }
+    ]
+  };
 }
 
 function buildHistoryView(tickets, user) {

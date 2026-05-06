@@ -1,18 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { TOOL_TYPES } from '../../constants/toolTypes.js';
-import { PRIORITIES } from '../../constants/priorities.js';
 import { buildMockTicketDescriptionDoc, buildMockTicketFormValues } from '../ticketSubmitMock.js';
 import { richTextToPlainText } from '../richText.js';
 
-test('一键生成模拟工单会填充提交表单所有核心字段', () => {
+test('一键生成模拟工单会填充提交表单所有非 Select 字段', () => {
   const values = buildMockTicketFormValues();
 
-  assert.equal(values.toolType, TOOL_TYPES.DATA_FIX);
-  assert.equal(values.priority, PRIORITIES.P2);
-  assert.equal(values.systemCategory, 'OLD');
-  assert.equal(values.systemName, 'ERP_CORE');
+  assert.equal(Object.hasOwn(values, 'toolType'), false);
+  assert.equal(Object.hasOwn(values, 'priority'), false);
+  assert.equal(Object.hasOwn(values, 'systemCategory'), false);
+  assert.equal(Object.hasOwn(values, 'systemName'), false);
   assert.equal(values.reporterPhone, '13800138000');
   assert.equal(values.reporterEmail, 'mock.requester@example.com');
   assert.equal(values.reportForOthers, true);

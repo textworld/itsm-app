@@ -2,6 +2,7 @@ import { applyTransition, canTransition, EVENTS } from '../state-machine/ticketS
 import { withDualStatuses } from '../constants/ticketStatus.js';
 import { generateTicketId, shortId } from '../utils/idGenerator.js';
 import { buildCustomTagUpdate } from '../utils/customTicketTags.js';
+import { routeRandomTechTransferAssignee } from '../utils/techTransferRouting.js';
 import { TICKET_ACTIONS, canPerformTicketAction } from '../permissions/ticketPermissionMatrix.js';
 import { getDb, reseedDb } from './db.js';
 
@@ -104,7 +105,7 @@ export function dispatchTicketEvent(ticketId, event, payload, user) {
     return { ok: false, reason: '工单不存在' };
   }
 
-  const nextPayload = prepareTicketEventPayload(ticket, event, payload);
+  const nextPayload = prepareTicketEventPayload(ticket, event, payload, user);
   const check = canTransition(ticket, event, user, nextPayload);
   if (!check.ok) {
     return { ok: false, reason: check.reason };
@@ -258,7 +259,7 @@ function prepareCreateTicketPayload(event, payload = {}) {
   return payload;
 }
 
-function prepareTicketEventPayload(ticket, event, payload = {}) {
+function prepareTicketEventPayload(ticket, event, payload = {}, user = null) {
   if (event === EVENTS.CREATE_SUBTASK) {
     const subtaskId = payload.subtask?.id || generateSubtaskTicketId(ticket, listTickets());
     const subtask = {
@@ -297,7 +298,20 @@ function prepareTicketEventPayload(ticket, event, payload = {}) {
     };
   }
 
+  if (event === EVENTS.TRANSFER_TECH && shouldAutoAssignTechTransfer(payload)) {
+    const assignee = routeRandomTechTransferAssignee(payload.targetRole || user?.role, user?.id);
+    return {
+      ...payload,
+      assigneeId: assignee.id,
+      assigneeName: assignee.name
+    };
+  }
+
   return payload;
+}
+
+function shouldAutoAssignTechTransfer(payload = {}) {
+  return payload.autoAssign === true || (payload.communicated === false && !payload.assigneeId);
 }
 
 function syncParentSubtaskSummary(subtaskTicket) {

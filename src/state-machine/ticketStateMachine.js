@@ -47,6 +47,7 @@ export const EVENTS = {
   START_SUBTASK: 'START_SUBTASK',
   COMPLETE_SUBTASK: 'COMPLETE_SUBTASK',
   TRANSFER_TECH: 'TRANSFER_TECH',
+  AUTO_ASSIGN_TECH: 'AUTO_ASSIGN_TECH',
   RETURN_FOR_INFO: 'RETURN_FOR_INFO',
   UPDATE_INFO_SUPPLEMENT: 'UPDATE_INFO_SUPPLEMENT',
   COMPLETE_INFO_SUPPLEMENT: 'COMPLETE_INFO_SUPPLEMENT',
@@ -84,6 +85,7 @@ export const EVENT_LABELS = {
   [EVENTS.START_SUBTASK]: '开始处理子任务',
   [EVENTS.COMPLETE_SUBTASK]: '完成子任务',
   [EVENTS.TRANSFER_TECH]: '技术支持转交',
+  [EVENTS.AUTO_ASSIGN_TECH]: '系统自动派工',
   [EVENTS.RETURN_FOR_INFO]: '退回提交人',
   [EVENTS.UPDATE_INFO_SUPPLEMENT]: '修改补充信息',
   [EVENTS.COMPLETE_INFO_SUPPLEMENT]: '已补充',
@@ -266,7 +268,7 @@ export const TRANSITIONS = [
     event: EVENTS.TRANSFER_TECH,
     to: STATUS.PROCESSING,
     role: ROLES.L1,
-    guard: (_ticket, payload, user) => isSameRoleTransfer(payload, user),
+    guard: (ticket, payload, user) => isSameRoleTransfer(payload, user) && isValidTechTransferTargetSystem(ticket, payload, user),
     transform: (ticket, payload, user, now) => buildTechTransferUpdate(ticket, payload, user, now)
   },
   {
@@ -617,12 +619,64 @@ export function applyTransition(ticket, event, payload = {}, user) {
               role: user?.role || null,
               at: now,
               remark: payload?.__timelineRemark || ''
-            }
+            },
+            ...buildAutomaticAssignmentTimelineEntries({
+              event,
+              payload,
+              nextPayload,
+              transition,
+              ticket,
+              now,
+              nextDualStatuses,
+              nextProcessingSubStatus
+            })
           ]
   };
   nextTicket.assigneeHistory = buildAssigneeHistory(currentTicket, nextTicket, now);
   delete nextTicket.__timelineRemark;
   return nextTicket;
+}
+
+function buildAutomaticAssignmentTimelineEntries({
+  event,
+  payload,
+  nextPayload,
+  transition,
+  ticket,
+  now,
+  nextDualStatuses,
+  nextProcessingSubStatus
+}) {
+  if (event !== EVENTS.TRANSFER_TECH || payload?.autoAssign !== true) {
+    return [];
+  }
+
+  const assignedName =
+    payload.assigneeName ||
+    nextPayload?.techTransfer?.assigneeName ||
+    payload.assigneeId ||
+    nextPayload?.techTransfer?.assigneeId ||
+    '未指定处理人';
+
+  return [
+    {
+      action: EVENTS.AUTO_ASSIGN_TECH,
+      actionLabel: EVENT_LABELS[EVENTS.AUTO_ASSIGN_TECH],
+      fromStatus: transition.to,
+      toStatus: transition.to,
+      fromRequesterStatus: nextDualStatuses.requesterStatus,
+      toRequesterStatus: nextDualStatuses.requesterStatus,
+      fromSupportStatus: nextDualStatuses.supportStatus,
+      toSupportStatus: nextDualStatuses.supportStatus,
+      fromProcessingSubStatus: getProcessingSubStatus(ticket),
+      toProcessingSubStatus: nextProcessingSubStatus,
+      operator: '系统',
+      operatorId: 'system',
+      role: null,
+      at: now,
+      remark: `系统自动派工给 ${assignedName}`
+    }
+  ];
 }
 
 function getNextDualStatuses(workflowStatus, event) {
@@ -778,6 +832,14 @@ function isSameRoleTransfer(payload, user) {
   );
 }
 
+function isValidTechTransferTargetSystem(ticket, payload, user) {
+  if (user?.role !== ROLES.L1 || payload?.communicated !== false) {
+    return true;
+  }
+
+  return Boolean(payload?.targetSystemCode && payload.targetSystemCode !== ticket?.systemCode);
+}
+
 function buildTechTransferUpdate(_ticket, payload, user, now) {
   const assigneeId = payload.assigneeId || null;
   const assigneeName = payload.assigneeName || null;
@@ -786,6 +848,9 @@ function buildTechTransferUpdate(_ticket, payload, user, now) {
     assigneeId,
     assigneeName,
     communicated: payload.communicated === true,
+    targetSystemCategory: payload.targetSystemCategory || null,
+    targetSystemCode: payload.targetSystemCode || null,
+    targetSystemName: payload.targetSystemName || SYSTEM_LABELS[payload.targetSystemCode] || null,
     transferredBy: user?.name || '',
     transferredAt: now
   };

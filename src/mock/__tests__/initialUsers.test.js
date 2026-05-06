@@ -20,3 +20,11 @@ test('初始账号中每个角色都有 3 个可登录账号', () => {
     assert.ok(roleUsers.every((user) => user.password === '123456'));
   }
 });
+
+test('initial users include one administrator account', () => {
+  const admins = initialUsers.filter((user) => user.role === 'ADMIN');
+
+  assert.equal(admins.length, 1);
+  assert.equal(admins[0].username, 'admin');
+  assert.equal(admins[0].password, '123456');
+});

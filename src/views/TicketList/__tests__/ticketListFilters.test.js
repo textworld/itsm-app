@@ -133,7 +133,7 @@ test('filterTicketsBySearch can match negative yes/no filters', () => {
   assert.deepEqual(result.map((ticket) => ticket.id), ['TKT-002']);
 });
 
-test('L1 workbench only shows tickets currently assigned to the signed-in L1 user', () => {
+test('L1 workbench shows all pending tickets plus tickets assigned to the signed-in L1 user', () => {
   const tickets = [
     { id: 'TKT-MINE', toolType: 'DATA_EXTRACT', status: STATUS.PROCESSING, supportStatus: STATUS.PROCESSING, assigneeL1Id: 'u_l1_1' },
     { id: 'TKT-OTHER', toolType: 'DATA_EXTRACT', status: STATUS.PROCESSING, supportStatus: STATUS.PROCESSING, assigneeL1Id: 'u_l1_2' },
@@ -141,7 +141,8 @@ test('L1 workbench only shows tickets currently assigned to the signed-in L1 use
   ];
   const view = buildView(tickets, { id: 'u_l1_1', role: ROLES.L1 });
 
-  assert.deepEqual(view.tabs[0].data.map((ticket) => ticket.id), ['TKT-MINE']);
+  assert.deepEqual(view.tabs[0].data.map((ticket) => ticket.id), ['TKT-MINE', 'TKT-UNASSIGNED']);
+  assert.deepEqual(view.tabs.find((tab) => tab.key === STATUS.PENDING).data.map((ticket) => ticket.id), ['TKT-UNASSIGNED']);
 });
 
 test('L2 workbench only shows tickets currently assigned to the signed-in L2 user', () => {
@@ -216,4 +217,34 @@ test('visible support tickets include current and historical assignments but exc
   );
 
   assert.deepEqual(visibleTickets.map((ticket) => ticket.id), ['TKT-CURRENT', 'TKT-HISTORY']);
+});
+
+test('visible tickets for an L1 support user include every pending ticket', () => {
+  const visibleTickets = getVisibleTicketsForUser(
+    [
+      { id: 'TKT-PENDING', status: STATUS.PENDING, supportStatus: STATUS.PENDING, assigneeL1Id: null },
+      { id: 'TKT-MINE', status: STATUS.PROCESSING, supportStatus: STATUS.PROCESSING, assigneeL1Id: 'u_l1_1' },
+      { id: 'TKT-OTHER', status: STATUS.PROCESSING, supportStatus: STATUS.PROCESSING, assigneeL1Id: 'u_l1_2' }
+    ],
+    { id: 'u_l1_1', role: ROLES.L1 }
+  );
+
+  assert.deepEqual(visibleTickets.map((ticket) => ticket.id), ['TKT-PENDING', 'TKT-MINE']);
+});
+
+test('administrator can see all tickets in the current ticket list', () => {
+  const tickets = [
+    { id: 'TKT-REQUESTER', requesterId: 'u_requester_1', status: STATUS.PENDING, supportStatus: STATUS.PENDING },
+    { id: 'TKT-L1', status: STATUS.PROCESSING, supportStatus: STATUS.PROCESSING, assigneeL1Id: 'u_l1_1' },
+    { id: 'TKT-L2', status: STATUS.PROCESSING, supportStatus: STATUS.PROCESSING, assigneeL2Id: 'u_l2_1' },
+    { id: 'TKT-DRAFT', status: STATUS.DRAFT, supportStatus: STATUS.DRAFT, requesterId: 'u_requester_2' }
+  ];
+
+  const user = { id: 'u_admin_1', role: ROLES.ADMIN };
+  const visibleTickets = getVisibleTicketsForUser(tickets, user);
+  const view = buildView(visibleTickets, user);
+
+  assert.deepEqual(visibleTickets.map((ticket) => ticket.id), ['TKT-REQUESTER', 'TKT-L1', 'TKT-L2', 'TKT-DRAFT']);
+  assert.deepEqual(view.tabs[0].data.map((ticket) => ticket.id), ['TKT-REQUESTER', 'TKT-L1', 'TKT-L2', 'TKT-DRAFT']);
+  assert.equal(view.hideTabs, true);
 });

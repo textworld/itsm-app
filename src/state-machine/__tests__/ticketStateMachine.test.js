@@ -125,6 +125,92 @@ test('TRANSFER_TECH records previous and next assignees in assignee history', ()
   );
 });
 
+test('automatic tech transfer appends a timeline entry naming the assigned support user', () => {
+  const transferred = applyTransition(
+    {
+      id: 'TKT-AUTO-ASSIGN-TIMELINE-1',
+      status: STATUS.PROCESSING,
+      requesterStatus: STATUS.PROCESSING,
+      supportStatus: STATUS.PROCESSING,
+      processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+      assigneeL1Id: 'u_l1_1',
+      assigneeL1Name: 'L1 One',
+      timeline: []
+    },
+    EVENTS.TRANSFER_TECH,
+    {
+      targetRole: ROLES.L1,
+      assigneeId: 'u_l1_2',
+      assigneeName: 'L1 Two',
+      communicated: false,
+      autoAssign: true,
+      targetSystemCategory: 'NEW',
+      targetSystemCode: 'OPS_MONITOR',
+      targetSystemName: 'OPS Monitor'
+    },
+    l1User
+  );
+
+  const assignmentEntry = transferred.timeline.find((entry) => entry.action === 'AUTO_ASSIGN_TECH');
+
+  assert.equal(transferred.timeline.length, 2);
+  assert.ok(assignmentEntry);
+  assert.equal(assignmentEntry.actionLabel, '系统自动派工');
+  assert.match(assignmentEntry.remark, /L1 Two/);
+});
+
+test('L1 automatic tech transfer records a different target system', () => {
+  const transferred = applyTransition(
+    {
+      id: 'TKT-AUTO-TRANSFER-SYSTEM-1',
+      status: STATUS.PROCESSING,
+      requesterStatus: STATUS.PROCESSING,
+      supportStatus: STATUS.PROCESSING,
+      processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+      systemCategory: 'OLD',
+      systemCode: 'ERP_CORE',
+      systemName: 'ERP 核心系统',
+      assigneeL1Id: 'u_l1_1',
+      assigneeL1Name: '李工',
+      timeline: []
+    },
+    EVENTS.TRANSFER_TECH,
+    {
+      targetRole: ROLES.L1,
+      assigneeId: 'u_l1_2',
+      assigneeName: '周一线',
+      communicated: false,
+      targetSystemCategory: 'NEW',
+      targetSystemCode: 'OPS_MONITOR',
+      targetSystemName: '运维监控中心'
+    },
+    l1User
+  );
+
+  assert.equal(transferred.techTransfer?.targetSystemCategory, 'NEW');
+  assert.equal(transferred.techTransfer?.targetSystemCode, 'OPS_MONITOR');
+  assert.equal(transferred.techTransfer?.targetSystemName, '运维监控中心');
+
+  assert.throws(
+    () =>
+      applyTransition(
+        transferred,
+        EVENTS.TRANSFER_TECH,
+        {
+          targetRole: ROLES.L1,
+          assigneeId: 'u_l1_3',
+          assigneeName: '吴一线',
+          communicated: false,
+          targetSystemCategory: 'OLD',
+          targetSystemCode: 'ERP_CORE',
+          targetSystemName: 'ERP 核心系统'
+        },
+        l1User
+      ),
+    /操作前置条件未满足/
+  );
+});
+
 test('SUBMIT 通过状态机创建待受理工单', () => {
   const nextTicket = applyTransition(
     null,

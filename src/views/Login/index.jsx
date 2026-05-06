@@ -71,6 +71,7 @@ export default function LoginPage() {
   const requesterAccounts = getDemoLoginAccountsByRole(ROLES.REQUESTER);
   const l1Accounts = getDemoLoginAccountsByRole(ROLES.L1);
   const l2Accounts = getDemoLoginAccountsByRole(ROLES.L2);
+  const adminAccounts = getDemoLoginAccountsByRole(ROLES.ADMIN);
 
   return (
     <div
@@ -172,6 +173,17 @@ export default function LoginPage() {
           >
             <Space wrap>
               {l2Accounts.map((account) => (
+                <Button key={account.username} size="small" onClick={() => fillDemo(account)}>
+                  {account.username} / {account.password}
+                </Button>
+              ))}
+            </Space>
+          </Descriptions.Item>
+          <Descriptions.Item
+            label={<Tag color="red">管理员</Tag>}
+          >
+            <Space wrap>
+              {adminAccounts.map((account) => (
                 <Button key={account.username} size="small" onClick={() => fillDemo(account)}>
                   {account.username} / {account.password}
                 </Button>

@@ -54,6 +54,12 @@ export const DEMO_LOGIN_ACCOUNTS = [
     username: 'ops3',
     password: '123456',
     name: '孙二线'
+  },
+  {
+    role: ROLES.ADMIN,
+    username: 'admin',
+    password: '123456',
+    name: '管理员'
   }
 ];
 
