@@ -12,7 +12,7 @@ import {
 } from '../../constants/systems.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { TICKET_ACTIONS, canPerformTicketAction } from '../../permissions/ticketPermissionMatrix.js';
-import { listAssignableSubtaskAssignees } from '../../utils/subtaskRouting.js';
+import { useSupportAssignees } from '../../hooks/useSupportAssignees.js';
 
 const SUBTASK_STATUS_LABELS = {
   PENDING: '待受理',
@@ -28,6 +28,7 @@ export default function SubtaskPanel({ ticket }) {
   const [completeTarget, setCompleteTarget] = useState(null);
   const [form] = Form.useForm();
   const [completeForm] = Form.useForm();
+  const supportAssignees = useSupportAssignees();
 
   if (![ROLES.L1, ROLES.L2].includes(user?.role)) {
     return (
@@ -42,7 +43,7 @@ export default function SubtaskPanel({ ticket }) {
 
   const handleCreate = async () => {
     const values = await form.validateFields();
-    const assignee = listAssignableSubtaskAssignees().find((item) => item.id === values.assigneeId);
+    const assignee = supportAssignees.find((item) => item.id === values.assigneeId);
     const result = await dispatchEvent(ticket.id, EVENTS.CREATE_SUBTASK, {
       subtask: {
         systemCategory: values.systemCategory,
@@ -189,7 +190,7 @@ export default function SubtaskPanel({ ticket }) {
                   showSearch
                   optionFilterProp="label"
                   placeholder="可为空，留空后由对应系统技术支持认领"
-                  options={listAssignableSubtaskAssignees().map((item) => ({
+                  options={supportAssignees.map((item) => ({
                     label: `${item.name} · ${item.role === ROLES.L2 ? '二线' : '一线'}`,
                     value: item.id
                   }))}

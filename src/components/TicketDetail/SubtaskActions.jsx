@@ -11,6 +11,7 @@ import {
 } from '../../constants/systems.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { listSubtaskAssignees } from '../../utils/subtaskRouting.js';
+import { useSupportAssignees } from '../../hooks/useSupportAssignees.js';
 
 export default function SubtaskActions({ ticket }) {
   const { dispatchEvent } = useTickets();
@@ -18,6 +19,7 @@ export default function SubtaskActions({ ticket }) {
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferForm] = Form.useForm();
   const isCompleted = ticket.subtaskStatus === SUBTASK_STATUS.COMPLETED;
+  const supportAssignees = useSupportAssignees();
 
   const handleDispatch = async (event, payload = {}, successText = '操作成功') => {
     const result = await dispatchEvent(ticket.id, event, payload);
@@ -39,7 +41,8 @@ export default function SubtaskActions({ ticket }) {
 
   const handleTransfer = async () => {
     const values = await transferForm.validateFields();
-    const assignee = listSubtaskAssignees(values.systemCode).find((item) => item.id === values.assigneeId);
+    const assignee = getOnlineSubtaskAssignees(values.systemCode, supportAssignees)
+      .find((item) => item.id === values.assigneeId);
     await handleDispatch(
       EVENTS.TRANSFER_SUBTASK,
       {
@@ -47,7 +50,8 @@ export default function SubtaskActions({ ticket }) {
         systemCode: values.systemCode,
         systemName: SYSTEM_LABELS[values.systemCode] || values.systemCode,
         assigneeId: assignee?.id || null,
-        assigneeName: assignee?.name || null
+        assigneeName: assignee?.name || null,
+        assigneeRole: assignee?.role || null
       },
       '子任务已转派'
     );
@@ -119,7 +123,7 @@ export default function SubtaskActions({ ticket }) {
             {({ getFieldValue }) => (
               <Form.Item name="assigneeId" label="处理人" rules={[{ required: true, message: '请选择处理人' }]}>
                 <Select
-                  options={listSubtaskAssignees(getFieldValue('systemCode')).map((item) => ({
+                  options={getOnlineSubtaskAssignees(getFieldValue('systemCode'), supportAssignees).map((item) => ({
                     label: item.name,
                     value: item.id
                   }))}
@@ -131,4 +135,10 @@ export default function SubtaskActions({ ticket }) {
       </Modal>
     </Card>
   );
+}
+
+function getOnlineSubtaskAssignees(systemCode, supportAssignees) {
+  const defaultRole = listSubtaskAssignees(systemCode)[0]?.role;
+  if (!defaultRole) return [];
+  return supportAssignees.filter((item) => item.role === defaultRole);
 }

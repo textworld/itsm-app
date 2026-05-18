@@ -6,7 +6,7 @@ import { useTickets } from '../../context/TicketContext.jsx';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { ROLES } from '../../constants/roles.js';
 import { SYSTEM_CATEGORY_OPTIONS, getSystemOptionsByCategory } from '../../constants/systems.js';
-import { listSameRoleAssignees } from '../../utils/techTransferRouting.js';
+import { useSupportAssignees } from '../../hooks/useSupportAssignees.js';
 
 export default function TechTransferPanel({
   ticket,
@@ -19,7 +19,8 @@ export default function TechTransferPanel({
   const { message } = AntdApp.useApp();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
-  const assignees = listSameRoleAssignees(role).filter((assignee) => assignee.id !== user?.id);
+  const onlineAssignees = useSupportAssignees(role);
+  const assignees = onlineAssignees.filter((assignee) => assignee.id !== user?.id);
   const requiresTargetSystem = role === ROLES.L1;
 
   const handleOpen = () => {

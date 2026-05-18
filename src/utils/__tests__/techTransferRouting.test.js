@@ -13,7 +13,7 @@ test('二线转交候选人包含全部二线运维账号', () => {
 
   assert.deepEqual(
     assignees.map((assignee) => assignee.id),
-    ['u_l2_1', 'u_l2_2', 'u_l2_3']
+    Array.from({ length: 23 }, (_, index) => `u_l2_${index + 1}`)
   );
   assert.equal(routeTechTransferAssignee(ROLES.L2).id, 'u_l2_1');
 });
@@ -25,5 +25,5 @@ test('自动转交默认避开当前二线运维', () => {
 test('random automatic tech transfer excludes the current support user', () => {
   const assignee = routeRandomTechTransferAssignee(ROLES.L2, 'u_l2_1', () => 0.99);
 
-  assert.equal(assignee.id, 'u_l2_3');
+  assert.equal(assignee.id, 'u_l2_23');
 });

@@ -11,6 +11,7 @@ import {
   App as AntdApp,
   Divider,
   Descriptions,
+  Modal,
   Space,
   Tag
 } from 'antd';
@@ -27,12 +28,16 @@ import { getDemoLoginAccountsByRole } from './demoAccounts.js';
  * - 预设测试账号提示
  */
 export default function LoginPage() {
-  const { login, initialized, isAuthenticated } = useAuth();
+  const { login, register, initialized, isAuthenticated } = useAuth();
   const router = useRouter();
   const { message } = AntdApp.useApp();
   const [submitting, setSubmitting] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [registering, setRegistering] = useState(false);
 
   const [form] = Form.useForm();
+  const [registerForm] = Form.useForm();
+  const publicRoleOptions = ROLE_OPTIONS.filter((option) => option.value !== ROLES.ADMIN);
 
   const getRedirectTarget = React.useCallback(() => {
     if (typeof window === 'undefined') {
@@ -57,6 +62,25 @@ export default function LoginPage() {
       return;
     }
     message.success(`欢迎 ${result.user.name}`);
+    router.replace(getRedirectTarget());
+  };
+
+  const handleRegisterFinish = async () => {
+    const values = await registerForm.validateFields();
+    setRegistering(true);
+    const result = await register(
+      values.username.trim(),
+      values.password,
+      values.role,
+      values.name.trim()
+    );
+    setRegistering(false);
+    if (!result.ok) {
+      message.error(result.reason || '注册失败');
+      return;
+    }
+    message.success(`欢迎 ${result.user.name}`);
+    setRegisterOpen(false);
     router.replace(getRedirectTarget());
   };
 
@@ -132,17 +156,75 @@ export default function LoginPage() {
           </Form.Item>
 
           <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={submitting}
-              block
-              size="large"
-            >
-              登 录
-            </Button>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={submitting}
+                block
+                size="large"
+              >
+                登 录
+              </Button>
+              <Button block onClick={() => setRegisterOpen(true)}>
+                注册账号
+              </Button>
+            </Space>
           </Form.Item>
         </Form>
+
+        <Modal
+          title="注册账号"
+          open={registerOpen}
+          okText="注册并登录"
+          cancelText="取消"
+          confirmLoading={registering}
+          onOk={handleRegisterFinish}
+          onCancel={() => setRegisterOpen(false)}
+          destroyOnClose
+        >
+          <Form
+            form={registerForm}
+            layout="vertical"
+            initialValues={{ role: ROLES.REQUESTER }}
+          >
+            <Form.Item
+              name="role"
+              label="人员类型"
+              rules={[{ required: true, message: '请选择人员类型' }]}
+            >
+              <Radio.Group
+                options={publicRoleOptions}
+                optionType="button"
+                buttonStyle="solid"
+              />
+            </Form.Item>
+            <Form.Item
+              name="username"
+              label="账号"
+              rules={[{ required: true, message: '请输入账号' }]}
+            >
+              <Input prefix={<UserOutlined />} placeholder="请输入账号" allowClear />
+            </Form.Item>
+            <Form.Item
+              name="name"
+              label="显示名称"
+              rules={[{ required: true, message: '请输入显示名称' }]}
+            >
+              <Input placeholder="请输入显示名称" allowClear />
+            </Form.Item>
+            <Form.Item
+              name="password"
+              label="密码"
+              rules={[
+                { required: true, message: '请输入密码' },
+                { min: 6, message: '密码至少 6 位' }
+              ]}
+            >
+              <Input.Password prefix={<LockOutlined />} placeholder="请输入密码" />
+            </Form.Item>
+          </Form>
+        </Modal>
 
         <Divider plain style={{ color: '#999' }}>测试账号 (点击可快速填充)</Divider>
         <Descriptions size="small" column={1} bordered>

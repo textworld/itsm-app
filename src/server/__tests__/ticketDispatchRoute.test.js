@@ -5,7 +5,13 @@ import { POST as dispatchPost } from '../../../app/api/tickets/[id]/dispatch/rou
 import { STATUS } from '../../constants/ticketStatus.js';
 import { ROLES } from '../../constants/roles.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
-import { dispatchCreateTicketEvent, dispatchTicketEvent, getTicketById, updateTicketCustomTags } from '../store.js';
+import {
+  dispatchCreateTicketEvent,
+  dispatchTicketEvent,
+  getTicketById,
+  updateTicketCustomTags,
+  updateUserAvailability
+} from '../store.js';
 import { reseedDb } from '../db.js';
 
 const requesterUser = { id: 'u_requester_1', name: '张三', role: 'REQUESTER' };
@@ -232,11 +238,161 @@ test('backend automatic tech transfer randomly assigns another support user befo
     );
 
     assert.equal(result.ok, true);
-    assert.equal(result.ticket.assigneeL1Id, 'u_l1_3');
+    assert.equal(result.ticket.assigneeL1Id, 'u_l1_23');
     assert.ok(result.ticket.assigneeL1Name);
-    assert.equal(result.ticket.techTransfer.assigneeId, 'u_l1_3');
+    assert.equal(result.ticket.techTransfer.assigneeId, 'u_l1_23');
     assert.equal(result.ticket.techTransfer.communicated, false);
   } finally {
     Math.random = originalRandom;
   }
+});
+
+test('offline support users cannot accept new ticket assignments', () => {
+  updateUserAvailability('u_l1_1', 'OFFLINE');
+  const ticketResult = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      id: 'TKT-OFFLINE-ACCEPT',
+      title: 'Offline accept',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P4',
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'offline accept' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  const result = dispatchTicketEvent(
+    ticketResult.ticket.id,
+    EVENTS.ACCEPT,
+    {
+      assigneeL1Id: 'u_l1_1',
+      assigneeL1Name: 'support'
+    },
+    { id: 'u_l1_1', name: 'support', role: ROLES.L1 }
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /offline|下线|涓嬬嚎/i);
+});
+
+test('automatic tech transfer skips offline support users', () => {
+  updateUserAvailability('u_l1_23', 'OFFLINE');
+  const originalRandom = Math.random;
+  Math.random = () => 0.99;
+
+  try {
+    const ticketResult = dispatchCreateTicketEvent(
+      EVENTS.SUBMIT,
+      {
+        id: 'TKT-OFFLINE-AUTO-DISPATCH',
+        title: 'Offline auto dispatch',
+        toolType: 'DATA_EXTRACT',
+        priority: 'P4',
+        systemName: 'ERP_CORE',
+        reporterPhone: '13800138000',
+        reporterEmail: '',
+        reportForOthers: false,
+        descriptionDoc: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'offline auto dispatch' }] }]
+        },
+        attachments: []
+      },
+      requesterUser
+    );
+
+    dispatchTicketEvent(
+      ticketResult.ticket.id,
+      EVENTS.ACCEPT,
+      {
+        assigneeL1Id: 'u_l1_1',
+        assigneeL1Name: 'support'
+      },
+      { id: 'u_l1_1', name: 'support', role: ROLES.L1 }
+    );
+
+    const result = dispatchTicketEvent(
+      ticketResult.ticket.id,
+      EVENTS.TRANSFER_TECH,
+      {
+        targetRole: ROLES.L1,
+        communicated: false,
+        autoAssign: true,
+        targetSystemCategory: 'NEW',
+        targetSystemCode: 'OPS_MONITOR',
+        targetSystemName: 'OPS Monitor'
+      },
+      { id: 'u_l1_1', name: 'support', role: ROLES.L1 }
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(result.ticket.assigneeL1Id, 'u_l1_22');
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test('offline L2 users cannot self-assign unassigned tickets by submitting review', () => {
+  updateUserAvailability('u_l2_1', 'OFFLINE');
+  const ticketResult = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      id: 'TKT-OFFLINE-L2-REVIEW',
+      title: 'Offline L2 review',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P4',
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'offline l2 review' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  dispatchTicketEvent(
+    ticketResult.ticket.id,
+    EVENTS.ACCEPT,
+    {
+      assigneeL1Id: 'u_l1_1',
+      assigneeL1Name: 'support'
+    },
+    { id: 'u_l1_1', name: 'support', role: ROLES.L1 }
+  );
+  dispatchTicketEvent(
+    ticketResult.ticket.id,
+    EVENTS.REQUEST_L2_SUPPORT,
+    {
+      assigneeL2Id: null,
+      assigneeL2Name: null,
+      l2SupportRequested: true
+    },
+    { id: 'u_l1_1', name: 'support', role: ROLES.L1 }
+  );
+
+  const result = dispatchTicketEvent(
+    ticketResult.ticket.id,
+    EVENTS.L1_REVIEW,
+    {
+      l2Conclusion: 'done',
+      assigneeL2Id: 'u_l2_1',
+      assigneeL2Name: 'ops'
+    },
+    { id: 'u_l2_1', name: 'ops', role: ROLES.L2 }
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /offline/i);
 });

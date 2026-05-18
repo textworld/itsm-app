@@ -1,4 +1,17 @@
 import { ROLES } from '../../constants/roles.js';
+import {
+  INITIAL_L1_SUPPORT_USERS,
+  INITIAL_L2_SUPPORT_USERS
+} from '../../constants/supportAccounts.js';
+
+function toDemoAccount({ role, username, password, name }) {
+  return {
+    role,
+    username,
+    password,
+    name
+  };
+}
 
 export const DEMO_LOGIN_ACCOUNTS = [
   {
@@ -19,42 +32,8 @@ export const DEMO_LOGIN_ACCOUNTS = [
     password: '123456',
     name: '钱五'
   },
-  {
-    role: ROLES.L1,
-    username: 'support1',
-    password: '123456',
-    name: '李一线'
-  },
-  {
-    role: ROLES.L1,
-    username: 'support2',
-    password: '123456',
-    name: '周一线'
-  },
-  {
-    role: ROLES.L1,
-    username: 'support3',
-    password: '123456',
-    name: '吴一线'
-  },
-  {
-    role: ROLES.L2,
-    username: 'ops1',
-    password: '123456',
-    name: '王二线'
-  },
-  {
-    role: ROLES.L2,
-    username: 'ops2',
-    password: '123456',
-    name: '郑二线'
-  },
-  {
-    role: ROLES.L2,
-    username: 'ops3',
-    password: '123456',
-    name: '孙二线'
-  },
+  ...INITIAL_L1_SUPPORT_USERS.map(toDemoAccount),
+  ...INITIAL_L2_SUPPORT_USERS.map(toDemoAccount),
   {
     role: ROLES.ADMIN,
     username: 'admin',

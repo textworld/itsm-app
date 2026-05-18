@@ -81,6 +81,25 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const register = useCallback(async (username, password, role, name) => {
+    try {
+      const { response, data } = await requestJson('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, password, role, name })
+      });
+
+      if (!response.ok || data?.ok === false) {
+        return { ok: false, reason: data?.reason || '注册失败' };
+      }
+
+      setUser(data.user);
+      return { ok: true, user: data.user };
+    } catch (error) {
+      console.error(error);
+      return { ok: false, reason: '注册失败，请稍后重试' };
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await fetch('/api/auth/logout', {
@@ -100,10 +119,11 @@ export function AuthProvider({ children }) {
       initialized,
       isAuthenticated: Boolean(user),
       login,
+      register,
       logout,
       refreshSession
     }),
-    [initialized, login, logout, refreshSession, user]
+    [initialized, login, logout, refreshSession, register, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

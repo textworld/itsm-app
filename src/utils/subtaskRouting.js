@@ -1,23 +1,21 @@
 import { ROLES } from '../constants/roles.js';
+import {
+  getAllSupportAssignees,
+  getSupportAssigneesByRole
+} from '../constants/supportAccounts.js';
 
-const ASSIGNABLE_SUBTASK_ASSIGNEES = [
-  { id: 'u_l1_1', name: '李一线 (一线技术支持)', role: ROLES.L1 },
-  { id: 'u_l1_2', name: '周一线 (一线技术支持)', role: ROLES.L1 },
-  { id: 'u_l1_3', name: '吴一线 (一线技术支持)', role: ROLES.L1 },
-  { id: 'u_l2_1', name: '王二线 (二线运维)', role: ROLES.L2 },
-  { id: 'u_l2_2', name: '郑二线 (二线运维)', role: ROLES.L2 },
-  { id: 'u_l2_3', name: '孙二线 (二线运维)', role: ROLES.L2 }
-];
+const DEFAULT_L1_ASSIGNEE = getSupportAssigneesByRole(ROLES.L1)[0];
+const DEFAULT_L2_ASSIGNEE = getSupportAssigneesByRole(ROLES.L2)[0];
 
 const DEFAULT_SUBTASK_ASSIGNEES = {
-  ERP_CORE: ASSIGNABLE_SUBTASK_ASSIGNEES[0],
-  FINANCE_BI: ASSIGNABLE_SUBTASK_ASSIGNEES[0],
-  OA_CENTER: ASSIGNABLE_SUBTASK_ASSIGNEES[0],
-  HR_MASTER: ASSIGNABLE_SUBTASK_ASSIGNEES[0],
-  SUPPLY_CHAIN: ASSIGNABLE_SUBTASK_ASSIGNEES[0],
-  MES_PORTAL: ASSIGNABLE_SUBTASK_ASSIGNEES[3],
-  CRM_CENTER: ASSIGNABLE_SUBTASK_ASSIGNEES[3],
-  OPS_MONITOR: ASSIGNABLE_SUBTASK_ASSIGNEES[3]
+  ERP_CORE: DEFAULT_L1_ASSIGNEE,
+  FINANCE_BI: DEFAULT_L1_ASSIGNEE,
+  OA_CENTER: DEFAULT_L1_ASSIGNEE,
+  HR_MASTER: DEFAULT_L1_ASSIGNEE,
+  SUPPLY_CHAIN: DEFAULT_L1_ASSIGNEE,
+  MES_PORTAL: DEFAULT_L2_ASSIGNEE,
+  CRM_CENTER: DEFAULT_L2_ASSIGNEE,
+  OPS_MONITOR: DEFAULT_L2_ASSIGNEE
 };
 
 export function routeSubtaskAssignee(systemCode) {
@@ -30,7 +28,7 @@ export function listSubtaskAssignees(systemCode) {
 }
 
 export function listAssignableSubtaskAssignees() {
-  return ASSIGNABLE_SUBTASK_ASSIGNEES;
+  return getAllSupportAssignees();
 }
 
 export function canUserHandleSubtaskSystem(user, systemCode) {

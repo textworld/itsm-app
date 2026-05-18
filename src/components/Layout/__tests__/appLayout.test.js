@@ -40,3 +40,22 @@ test('support roles have a history ticket list entry in the top navigation', () 
   assert.match(appLayoutSource, /href="\/tickets\/history"/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/tickets\/history'\)/);
 });
+
+test('administrator entries are grouped under a second-level admin menu', () => {
+  assert.match(appLayoutSource, /user\?\.role === ROLES\.ADMIN/);
+  assert.match(appLayoutSource, /key: 'admin-management'/);
+  assert.match(appLayoutSource, /label: '后台管理'/);
+  assert.match(appLayoutSource, /children:/);
+  assert.match(appLayoutSource, /href="\/admin\/users"/);
+  assert.match(appLayoutSource, /href="\/dictionaries\/insurance-types"/);
+  assert.match(appLayoutSource, /href="\/schedules"/);
+  assert.match(appLayoutSource, /href="\/support-rests"/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/admin\/users'\)/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/dictionaries\/insurance-types'\)/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/schedules'\)/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/support-rests'\)/);
+  assert.match(appLayoutSource, /账号管理/);
+  assert.match(appLayoutSource, /险种词典/);
+  assert.match(appLayoutSource, /排班配置/);
+  assert.match(appLayoutSource, /休息时间配置/);
+});

@@ -489,6 +489,34 @@ body {
   width: 100%;
 }
 
+.admin-config-page {
+  width: 100%;
+}
+
+.admin-config-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-config-error-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.schedule-group-card .ant-card-body {
+  padding-top: 18px;
+}
+
+.schedule-team-panel {
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
 @media (max-width: 768px) {
   .ticket-assignee-summary {
     grid-template-columns: 1fr;

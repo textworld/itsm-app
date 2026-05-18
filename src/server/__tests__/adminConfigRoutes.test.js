@@ -1,0 +1,183 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  GET as insuranceGet,
+  POST as insurancePost
+} from '../../../app/api/admin/dictionaries/insurance-types/route.js';
+import {
+  PATCH as insurancePatch
+} from '../../../app/api/admin/dictionaries/insurance-types/[id]/route.js';
+import {
+  GET as schedulesGet,
+  PUT as schedulesPut
+} from '../../../app/api/admin/schedules/route.js';
+import {
+  GET as supportRestsGet,
+  PUT as supportRestsPut
+} from '../../../app/api/admin/support-rests/route.js';
+import { reseedDb } from '../db.js';
+
+test.beforeEach(() => {
+  reseedDb();
+});
+
+test('admin insurance routes reject unauthenticated and non-admin users', async () => {
+  const unauthenticated = await insuranceGet(buildRequest({ userId: null }));
+  assert.equal(unauthenticated.status, 401);
+  assert.equal((await unauthenticated.json()).reason, '未登录');
+
+  const forbidden = await insurancePost(buildRequest({
+    userId: 'u_l1_1',
+    body: { code: 'ROUTE_FORBIDDEN', name: '无权限险' }
+  }));
+  assert.equal(forbidden.status, 403);
+  assert.equal((await forbidden.json()).reason, '无管理员权限');
+});
+
+test('admin insurance routes create and update insurance types', async () => {
+  const suffix = Date.now().toString(36);
+  const createResponse = await insurancePost(buildRequest({
+    body: { code: `route_${suffix}`, name: `路由险种 ${suffix}` }
+  }));
+  const createPayload = await createResponse.json();
+
+  assert.equal(createResponse.status, 200);
+  assert.equal(createPayload.ok, true);
+  assert.equal(createPayload.item.code, `ROUTE_${suffix.toUpperCase()}`);
+
+  const patchResponse = await insurancePatch(
+    buildRequest({ body: { enabled: false } }),
+    { params: Promise.resolve({ id: createPayload.item.id }) }
+  );
+  const patchPayload = await patchResponse.json();
+
+  assert.equal(patchResponse.status, 200);
+  assert.equal(patchPayload.ok, true);
+  assert.equal(patchPayload.item.enabled, false);
+});
+
+test('admin insurance routes return structured validation errors', async () => {
+  const response = await insurancePost(buildRequest({
+    body: { code: '', name: '' }
+  }));
+  const payload = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(payload.reason, '险种词典校验失败');
+  assert.deepEqual(payload.errors, [
+    { path: ['code'], message: '请输入险种编码' },
+    { path: ['name'], message: '请输入险种名称' }
+  ]);
+});
+
+test('admin schedule routes load options and reject invalid saves', async () => {
+  const getResponse = await schedulesGet(buildRequest());
+  const getPayload = await getResponse.json();
+
+  assert.equal(getResponse.status, 200);
+  assert.equal(getPayload.ok, true);
+  assert.ok(getPayload.systems.some((item) => item.value === 'ERP_CORE'));
+  assert.ok(getPayload.users.every((user) => user.role === 'L1'));
+  assert.ok(getPayload.insuranceTypes.length > 0);
+
+  const putResponse = await schedulesPut(buildRequest({
+    body: {
+      groups: [
+        {
+          id: 'grp_invalid',
+          name: '无基础排班',
+          systemCodes: ['ERP_CORE'],
+          baseSchedule: { userIds: [] },
+          insuranceTeams: []
+        }
+      ]
+    }
+  }));
+  const putPayload = await putResponse.json();
+
+  assert.equal(putResponse.status, 400);
+  assert.equal(putPayload.reason, '排班配置校验失败');
+  assert.deepEqual(putPayload.errors, [
+    { path: ['groups', 0, 'baseSchedule', 'userIds'], message: '基础排班至少选择一名一线人员' }
+  ]);
+});
+
+test('admin support rest routes require admin users', async () => {
+  const unauthenticated = await supportRestsGet(buildRequest({ userId: null }));
+  assert.equal(unauthenticated.status, 401);
+  assert.equal((await unauthenticated.json()).reason, '未登录');
+
+  const forbidden = await supportRestsPut(buildRequest({
+    userId: 'u_l1_1',
+    body: { restPeriods: [] }
+  }));
+  assert.equal(forbidden.status, 403);
+  assert.equal((await forbidden.json()).reason, '无管理员权限');
+});
+
+test('admin support rest routes load L1 users, save config and return structured validation errors', async () => {
+  const getResponse = await supportRestsGet(buildRequest());
+  const getPayload = await getResponse.json();
+
+  assert.equal(getResponse.status, 200);
+  assert.equal(getPayload.ok, true);
+  assert.ok(Array.isArray(getPayload.config.restPeriods));
+  assert.ok(getPayload.users.every((user) => user.role === 'L1'));
+  assert.ok(Array.isArray(getPayload.upcoming.days));
+
+  const putResponse = await supportRestsPut(buildRequest({
+    body: {
+      restPeriods: [
+        {
+          id: 'rest_route',
+          userIds: ['u_l1_1'],
+          startsAt: '2026-05-18T09:00:00.000Z',
+          endsAt: '2026-05-18T18:00:00.000Z',
+          reason: '接口测试'
+        }
+      ]
+    }
+  }));
+  const putPayload = await putResponse.json();
+
+  assert.equal(putResponse.status, 200);
+  assert.equal(putPayload.ok, true);
+  assert.equal(putPayload.config.restPeriods[0].reason, '接口测试');
+
+  const invalidResponse = await supportRestsPut(buildRequest({
+    body: {
+      restPeriods: [
+        {
+          id: 'rest_invalid',
+          userIds: [],
+          startsAt: '2026-05-18T18:00:00.000Z',
+          endsAt: '2026-05-18T09:00:00.000Z',
+          reason: ''
+        }
+      ]
+    }
+  }));
+  const invalidPayload = await invalidResponse.json();
+
+  assert.equal(invalidResponse.status, 400);
+  assert.equal(invalidPayload.reason, '休息时间配置校验失败');
+  assert.deepEqual(invalidPayload.errors, [
+    { path: ['restPeriods', 0, 'userIds'], message: '请选择一线技术支持人员' },
+    { path: ['restPeriods', 0, 'endsAt'], message: '结束时间必须晚于开始时间' }
+  ]);
+});
+
+function buildRequest({ userId = 'u_admin_1', body = {} } = {}) {
+  return {
+    cookies: {
+      get(name) {
+        if (name !== 'itsm_session_user_id' || !userId) return undefined;
+        return { value: userId };
+      }
+    },
+    async json() {
+      return body;
+    }
+  };
+}

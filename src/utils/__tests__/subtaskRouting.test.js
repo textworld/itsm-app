@@ -13,10 +13,13 @@ test('创建子任务可指定所有一线和二线技术支持', () => {
 
   assert.deepEqual(
     assignees.map((assignee) => assignee.id),
-    ['u_l1_1', 'u_l1_2', 'u_l1_3', 'u_l2_1', 'u_l2_2', 'u_l2_3']
+    [
+      ...Array.from({ length: 23 }, (_, index) => `u_l1_${index + 1}`),
+      ...Array.from({ length: 23 }, (_, index) => `u_l2_${index + 1}`)
+    ]
   );
-  assert.equal(assignees.filter((assignee) => assignee.role === ROLES.L1).length, 3);
-  assert.equal(assignees.filter((assignee) => assignee.role === ROLES.L2).length, 3);
+  assert.equal(assignees.filter((assignee) => assignee.role === ROLES.L1).length, 23);
+  assert.equal(assignees.filter((assignee) => assignee.role === ROLES.L2).length, 23);
 });
 
 test('系统默认子任务派工仍保留原有路由', () => {

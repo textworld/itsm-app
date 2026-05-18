@@ -1,25 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import { DEMO_LOGIN_ACCOUNTS, getDemoLoginAccountsByRole } from '../demoAccounts.js';
 import { ROLES } from '../../../constants/roles.js';
 
-test('登录页一键登录账号覆盖每个角色的 3 个初始账号', () => {
+const initialUsers = JSON.parse(
+  fs.readFileSync(path.join(process.cwd(), 'src', 'mock', 'initialUsers.json'), 'utf8')
+);
+
+test('登录页一键登录账号覆盖全部初始账号', () => {
   assert.deepEqual(
     DEMO_LOGIN_ACCOUNTS.map((account) => account.username),
-    ['test_user', 'test_user2', 'test_user3', 'support1', 'support2', 'support3', 'ops1', 'ops2', 'ops3', 'admin']
+    initialUsers.map((user) => user.username)
   );
 
-  for (const role of [ROLES.REQUESTER, ROLES.L1, ROLES.L2]) {
+  for (const role of [ROLES.REQUESTER, ROLES.L1, ROLES.L2, ROLES.ADMIN]) {
     const accounts = getDemoLoginAccountsByRole(role);
+    const roleUsers = initialUsers.filter((user) => user.role === role);
 
-    assert.equal(accounts.length, 3);
+    assert.equal(accounts.length, roleUsers.length);
     assert.ok(accounts.every((account) => account.role === role));
     assert.ok(accounts.every((account) => account.password === '123456'));
   }
-
-  const adminAccounts = getDemoLoginAccountsByRole(ROLES.ADMIN);
-  assert.equal(adminAccounts.length, 1);
-  assert.equal(adminAccounts[0].username, 'admin');
-  assert.equal(adminAccounts[0].password, '123456');
 });

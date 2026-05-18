@@ -20,7 +20,12 @@ import {
   UserOutlined,
   HistoryOutlined,
   NodeIndexOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  DatabaseOutlined,
+  CalendarOutlined,
+  TeamOutlined,
+  CoffeeOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -74,6 +79,35 @@ export default function AppLayout({ children }) {
         label: <Link href="/tickets/history">历史工单</Link>
       });
     }
+    if (user?.role === ROLES.ADMIN) {
+      base.push({
+        key: 'admin-management',
+        icon: <SettingOutlined />,
+        label: '后台管理',
+        children: [
+          {
+            key: '/admin/users',
+            icon: <TeamOutlined />,
+            label: <Link href="/admin/users">账号管理</Link>
+          },
+          {
+            key: '/dictionaries/insurance-types',
+            icon: <DatabaseOutlined />,
+            label: <Link href="/dictionaries/insurance-types">险种词典</Link>
+          },
+          {
+            key: '/schedules',
+            icon: <CalendarOutlined />,
+            label: <Link href="/schedules">排班配置</Link>
+          },
+          {
+            key: '/support-rests',
+            icon: <CoffeeOutlined />,
+            label: <Link href="/support-rests">休息时间配置</Link>
+          }
+        ]
+      });
+    }
     base.push({
       key: '/state-machine',
       icon: <NodeIndexOutlined />,
@@ -85,6 +119,10 @@ export default function AppLayout({ children }) {
   const selectedKey = useMemo(() => {
     if (pathname.startsWith('/tickets/new')) return '/tickets/new';
     if (pathname.startsWith('/tickets/history')) return '/tickets/history';
+    if (pathname.startsWith('/admin/users')) return '/admin/users';
+    if (pathname.startsWith('/dictionaries/insurance-types')) return '/dictionaries/insurance-types';
+    if (pathname.startsWith('/schedules')) return '/schedules';
+    if (pathname.startsWith('/support-rests')) return '/support-rests';
     if (pathname.startsWith('/tickets')) return '/tickets';
     if (pathname.startsWith('/state-machine')) return '/state-machine';
     return '/tickets';
@@ -186,6 +224,14 @@ function pageTitle(key) {
       return '历史工单';
     case '/state-machine':
       return '工单流转规则';
+    case '/admin/users':
+      return '账号管理';
+    case '/dictionaries/insurance-types':
+      return '险种词典';
+    case '/schedules':
+      return '排班配置';
+    case '/support-rests':
+      return '休息时间配置';
     case '/tickets':
     default:
       return '工单列表';

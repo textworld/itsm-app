@@ -1,31 +1,25 @@
 import { ROLES } from '../constants/roles.js';
-
-const SAME_ROLE_ASSIGNEES = {
-  [ROLES.L1]: [
-    { id: 'u_l1_1', name: '李一线 (一线技术支持)' },
-    { id: 'u_l1_2', name: '周一线 (一线技术支持)' },
-    { id: 'u_l1_3', name: '吴一线 (一线技术支持)' }
-  ],
-  [ROLES.L2]: [
-    { id: 'u_l2_1', name: '王二线 (二线运维)' },
-    { id: 'u_l2_2', name: '郑二线 (二线运维)' },
-    { id: 'u_l2_3', name: '孙二线 (二线运维)' }
-  ]
-};
+import { getSupportAssigneesByRole } from '../constants/supportAccounts.js';
 
 export function listSameRoleAssignees(role) {
-  return SAME_ROLE_ASSIGNEES[role] || [];
+  if (![ROLES.L1, ROLES.L2].includes(role)) return [];
+  return getSupportAssigneesByRole(role).map(({ id, name }) => ({ id, name }));
 }
 
-export function routeTechTransferAssignee(role, excludedUserId = null) {
+export function routeTechTransferAssignee(role, excludedUserId = null, assignees = listSameRoleAssignees(role)) {
   return (
-    listSameRoleAssignees(role).find((assignee) => assignee.id !== excludedUserId) ||
+    assignees.find((assignee) => assignee.id !== excludedUserId) ||
     { id: null, name: null }
   );
 }
 
-export function routeRandomTechTransferAssignee(role, excludedUserId = null, random = Math.random) {
-  const candidates = listSameRoleAssignees(role).filter((assignee) => assignee.id !== excludedUserId);
+export function routeRandomTechTransferAssignee(
+  role,
+  excludedUserId = null,
+  random = Math.random,
+  assignees = listSameRoleAssignees(role)
+) {
+  const candidates = assignees.filter((assignee) => assignee.id !== excludedUserId);
   if (!candidates.length) {
     return { id: null, name: null };
   }

@@ -6,6 +6,11 @@ import { routeRandomTechTransferAssignee } from '../utils/techTransferRouting.js
 import { TICKET_ACTIONS, canPerformTicketAction } from '../permissions/ticketPermissionMatrix.js';
 import { getDb, reseedDb } from './db.js';
 
+const USER_AVAILABILITY_STATUS = {
+  ONLINE: 'ONLINE',
+  OFFLINE: 'OFFLINE'
+};
+
 function parseRow(row) {
   return row ? JSON.parse(row.data) : null;
 }
@@ -106,6 +111,10 @@ export function dispatchTicketEvent(ticketId, event, payload, user) {
   }
 
   const nextPayload = prepareTicketEventPayload(ticket, event, payload, user);
+  const assignmentCheck = validateTicketAssignmentTargets(ticket, event, nextPayload, user);
+  if (!assignmentCheck.ok) {
+    return assignmentCheck;
+  }
   const check = canTransition(ticket, event, user, nextPayload);
   if (!check.ok) {
     return { ok: false, reason: check.reason };
@@ -193,6 +202,92 @@ export function findUserByCredentials(username, password, role) {
 
   const user = parseRow(row);
   return sanitizeUser(user);
+}
+
+export function listUsers() {
+  const db = getDb();
+  return db
+    .prepare('SELECT data FROM users ORDER BY username ASC')
+    .all()
+    .map(parseRow)
+    .map(sanitizeUser);
+}
+
+export function listAssignableSupportUsers(role = null) {
+  return listActiveSupportAssignees(role).map((user) => ({
+    ...user,
+    availabilityStatus: USER_AVAILABILITY_STATUS.ONLINE
+  }));
+}
+
+export function updateUserAvailability(userId, availabilityStatus) {
+  const normalizedStatus = normalizeAvailabilityStatus(availabilityStatus);
+  if (!normalizedStatus) {
+    return { ok: false, reason: 'Invalid account availability status' };
+  }
+
+  const db = getDb();
+  const row = db.prepare('SELECT data FROM users WHERE id = ?').get(userId);
+  if (!row) {
+    return { ok: false, reason: 'Account does not exist' };
+  }
+
+  const user = {
+    ...parseRow(row),
+    availabilityStatus: normalizedStatus
+  };
+  db.prepare('UPDATE users SET data = @data WHERE id = @id').run({
+    id: user.id,
+    data: JSON.stringify(user)
+  });
+
+  return { ok: true, user: sanitizeUser(user) };
+}
+
+export function createUserAccount(input = {}, options = {}) {
+  const username = String(input.username || '').trim();
+  const password = String(input.password || '');
+  const name = String(input.name || username || '').trim();
+  const role = String(input.role || '').trim();
+  const allowAdmin = options.allowAdmin === true;
+
+  if (!username) {
+    return { ok: false, reason: '请输入账号' };
+  }
+  if (password.length < 6) {
+    return { ok: false, reason: '密码至少 6 位' };
+  }
+  if (!['REQUESTER', 'L1', 'L2', 'ADMIN'].includes(role)) {
+    return { ok: false, reason: '请选择人员类型' };
+  }
+  if (role === 'ADMIN' && !allowAdmin) {
+    return { ok: false, reason: '公开注册不能创建管理员账号' };
+  }
+  if (listUsers().some((user) => user.username === username)) {
+    return { ok: false, reason: '账号已存在' };
+  }
+
+  const user = {
+    id: shortId('user'),
+    username,
+    name,
+    role,
+    department: '',
+    availabilityStatus: USER_AVAILABILITY_STATUS.ONLINE
+  };
+
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO users (id, username, password, data)
+    VALUES (@id, @username, @password, @data)
+  `).run({
+    id: user.id,
+    username,
+    password,
+    data: JSON.stringify(user)
+  });
+
+  return { ok: true, user: sanitizeUser(user) };
 }
 
 export function getUserById(userId) {
@@ -299,7 +394,13 @@ function prepareTicketEventPayload(ticket, event, payload = {}, user = null) {
   }
 
   if (event === EVENTS.TRANSFER_TECH && shouldAutoAssignTechTransfer(payload)) {
-    const assignee = routeRandomTechTransferAssignee(payload.targetRole || user?.role, user?.id);
+    const targetRole = payload.targetRole || user?.role;
+    const assignee = routeRandomTechTransferAssignee(
+      targetRole,
+      user?.id,
+      Math.random,
+      listActiveSupportAssignees(targetRole)
+    );
     return {
       ...payload,
       assigneeId: assignee.id,
@@ -312,6 +413,63 @@ function prepareTicketEventPayload(ticket, event, payload = {}, user = null) {
 
 function shouldAutoAssignTechTransfer(payload = {}) {
   return payload.autoAssign === true || (payload.communicated === false && !payload.assigneeId);
+}
+
+function validateTicketAssignmentTargets(ticket, event, payload = {}, user = null) {
+  const assignments = getTicketAssignmentTargets(ticket, event, payload, user);
+  for (const assignment of assignments) {
+    if (!assignment.assigneeId) {
+      if (assignment.required) {
+        return { ok: false, reason: 'No online assignee is available' };
+      }
+      continue;
+    }
+
+    if (!isUserAssignable(assignment.assigneeId, assignment.role)) {
+      return { ok: false, reason: 'Offline accounts cannot be assigned tickets' };
+    }
+  }
+  return { ok: true };
+}
+
+function getTicketAssignmentTargets(ticket, event, payload = {}, user = null) {
+  if (event === EVENTS.ACCEPT) {
+    return [{ assigneeId: payload.assigneeL1Id || user?.id, role: 'L1', required: true }];
+  }
+  if (event === EVENTS.TRANSFER_TECH) {
+    return [{ assigneeId: payload.assigneeId, role: payload.targetRole || user?.role, required: payload.autoAssign === true }];
+  }
+  if (event === EVENTS.CREATE_SUBTASK) {
+    return [{ assigneeId: payload.subtask?.assigneeId, role: payload.subtask?.assigneeRole }];
+  }
+  if (event === EVENTS.CLAIM_SUBTASK) {
+    return [{ assigneeId: user?.id, role: user?.role, required: true }];
+  }
+  if (event === EVENTS.TRANSFER_SUBTASK) {
+    return [{ assigneeId: payload.assigneeId, role: payload.assigneeRole }];
+  }
+  if (event === EVENTS.L1_REVIEW) {
+    const assigneeId = payload.assigneeL2Id || user?.id;
+    return ticket?.assigneeL2Id === assigneeId
+      ? []
+      : [{ assigneeId, role: 'L2', required: true }];
+  }
+  return [];
+}
+
+function listActiveSupportAssignees(role) {
+  return listUsers()
+    .filter((user) => ['L1', 'L2'].includes(user.role))
+    .filter((user) => !role || user.role === role)
+    .filter((user) => isUserOnline(user))
+    .map(({ id, name, role: userRole }) => ({ id, name, role: userRole }));
+}
+
+function isUserAssignable(userId, role = null) {
+  const user = getUserById(userId);
+  if (!user) return false;
+  if (role && user.role !== role) return false;
+  return isUserOnline(user);
 }
 
 function syncParentSubtaskSummary(subtaskTicket) {
@@ -370,6 +528,19 @@ function sanitizeUser(user) {
     username: user.username,
     name: user.name,
     role: user.role,
-    department: user.department
+    department: user.department,
+    availabilityStatus: normalizeAvailabilityStatus(user.availabilityStatus) || USER_AVAILABILITY_STATUS.ONLINE
   };
+}
+
+function isUserOnline(user) {
+  return (normalizeAvailabilityStatus(user?.availabilityStatus) || USER_AVAILABILITY_STATUS.ONLINE) === USER_AVAILABILITY_STATUS.ONLINE;
+}
+
+function normalizeAvailabilityStatus(value) {
+  const status = String(value || '').trim().toUpperCase();
+  if (status === USER_AVAILABILITY_STATUS.ONLINE || status === USER_AVAILABILITY_STATUS.OFFLINE) {
+    return status;
+  }
+  return '';
 }
