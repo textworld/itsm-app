@@ -43,7 +43,7 @@ function summarizeUsers(group = {}, usersById) {
   for (const team of group.insuranceTeams || []) {
     const teamNames = userIdsToNames(team.userIds, usersById);
     if (teamNames.length) {
-      summaries.push(`${team.name || '险种小组'}：${teamNames.join('、')}`);
+      summaries.push(`险种排班：${teamNames.join('、')}`);
     }
   }
 

@@ -210,10 +210,6 @@ function validateInsuranceTeams(group, groupIndex, userById, insuranceByCode, er
   const teamInsuranceOwner = new Map();
 
   group.insuranceTeams.forEach((team, teamIndex) => {
-    if (!team.name) {
-      errors.push({ path: ['groups', groupIndex, 'insuranceTeams', teamIndex, 'name'], message: '请输入险种小组名称' });
-    }
-
     for (const userId of team.userIds) {
       if (!userById.has(userId)) {
         errors.push({ path: ['groups', groupIndex, 'insuranceTeams', teamIndex, 'userIds'], message: `人员 ${userId} 不是可选一线人员` });

@@ -123,7 +123,6 @@ export default function ScheduleDetailPage({ mode = 'edit', groupId = null }) {
         ...(previous.insuranceTeams || []),
         {
           id: localId('team'),
-          name: '',
           userIds: [],
           insuranceTypeCodes: []
         }
@@ -318,15 +317,7 @@ export default function ScheduleDetailPage({ mode = 'edit', groupId = null }) {
               {(group.insuranceTeams || []).map((team, teamIndex) => (
                 <div key={team.id} className="schedule-team-panel">
                   <Row gutter={[12, 12]} align="middle">
-                    <Col xs={24} md={6}>
-                      <Typography.Text strong>小组名称</Typography.Text>
-                      <Input
-                        value={team.name}
-                        placeholder="例如 医疗险小组"
-                        onChange={(event) => updateInsuranceTeam(teamIndex, { name: event.target.value })}
-                      />
-                    </Col>
-                    <Col xs={24} md={8}>
+                    <Col xs={24} md={10}>
                       <Typography.Text strong>人员</Typography.Text>
                       <Select
                         mode="multiple"
@@ -337,7 +328,7 @@ export default function ScheduleDetailPage({ mode = 'edit', groupId = null }) {
                         style={{ width: '100%' }}
                       />
                     </Col>
-                    <Col xs={24} md={8}>
+                    <Col xs={24} md={10}>
                       <Typography.Text strong>险种</Typography.Text>
                       <Select
                         mode="multiple"

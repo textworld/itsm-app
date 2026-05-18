@@ -153,6 +153,32 @@ test('schedule validation rejects duplicate insurance and users within one group
   ]);
 });
 
+test('schedule validation allows insurance teams without names', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: 'ERP 组',
+          systemCodes: ['ERP_CORE'],
+          baseSchedule: { userIds: ['u_l1_1'] },
+          insuranceTeams: [
+            {
+              id: 'team_1',
+              userIds: ['u_l1_2'],
+              insuranceTypeCodes: ['MEDICAL']
+            }
+          ]
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
 test('schedule validation rejects non-L1 users and disabled insurance references', () => {
   const result = validateScheduleConfig(
     {

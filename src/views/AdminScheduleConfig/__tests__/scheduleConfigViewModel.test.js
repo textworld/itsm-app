@@ -49,7 +49,7 @@ test('buildScheduleGroupRow maps systems and summarizes base and team users', ()
   assert.equal(row.key, 'grp_erp');
   assert.equal(row.name, 'ERP 排班组');
   assert.equal(row.systemSummary, 'ERP 核心系统');
-  assert.equal(row.userSummary, '基础：张一线；医疗险小组：李一线');
+  assert.equal(row.userSummary, '基础：张一线；险种排班：李一线');
 });
 
 test('filterScheduleGroups matches system labels and codes', () => {
