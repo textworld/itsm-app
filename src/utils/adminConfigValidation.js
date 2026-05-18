@@ -50,6 +50,18 @@ export function normalizeScheduleConfig(input = {}) {
                 userIds: uniqueStrings(team.userIds),
                 insuranceTypeCodes: uniqueStrings(team.insuranceTypeCodes)
               }))
+            : [],
+          flexibleRules: Array.isArray(group.flexibleRules)
+            ? group.flexibleRules.map((rule, ruleIndex) => ({
+                id: String(rule.id || `flex_${groupIndex + 1}_${ruleIndex + 1}`),
+                systemCodes: uniqueStrings(rule.systemCodes),
+                assignees: Array.isArray(rule.assignees)
+                  ? rule.assignees.map((assignee) => ({
+                      userId: String(assignee.userId || '').trim(),
+                      ratio: Number(assignee.ratio)
+                    }))
+                  : []
+              }))
             : []
         }))
       : []
@@ -92,6 +104,7 @@ export function validateScheduleConfig(input = {}, context = {}) {
     }
 
     validateInsuranceTeams(group, groupIndex, userById, insuranceByCode, errors);
+    validateFlexibleRules(group, groupIndex, systemsByCode, userById, errors);
   });
 
   return { ok: errors.length === 0, errors, value };
@@ -229,6 +242,66 @@ function validateInsuranceTeams(group, groupIndex, userById, insuranceByCode, er
         teamInsuranceOwner.set(insuranceCode, teamIndex);
       }
     }
+  });
+}
+
+function validateFlexibleRules(group, groupIndex, systemsByCode, userById, errors) {
+  const groupSystemCodes = new Set(group.systemCodes);
+  const flexibleSystemOwner = new Map();
+
+  group.flexibleRules.forEach((rule, ruleIndex) => {
+    const ruleUserOwner = new Map();
+
+    if (!rule.systemCodes.length) {
+      errors.push({ path: ['groups', groupIndex, 'flexibleRules', ruleIndex, 'systemCodes'], message: '灵活规则至少选择一个系统' });
+    }
+
+    if (!rule.assignees.length) {
+      errors.push({ path: ['groups', groupIndex, 'flexibleRules', ruleIndex, 'assignees'], message: '灵活规则至少配置一名人员' });
+    }
+
+    for (const systemCode of rule.systemCodes) {
+      const system = systemsByCode.get(systemCode);
+      if (!system) {
+        errors.push({ path: ['groups', groupIndex, 'flexibleRules', ruleIndex, 'systemCodes'], message: `系统 ${systemCode} 不存在` });
+        continue;
+      }
+      if (!groupSystemCodes.has(systemCode)) {
+        errors.push({ path: ['groups', groupIndex, 'flexibleRules', ruleIndex, 'systemCodes'], message: `${system.label}不在当前排班规则系统范围内` });
+        continue;
+      }
+      if (flexibleSystemOwner.has(systemCode)) {
+        errors.push({ path: ['groups', groupIndex, 'flexibleRules', ruleIndex, 'systemCodes'], message: `${system.label}已出现在本分组其他灵活规则中` });
+        continue;
+      }
+      flexibleSystemOwner.set(systemCode, ruleIndex);
+    }
+
+    rule.assignees.forEach((assignee, assigneeIndex) => {
+      const user = userById.get(assignee.userId);
+      const userName = user?.name || assignee.userId || '人员';
+
+      if (!user) {
+        errors.push({
+          path: ['groups', groupIndex, 'flexibleRules', ruleIndex, 'assignees', assigneeIndex, 'userId'],
+          message: `人员 ${assignee.userId} 不是可选一线人员`
+        });
+      } else if (ruleUserOwner.has(assignee.userId)) {
+        errors.push({
+          path: ['groups', groupIndex, 'flexibleRules', ruleIndex, 'assignees', assigneeIndex, 'userId'],
+          message: `${user.name} 已出现在本灵活规则中`
+        });
+      } else {
+        ruleUserOwner.set(assignee.userId, assigneeIndex);
+      }
+
+      if (!Number.isFinite(assignee.ratio) || assignee.ratio <= 0) {
+        errors.push({
+          path: ['groups', groupIndex, 'flexibleRules', ruleIndex, 'assignees', assigneeIndex, 'ratio'],
+          message: `${userName} 的派单比例必须大于 0`
+        });
+      }
+    });
   });
 }
 

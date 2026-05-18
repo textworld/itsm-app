@@ -32,6 +32,15 @@ const groups = [
         userIds: ['u_l1_2'],
         insuranceTypeCodes: ['MEDICAL']
       }
+    ],
+    flexibleRules: [
+      {
+        id: 'flex_erp',
+        systemCodes: ['ERP_CORE'],
+        assignees: [
+          { userId: 'u_l1_3', ratio: 60 }
+        ]
+      }
     ]
   },
   {
@@ -49,7 +58,7 @@ test('buildScheduleGroupRow maps systems and summarizes base and team users', ()
   assert.equal(row.key, 'grp_erp');
   assert.equal(row.name, 'ERP 排班组');
   assert.equal(row.systemSummary, 'ERP 核心系统');
-  assert.equal(row.userSummary, '基础：张一线；险种排班：李一线');
+  assert.equal(row.userSummary, '基础：张一线；险种排班：李一线；灵活规则：王一线(60)');
 });
 
 test('filterScheduleGroups matches system labels and codes', () => {
@@ -77,6 +86,6 @@ test('filterScheduleGroups matches base and insurance team user names, usernames
 
   assert.deepEqual(
     filterScheduleGroups(groups, { userKeyword: 'u_l1_3' }, context).map((group) => group.id),
-    ['grp_crm']
+    ['grp_erp', 'grp_crm']
   );
 });

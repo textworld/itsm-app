@@ -179,6 +179,97 @@ test('schedule validation allows insurance teams without names', () => {
   assert.deepEqual(result.errors, []);
 });
 
+test('schedule validation allows flexible rules with personnel ratios that do not total 100', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: 'ERP 组',
+          systemCodes: ['ERP_CORE', 'CRM_CENTER'],
+          baseSchedule: { userIds: ['u_l1_1'] },
+          insuranceTeams: [],
+          flexibleRules: [
+            {
+              id: 'flex_1',
+              systemCodes: ['ERP_CORE'],
+              assignees: [
+                { userId: 'u_l1_1', ratio: 70 },
+                { userId: 'u_l1_2', ratio: 20 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.value.groups[0].flexibleRules, [
+    {
+      id: 'flex_1',
+      systemCodes: ['ERP_CORE'],
+      assignees: [
+        { userId: 'u_l1_1', ratio: 70 },
+        { userId: 'u_l1_2', ratio: 20 }
+      ]
+    }
+  ]);
+});
+
+test('schedule validation rejects invalid flexible rule systems, duplicate coverage, users, and ratios', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: 'ERP 组',
+          systemCodes: ['ERP_CORE'],
+          baseSchedule: { userIds: ['u_l1_1'] },
+          insuranceTeams: [],
+          flexibleRules: [
+            {
+              id: 'flex_1',
+              systemCodes: [],
+              assignees: []
+            },
+            {
+              id: 'flex_2',
+              systemCodes: ['ERP_CORE', 'CRM_CENTER'],
+              assignees: [
+                { userId: 'u_l1_1', ratio: 0 },
+                { userId: 'u_l1_1', ratio: 10 },
+                { userId: 'u_l2_1', ratio: 5 }
+              ]
+            },
+            {
+              id: 'flex_3',
+              systemCodes: ['ERP_CORE'],
+              assignees: [
+                { userId: 'u_l1_2', ratio: 15 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    { path: ['groups', 0, 'flexibleRules', 0, 'systemCodes'], message: '灵活规则至少选择一个系统' },
+    { path: ['groups', 0, 'flexibleRules', 0, 'assignees'], message: '灵活规则至少配置一名人员' },
+    { path: ['groups', 0, 'flexibleRules', 1, 'systemCodes'], message: 'CRM 客户管理系统不在当前排班规则系统范围内' },
+    { path: ['groups', 0, 'flexibleRules', 1, 'assignees', 0, 'ratio'], message: '李一线 的派单比例必须大于 0' },
+    { path: ['groups', 0, 'flexibleRules', 1, 'assignees', 1, 'userId'], message: '李一线 已出现在本灵活规则中' },
+    { path: ['groups', 0, 'flexibleRules', 1, 'assignees', 2, 'userId'], message: '人员 u_l2_1 不是可选一线人员' },
+    { path: ['groups', 0, 'flexibleRules', 2, 'systemCodes'], message: 'ERP 核心系统已出现在本分组其他灵活规则中' }
+  ]);
+});
+
 test('schedule validation rejects non-L1 users and disabled insurance references', () => {
   const result = validateScheduleConfig(
     {

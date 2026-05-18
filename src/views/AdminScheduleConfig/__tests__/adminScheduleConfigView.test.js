@@ -42,8 +42,12 @@ test('schedule detail view saves one editable group through admin API', () => {
   assert.match(detailSource, /validateScheduleConfig/);
   assert.match(detailSource, /method: 'PUT'/);
   assert.match(detailSource, /addInsuranceTeam/);
+  assert.match(detailSource, /addFlexibleRule/);
   assert.match(detailSource, /基础排班/);
   assert.match(detailSource, /险种排班小组/);
+  assert.match(detailSource, /灵活规则/);
+  assert.match(detailSource, /派单比例/);
+  assert.match(detailSource, /InputNumber/);
   assert.doesNotMatch(detailSource, /小组名称/);
   assert.doesNotMatch(detailSource, /team\.name/);
   assert.match(detailSource, /\/schedules/);

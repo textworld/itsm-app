@@ -47,6 +47,18 @@ function summarizeUsers(group = {}, usersById) {
     }
   }
 
+  const flexibleAssigneeNames = (group.flexibleRules || [])
+    .flatMap((rule) => rule.assignees || [])
+    .map((assignee) => {
+      const name = usersById.get(assignee.userId)?.name || assignee.userId;
+      return name ? `${name}(${assignee.ratio})` : null;
+    })
+    .filter(Boolean);
+
+  if (flexibleAssigneeNames.length) {
+    summaries.push(`灵活规则：${flexibleAssigneeNames.join('、')}`);
+  }
+
   return summaries.length ? summaries.join('；') : '未配置人员';
 }
 
@@ -62,7 +74,8 @@ function getGroupSystemSearchText(group = {}, systemsByCode) {
 function getGroupUserSearchText(group = {}, usersById) {
   const userIds = [
     ...(group.baseSchedule?.userIds || []),
-    ...(group.insuranceTeams || []).flatMap((team) => team.userIds || [])
+    ...(group.insuranceTeams || []).flatMap((team) => team.userIds || []),
+    ...(group.flexibleRules || []).flatMap((rule) => (rule.assignees || []).map((assignee) => assignee.userId))
   ];
 
   return normalizeKeyword(

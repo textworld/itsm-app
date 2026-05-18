@@ -11,6 +11,7 @@ import {
   Col,
   Divider,
   Input,
+  InputNumber,
   Popconfirm,
   Row,
   Select,
@@ -143,6 +144,86 @@ export default function ScheduleDetailPage({ mode = 'edit', groupId = null }) {
     setGroup((previous) => ({
       ...previous,
       insuranceTeams: (previous.insuranceTeams || []).filter((_, currentTeamIndex) => currentTeamIndex !== teamIndex)
+    }));
+  };
+
+  const addFlexibleRule = () => {
+    setGroup((previous) => ({
+      ...previous,
+      flexibleRules: [
+        ...(previous.flexibleRules || []),
+        {
+          id: localId('flex'),
+          systemCodes: [],
+          assignees: []
+        }
+      ]
+    }));
+  };
+
+  const updateFlexibleRule = (ruleIndex, patch) => {
+    setGroup((previous) => ({
+      ...previous,
+      flexibleRules: (previous.flexibleRules || []).map((rule, currentRuleIndex) =>
+        currentRuleIndex === ruleIndex ? { ...rule, ...patch } : rule
+      )
+    }));
+  };
+
+  const removeFlexibleRule = (ruleIndex) => {
+    setGroup((previous) => ({
+      ...previous,
+      flexibleRules: (previous.flexibleRules || []).filter((_, currentRuleIndex) => currentRuleIndex !== ruleIndex)
+    }));
+  };
+
+  const addFlexibleAssignee = (ruleIndex) => {
+    setGroup((previous) => ({
+      ...previous,
+      flexibleRules: (previous.flexibleRules || []).map((rule, currentRuleIndex) =>
+        currentRuleIndex === ruleIndex
+          ? {
+              ...rule,
+              assignees: [
+                ...(rule.assignees || []),
+                {
+                  userId: '',
+                  ratio: 1
+                }
+              ]
+            }
+          : rule
+      )
+    }));
+  };
+
+  const updateFlexibleAssignee = (ruleIndex, assigneeIndex, patch) => {
+    setGroup((previous) => ({
+      ...previous,
+      flexibleRules: (previous.flexibleRules || []).map((rule, currentRuleIndex) =>
+        currentRuleIndex === ruleIndex
+          ? {
+              ...rule,
+              assignees: (rule.assignees || []).map((assignee, currentAssigneeIndex) =>
+                currentAssigneeIndex === assigneeIndex ? { ...assignee, ...patch } : assignee
+              )
+            }
+          : rule
+      )
+    }));
+  };
+
+  const removeFlexibleAssignee = (ruleIndex, assigneeIndex) => {
+    setGroup((previous) => ({
+      ...previous,
+      flexibleRules: (previous.flexibleRules || []).map((rule, currentRuleIndex) =>
+        currentRuleIndex === ruleIndex
+          ? {
+              ...rule,
+              assignees: (rule.assignees || []).filter((_, currentAssigneeIndex) => currentAssigneeIndex !== assigneeIndex)
+            }
+          : rule
+      )
     }));
   };
 
@@ -353,6 +434,78 @@ export default function ScheduleDetailPage({ mode = 'edit', groupId = null }) {
                 新增险种小组
               </Button>
             </Space>
+
+            <Divider orientation="left">灵活规则</Divider>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              {(group.flexibleRules || []).map((rule, ruleIndex) => (
+                <div key={rule.id} className="schedule-team-panel">
+                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                    <Row gutter={[12, 12]} align="middle">
+                      <Col xs={24} md={20}>
+                        <Typography.Text strong>系统范围</Typography.Text>
+                        <Select
+                          mode="multiple"
+                          value={rule.systemCodes}
+                          options={systemOptions}
+                          placeholder="请选择适用系统"
+                          onChange={(systemCodes) => updateFlexibleRule(ruleIndex, { systemCodes })}
+                          style={{ width: '100%' }}
+                        />
+                      </Col>
+                      <Col xs={24} md={4}>
+                        <Button
+                          danger
+                          icon={<DeleteOutlined />}
+                          onClick={() => removeFlexibleRule(ruleIndex)}
+                        >
+                          删除规则
+                        </Button>
+                      </Col>
+                    </Row>
+
+                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      {(rule.assignees || []).map((assignee, assigneeIndex) => (
+                        <Row key={`${rule.id}_${assigneeIndex}`} gutter={[12, 12]} align="middle">
+                          <Col xs={24} md={10}>
+                            <Typography.Text strong>人员</Typography.Text>
+                            <Select
+                              value={assignee.userId || undefined}
+                              options={userOptions}
+                              placeholder="请选择一线人员"
+                              onChange={(userId) => updateFlexibleAssignee(ruleIndex, assigneeIndex, { userId })}
+                              style={{ width: '100%' }}
+                            />
+                          </Col>
+                          <Col xs={24} md={10}>
+                            <Typography.Text strong>派单比例</Typography.Text>
+                            <InputNumber
+                              min={0}
+                              value={assignee.ratio}
+                              placeholder="请输入派单比例"
+                              onChange={(ratio) => updateFlexibleAssignee(ruleIndex, assigneeIndex, { ratio })}
+                              style={{ width: '100%' }}
+                            />
+                          </Col>
+                          <Col xs={24} md={4}>
+                            <Button
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => removeFlexibleAssignee(ruleIndex, assigneeIndex)}
+                            />
+                          </Col>
+                        </Row>
+                      ))}
+                      <Button icon={<PlusOutlined />} onClick={() => addFlexibleAssignee(ruleIndex)}>
+                        新增人员比例
+                      </Button>
+                    </Space>
+                  </Space>
+                </div>
+              ))}
+              <Button icon={<PlusOutlined />} onClick={addFlexibleRule}>
+                新增灵活规则
+              </Button>
+            </Space>
           </Card>
         )}
       </Spin>
@@ -366,7 +519,8 @@ function createEmptyGroup() {
     name: '',
     systemCodes: [],
     baseSchedule: { userIds: [] },
-    insuranceTeams: []
+    insuranceTeams: [],
+    flexibleRules: []
   };
 }
 
