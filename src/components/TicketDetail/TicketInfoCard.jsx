@@ -1,5 +1,6 @@
 import React from 'react';
-import { Button, Card, Descriptions, Typography, Space, Divider, Tag } from 'antd';
+import { Alert, Button, Card, Descriptions, Typography, Space, Divider, Tag } from 'antd';
+import Link from 'next/link';
 import StatusTag from '../common/StatusTag.jsx';
 import AttachmentList from '../common/AttachmentList.jsx';
 import RichContentPreview from '../common/RichContentPreview.jsx';
@@ -24,28 +25,40 @@ export default function TicketInfoCard({ ticket }) {
 
   if (!ticket) return null;
   const showTechnicalTags = user?.role !== ROLES.REQUESTER;
+  const isAwaitingOaApproval = getSupportStatus(ticket) === STATUS.APPROVING;
+  const approvalRecords = ticket.oaApplication?.approvalRecords || [];
 
   return (
     <Card
       title="工单基本信息"
       extra={<DraftTicketEditButton ticket={ticket} />}
       >
-      <div className="ticket-assignee-summary">
-        <div className="ticket-assignee-summary-item">
-          <Typography.Text type="secondary">一线处理人</Typography.Text>
-          <Typography.Text strong className="ticket-assignee-highlight">
-            {ticket.assigneeL1Name || '-'}
-          </Typography.Text>
-        </div>
-        {user?.role !== ROLES.REQUESTER && (
+      {isAwaitingOaApproval ? (
+        <Alert
+          type="info"
+          showIcon
+          message="OA通过后，才能进入技术支持处理环节。"
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
+      {!isAwaitingOaApproval && (
+        <div className="ticket-assignee-summary">
           <div className="ticket-assignee-summary-item">
-            <Typography.Text type="secondary">二线处理人</Typography.Text>
+            <Typography.Text type="secondary">一线处理人</Typography.Text>
             <Typography.Text strong className="ticket-assignee-highlight">
-              {ticket.assigneeL2Name || '-'}
+              {ticket.assigneeL1Name || '-'}
             </Typography.Text>
           </div>
-        )}
-      </div>
+          {user?.role !== ROLES.REQUESTER && (
+            <div className="ticket-assignee-summary-item">
+              <Typography.Text type="secondary">二线处理人</Typography.Text>
+              <Typography.Text strong className="ticket-assignee-highlight">
+                {ticket.assigneeL2Name || '-'}
+              </Typography.Text>
+            </div>
+          )}
+        </div>
+      )}
       <Descriptions column={2} size="small" bordered>
         <Descriptions.Item label="工单编号">{ticket.id}</Descriptions.Item>
         <Descriptions.Item label="提单人状态">
@@ -94,6 +107,59 @@ export default function TicketInfoCard({ ticket }) {
           {formatDateTime(ticket.updatedAt)}
         </Descriptions.Item>
       </Descriptions>
+
+      {ticket.oaApplication && (
+        <>
+          <Divider />
+          <Typography.Title level={5}>OA 申请单</Typography.Title>
+          <Descriptions column={2} size="small" bordered>
+            <Descriptions.Item label="OA 编号">
+              {ticket.oaApplication.oaId ? (
+                <Link href={`/approvals/${ticket.oaApplication.oaId}`}>
+                  审批详情 {ticket.oaApplication.oaId}
+                </Link>
+              ) : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="审批状态">
+              {ticket.oaApplication.status || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="创建时间">
+              {formatDateTime(ticket.oaApplication.createdAt)}
+            </Descriptions.Item>
+            <Descriptions.Item label="更新时间">
+              {formatDateTime(ticket.oaApplication.updatedAt)}
+            </Descriptions.Item>
+            <Descriptions.Item label="锁定状态">
+              {ticket.oaLocked ? '已锁定' : '未锁定'}
+            </Descriptions.Item>
+            <Descriptions.Item label="正式工单">
+              {ticket.formalTicketCreated ? '已生成' : '未生成'}
+            </Descriptions.Item>
+          </Descriptions>
+          {approvalRecords.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <Typography.Text strong>审批记录</Typography.Text>
+              {approvalRecords.map((record) => (
+                <Descriptions
+                  key={record.id || `${record.action}-${record.handledAt}`}
+                  column={2}
+                  size="small"
+                  bordered
+                  style={{ marginTop: 8 }}
+                >
+                  <Descriptions.Item label="动作">{record.action || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="处理人">{record.operatorName || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="处理时间">{formatDateTime(record.handledAt)}</Descriptions.Item>
+                  <Descriptions.Item label="意见">{record.opinion || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="附件" span={2}>
+                    <AttachmentList attachments={record.attachments || []} compact />
+                  </Descriptions.Item>
+                </Descriptions>
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
       <Divider />
       <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>

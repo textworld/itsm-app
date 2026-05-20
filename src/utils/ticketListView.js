@@ -38,6 +38,7 @@ export function buildView(tickets, user, options = {}) {
       tabs: [
         { key: 'ALL', label: '全部', data: mine, color: 'blue' },
         { key: STATUS.DRAFT, label: STATUS_LABELS[STATUS.DRAFT], data: byStatus(STATUS.DRAFT), color: 'default' },
+        { key: STATUS.APPROVING, label: STATUS_LABELS[STATUS.APPROVING], data: byStatus(STATUS.APPROVING), color: 'blue' },
         { key: STATUS.PENDING, label: STATUS_LABELS[STATUS.PENDING], data: byStatus(STATUS.PENDING), color: 'orange' },
         { key: STATUS.PROCESSING, label: STATUS_LABELS[STATUS.PROCESSING], data: byStatus(STATUS.PROCESSING), color: 'processing' },
         { key: STATUS.INFO_SUPPLEMENT, label: STATUS_LABELS[STATUS.INFO_SUPPLEMENT], data: byStatus(STATUS.INFO_SUPPLEMENT), color: 'cyan' },

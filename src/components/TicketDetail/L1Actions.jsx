@@ -6,6 +6,7 @@ import {
   Popconfirm,
   Modal,
   Form,
+  Input,
   Typography,
   Alert,
   Tooltip,
@@ -62,7 +63,9 @@ export default function L1Actions({ ticket }) {
   const [closureSummaryDoc, setClosureSummaryDoc] = useState(createEmptyRichTextDoc());
   const [closureSummaryError, setClosureSummaryError] = useState('');
   const [closureGenerating, setClosureGenerating] = useState(false);
+  const [dataFixSolutionOpen, setDataFixSolutionOpen] = useState(false);
   const [closureForm] = Form.useForm();
+  const [dataFixSolutionForm] = Form.useForm();
   const generationAbortRef = useRef(null);
   const generationIdRef = useRef(0);
   const generatedSummaryTextRef = useRef('');
@@ -152,6 +155,49 @@ export default function L1Actions({ ticket }) {
     }
     await pushSystemMessage('【系统】一线已将工单转交二线支持。');
     message.success('已请求二线支持，工单仍为处理中');
+  };
+
+  const handleSubmitDataFixSchemeReview = async () => {
+    const result = await dispatchEvent(
+      ticket.id,
+      EVENTS.SUBMIT_TO_OA,
+      {
+        action: 'SUBMIT_TO_OA',
+        operatorName: user.name,
+        __timelineRemark: '一线方案审核通过创建 OA'
+      },
+      user
+    );
+    if (!result.ok) {
+      message.error(result.reason || '创建 OA 失败');
+      return;
+    }
+    await pushSystemMessage('【系统】一线已审核通过数据修正方案并创建 OA 申请。');
+    message.success('方案审核通过创建 OA');
+  };
+
+  const handleConfirmDataFixSolution = async () => {
+    const values = await dataFixSolutionForm.validateFields();
+    const result = await dispatchEvent(
+      ticket.id,
+      EVENTS.CONFIRM_DATA_FIX_SOLUTION,
+      {
+        dataFixSolution: {
+          supportReason: String(values.supportReason || '').trim(),
+          supportSolution: String(values.supportSolution || '').trim()
+        },
+        __timelineRemark: '一线确认修正方案'
+      },
+      user
+    );
+    if (!result.ok) {
+      message.error(result.reason || '确认修正方案失败');
+      return;
+    }
+    await pushSystemMessage('【系统】一线已确认修正方案，等待提单人一键提交 OA。');
+    dataFixSolutionForm.resetFields();
+    setDataFixSolutionOpen(false);
+    message.success('已确认修正方案');
   };
 
   const handleSuspend = async () => {
@@ -329,6 +375,31 @@ export default function L1Actions({ ticket }) {
 
   const { status } = ticket;
 
+  if (status === STATUS.DATA_FIX_SCHEME_REVIEW) {
+    return (
+      <Card title="一线操作区 · 方案审核">
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message="等待一线审核数据修正方案"
+            description="提单人已提供修正方案或关联工单号，审核通过后将创建模拟 OA 申请。"
+          />
+          <Popconfirm
+            title="确认方案审核通过创建 OA？"
+            okText="确认"
+            cancelText="取消"
+            onConfirm={handleSubmitDataFixSchemeReview}
+          >
+            <Button type="primary" icon={<CheckOutlined />}>
+              方案审核通过创建 OA
+            </Button>
+          </Popconfirm>
+        </Space>
+      </Card>
+    );
+  }
+
   if (status === STATUS.PENDING) {
     return (
       <Card title="一线操作区 · 待受理">
@@ -398,6 +469,12 @@ export default function L1Actions({ ticket }) {
                   退回提单人-信息补充
                 </Button>
               </Popconfirm>
+
+              {ticket.originalToolType === 'DATA_FIX' && (
+                <Button onClick={() => setDataFixSolutionOpen(true)}>
+                  确认修正方案
+                </Button>
+              )}
 
               <Tooltip title={hasIncompleteSubtasks ? '存在子任务未完结' : ''}>
                 <span>
@@ -487,6 +564,32 @@ export default function L1Actions({ ticket }) {
                 disabled={closureGenerating}
                 placeholder="正在生成或手动填写工单处理总结，支持富文本和图片..."
               />
+            </Form.Item>
+          </Form>
+        </Modal>
+        <Modal
+          title="确认修正方案"
+          open={dataFixSolutionOpen}
+          onOk={handleConfirmDataFixSolution}
+          onCancel={() => setDataFixSolutionOpen(false)}
+          okText="确认"
+          cancelText="取消"
+          destroyOnClose
+        >
+          <Form form={dataFixSolutionForm} layout="vertical">
+            <Form.Item
+              name="supportReason"
+              label="修正原因"
+              rules={[{ required: true, message: '请填写修正原因' }]}
+            >
+              <Input.TextArea rows={3} maxLength={300} showCount />
+            </Form.Item>
+            <Form.Item
+              name="supportSolution"
+              label="修正方案"
+              rules={[{ required: true, message: '请填写修正方案' }]}
+            >
+              <Input.TextArea rows={4} maxLength={600} showCount />
             </Form.Item>
           </Form>
         </Modal>

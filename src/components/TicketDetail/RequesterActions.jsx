@@ -71,6 +71,64 @@ export default function RequesterActions({ ticket }) {
 
   const requesterStatus = getRequesterStatus(ticket);
 
+  if (requesterStatus === STATUS.OA_READY) {
+    const handleRequesterSubmitOa = async () => {
+      const result = await dispatchEvent(
+        ticket.id,
+        EVENTS.REQUESTER_SUBMIT_OA,
+        {
+          action: 'REQUESTER_SUBMIT_OA',
+          operatorName: user.name,
+          __timelineRemark: '提单人一键提交 OA'
+        },
+        user
+      );
+      if (!result.ok) {
+        message.error(result.reason || '提交 OA 失败');
+        return;
+      }
+      await addMessage(ticket.id, {
+        id: shortId('m'),
+        authorId: user.id,
+        authorName: user.name,
+        authorRole: user.role,
+        content: '【系统】提单人已一键提交 OA，工单进入审批中。',
+        attachments: [],
+        createdAt: new Date().toISOString()
+      });
+      message.success('已一键提交 OA');
+    };
+
+    return (
+      <Card title="提单人操作区">
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message="修正方案已确认"
+            description="请确认一线补充的原因和修正方案，确认后可一键提交 OA。"
+          />
+          <Button type="primary" icon={<CheckCircleOutlined />} onClick={handleRequesterSubmitOa}>
+            一键提交 OA
+          </Button>
+        </Space>
+      </Card>
+    );
+  }
+
+  if (ticket.oaLocked) {
+    return (
+      <Card title="提单人操作区">
+        <Alert
+          type="info"
+          showIcon
+          message="OA 审批中"
+          description="当前工单已进入 OA 审批并锁定，暂不能撤回、编辑或补充信息。"
+        />
+      </Card>
+    );
+  }
+
   if (requesterStatus === STATUS.DRAFT) {
     const handleStartDraftAiSubmit = () => {
       setAiDrawerOpen(true);

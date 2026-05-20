@@ -31,6 +31,19 @@ test('详情页处理人字段单独占行并使用醒目样式', () => {
   assert.doesNotMatch(descriptionsSource, /二线处理人/);
 });
 
+test('审批中工单详情隐藏处理人并展示 OA 通过后提示', () => {
+  assert.match(ticketInfoCardSource, /const isAwaitingOaApproval = getSupportStatus\(ticket\) === STATUS\.APPROVING/);
+  assert.match(ticketInfoCardSource, /OA通过后，才能进入技术支持处理环节。/);
+  assert.match(ticketInfoCardSource, /isAwaitingOaApproval \? \(/);
+  assert.match(ticketInfoCardSource, /!\s*isAwaitingOaApproval && \(/);
+});
+
+test('OA 申请单编号链接到审批详情页', () => {
+  assert.match(ticketInfoCardSource, /import Link from 'next\/link';/);
+  assert.match(ticketInfoCardSource, /href=\{`\/approvals\/\$\{ticket\.oaApplication\.oaId\}`\}/);
+  assert.match(ticketInfoCardSource, /审批详情/);
+});
+
 test('提单人详情不展示标签和打标入口', () => {
   assert.match(ticketDetailPageSource, /user\?\.role !== ROLES\.REQUESTER[\s\S]*<CustomTicketTags ticket=\{ticket\}/);
   assert.match(ticketInfoCardSource, /showTechnicalTags[\s\S]*ticket\.defectTag/);

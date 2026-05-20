@@ -34,7 +34,7 @@ export default function DraftTicketEditButton({ ticket }) {
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
 
-  if (!ticket || !user || getRequesterStatus(ticket) !== STATUS.DRAFT) {
+  if (!ticket || !user || ticket.oaLocked || getRequesterStatus(ticket) !== STATUS.DRAFT) {
     return null;
   }
 

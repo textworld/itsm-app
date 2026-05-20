@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import dayjs from 'dayjs';
 
 import {
+  DATA_FIX_SCHEME_CONFIG_KEY,
   INSURANCE_DICTIONARY_TYPE,
   SUPPORT_REST_CONFIG_KEY,
   buildUpcomingSupportRestDays,
   validateInsuranceTypeInput,
+  validateDataFixSchemeConfig,
   validateScheduleConfig,
   validateSupportRestConfig
 } from '../adminConfigValidation.js';
@@ -458,4 +460,24 @@ test('upcoming support rest days include future and cross-day periods grouped by
   assert.deepEqual(days[1].items[0].userNames, ['李一线', '周一线']);
   assert.equal(days[0].items[0].dayStartsAt < days[0].items[0].dayEndsAt, true);
   assert.equal(days[1].items[0].dayStartsAt < days[1].items[0].dayEndsAt, true);
+});
+
+test('data fix scheme validation requires title and description and normalizes ids', () => {
+  assert.equal(DATA_FIX_SCHEME_CONFIG_KEY, 'DATA_FIX_SCHEME_CONFIG');
+
+  const invalid = validateDataFixSchemeConfig({
+    schemes: [
+      { id: 'scheme_empty', title: '', description: '' },
+      { title: '  月结数据重算  ', description: '  修正月结汇总数据  ' }
+    ]
+  });
+
+  assert.equal(invalid.ok, false);
+  assert.deepEqual(invalid.errors, [
+    { path: ['schemes', 0, 'title'], message: '请输入方案标题' },
+    { path: ['schemes', 0, 'description'], message: '请输入方案描述' }
+  ]);
+  assert.equal(invalid.value.schemes[1].id, 'scheme_2');
+  assert.equal(invalid.value.schemes[1].title, '月结数据重算');
+  assert.equal(invalid.value.schemes[1].description, '修正月结汇总数据');
 });

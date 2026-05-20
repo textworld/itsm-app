@@ -3,17 +3,31 @@ import assert from 'node:assert/strict';
 
 import {
   createInsuranceType,
+  getDataFixSchemeConfig,
   getScheduleConfig,
   getSupportRestConfig,
   listInsuranceTypes,
   listL1Users,
+  saveDataFixSchemeConfig,
   saveScheduleConfig,
   saveSupportRestConfig,
   setInsuranceTypeEnabled,
   updateInsuranceType
 } from '../adminConfigStore.js';
+import { reseedDb } from '../db.js';
 
 const adminUser = { id: 'u_admin_1', name: '管理员', role: 'ADMIN' };
+
+test('admin config store seeds 20 default data fix schemes', () => {
+  reseedDb();
+
+  const config = getDataFixSchemeConfig();
+
+  assert.equal(config.schemes.length, 20);
+  assert.ok(config.schemes.every((scheme) => scheme.id));
+  assert.ok(config.schemes.every((scheme) => scheme.title));
+  assert.ok(config.schemes.every((scheme) => scheme.description));
+});
 
 test('admin config store lists sanitized L1 users only', () => {
   const users = listL1Users();
@@ -162,5 +176,45 @@ test('admin config store rejects invalid support rest config with structured err
   assert.deepEqual(result.errors, [
     { path: ['restPeriods', 0, 'userIds'], message: '请选择一线技术支持人员' },
     { path: ['restPeriods', 0, 'endsAt'], message: '结束时间必须晚于开始时间' }
+  ]);
+});
+
+test('admin config store saves data fix scheme config with updater metadata', () => {
+  const result = saveDataFixSchemeConfig(
+    {
+      schemes: [
+        {
+          id: 'scheme_store_test',
+          title: '月结数据重算',
+          description: '用于修复月结汇总数据不一致'
+        }
+      ]
+    },
+    adminUser
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.config.schemes.length, 1);
+  assert.equal(result.config.schemes[0].title, '月结数据重算');
+  assert.equal(result.config.updatedBy.id, adminUser.id);
+
+  const saved = getDataFixSchemeConfig();
+  assert.deepEqual(saved.schemes, result.config.schemes);
+  assert.equal(saved.updatedBy.id, adminUser.id);
+});
+
+test('admin config store rejects invalid data fix scheme config with structured errors', () => {
+  const result = saveDataFixSchemeConfig(
+    {
+      schemes: [{ id: 'scheme_invalid', title: '', description: '' }]
+    },
+    adminUser
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, '数据修正方案配置校验失败');
+  assert.deepEqual(result.errors, [
+    { path: ['schemes', 0, 'title'], message: '请输入方案标题' },
+    { path: ['schemes', 0, 'description'], message: '请输入方案描述' }
   ]);
 });

@@ -41,6 +41,14 @@ test('support roles have a history ticket list entry in the top navigation', () 
   assert.match(appLayoutSource, /pathname\.startsWith\('\/tickets\/history'\)/);
 });
 
+test('support roles have a personal quick phrases configuration entry', () => {
+  assert.match(appLayoutSource, /ProfileOutlined/);
+  assert.match(appLayoutSource, /href="\/personal\/quick-phrases"/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/personal\/quick-phrases'\)/);
+  assert.match(appLayoutSource, /个人配置/);
+  assert.match(appLayoutSource, /常用话术/);
+});
+
 test('administrator entries are grouped under a second-level admin menu', () => {
   assert.match(appLayoutSource, /user\?\.role === ROLES\.ADMIN/);
   assert.match(appLayoutSource, /key: 'admin-management'/);
@@ -50,12 +58,18 @@ test('administrator entries are grouped under a second-level admin menu', () => 
   assert.match(appLayoutSource, /href="\/dictionaries\/insurance-types"/);
   assert.match(appLayoutSource, /href="\/schedules"/);
   assert.match(appLayoutSource, /href="\/support-rests"/);
+  assert.match(appLayoutSource, /href="\/data-fix-schemes"/);
+  assert.match(appLayoutSource, /href="\/oa-simulator"/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/admin\/users'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/dictionaries\/insurance-types'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/schedules'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/support-rests'\)/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/data-fix-schemes'\)/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/oa-simulator'\)/);
   assert.match(appLayoutSource, /账号管理/);
   assert.match(appLayoutSource, /险种词典/);
   assert.match(appLayoutSource, /排班配置/);
   assert.match(appLayoutSource, /休息时间配置/);
+  assert.match(appLayoutSource, /数据修正方案/);
+  assert.match(appLayoutSource, /OA 模拟审批台/);
 });

@@ -2,14 +2,20 @@ import { ROLES } from '../constants/roles.js';
 import { SYSTEM_OPTIONS } from '../constants/systems.js';
 import { shortId } from '../utils/idGenerator.js';
 import {
+  DATA_FIX_SCHEME_CONFIG_KEY,
   INSURANCE_DICTIONARY_TYPE,
   SCHEDULE_CONFIG_KEY,
   SUPPORT_REST_CONFIG_KEY,
   buildUpcomingSupportRestDays,
   validateInsuranceTypeInput,
+  validateDataFixSchemeConfig,
   validateScheduleConfig,
   validateSupportRestConfig
 } from '../utils/adminConfigValidation.js';
+import {
+  buildPersonalQuickPhrasesConfigKey,
+  validateQuickPhraseConfig
+} from '../utils/quickPhrases.js';
 import { getDb } from './db.js';
 
 function parseRow(row) {
@@ -230,4 +236,90 @@ export function saveSupportRestConfig(input, user) {
 export function getUpcomingSupportRestDays(options = {}) {
   const users = listL1Users();
   return buildUpcomingSupportRestDays(getSupportRestConfig(), users, options);
+}
+
+export function getDataFixSchemeConfig() {
+  const db = getDb();
+  const row = db.prepare('SELECT data FROM app_configs WHERE key = ?').get(DATA_FIX_SCHEME_CONFIG_KEY);
+  return parseRow(row) || {
+    schemes: [],
+    updatedAt: null,
+    updatedBy: null
+  };
+}
+
+export function saveDataFixSchemeConfig(input, user) {
+  const validation = validateDataFixSchemeConfig(input);
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      reason: '数据修正方案配置校验失败',
+      errors: validation.errors
+    };
+  }
+
+  const config = {
+    ...validation.value,
+    updatedAt: nowIso(),
+    updatedBy: actorFromUser(user)
+  };
+
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO app_configs (key, updated_at, data)
+    VALUES (@key, @updated_at, @data)
+    ON CONFLICT(key) DO UPDATE SET
+      updated_at = excluded.updated_at,
+      data = excluded.data
+  `).run({
+    key: DATA_FIX_SCHEME_CONFIG_KEY,
+    updated_at: config.updatedAt,
+    data: JSON.stringify(config)
+  });
+
+  return { ok: true, config };
+}
+
+export function getPersonalQuickPhrasesConfig(userId) {
+  const db = getDb();
+  const row = db.prepare('SELECT data FROM app_configs WHERE key = ?').get(buildPersonalQuickPhrasesConfigKey(userId));
+  return parseRow(row) || {
+    phrases: [],
+    updatedAt: null,
+    updatedBy: null
+  };
+}
+
+export function savePersonalQuickPhrasesConfig(userId, input, user) {
+  const validation = validateQuickPhraseConfig(input);
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      reason: '常用话术配置校验失败',
+      errors: validation.errors
+    };
+  }
+
+  const config = {
+    ...validation.value,
+    updatedAt: nowIso(),
+    updatedBy: actorFromUser(user)
+  };
+
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO app_configs (key, updated_at, data)
+    VALUES (@key, @updated_at, @data)
+    ON CONFLICT(key) DO UPDATE SET
+      updated_at = excluded.updated_at,
+      data = excluded.data
+  `).run({
+    key: buildPersonalQuickPhrasesConfigKey(userId),
+    updated_at: config.updatedAt,
+    data: JSON.stringify(config)
+  });
+
+  return { ok: true, config };
 }

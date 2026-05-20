@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
-import { Button, Select, Slider, Space, Tooltip, App as AntdApp } from 'antd';
+import { Button, Select, Slider, Space, Tooltip, App as AntdApp, Typography, Empty } from 'antd';
 import {
   BoldOutlined,
   ItalicOutlined,
@@ -26,6 +26,7 @@ import {
   richTextHtmlToDoc
 } from '../../utils/richText.js';
 import { uploadAttachmentFile } from '../../utils/fileUtils.js';
+import { filterQuickPhrases, getSlashQuery } from '../../utils/quickPhrases.js';
 
 const HEADING_OPTIONS = [
   { value: 'p', label: '正文' },
@@ -36,16 +37,25 @@ const HEADING_OPTIONS = [
 const IMAGE_WIDTH_MIN = 20;
 const IMAGE_WIDTH_MAX = 100;
 const IMAGE_WIDTH_STEP = 5;
+const EMPTY_QUICK_PHRASES = Object.freeze([]);
 
 export default function RichTextEditor({
   value,
   onChange,
   disabled = false,
-  placeholder = '请输入详细描述...'
+  placeholder = '请输入详细描述...',
+  quickPhrases = EMPTY_QUICK_PHRASES
 }) {
   const { message } = AntdApp.useApp();
   const fileInputRef = useRef(null);
   const lastSerializedValueRef = useRef(null);
+  const [slashState, setSlashState] = useState({
+    open: false,
+    query: '',
+    activeIndex: 0
+  });
+  const slashStateRef = useRef(slashState);
+  const quickPhrasesRef = useRef(quickPhrases);
 
   const extensions = useMemo(
     () => [
@@ -75,6 +85,48 @@ export default function RichTextEditor({
         event.preventDefault();
         void uploadAndInsertImage(file);
         return true;
+      },
+      handleKeyDown: (_view, event) => {
+        if (disabled) return false;
+        const currentQuickPhrases = quickPhrasesRef.current;
+        const currentSlashState = slashStateRef.current;
+        if (!currentQuickPhrases.length) return false;
+
+        if (currentSlashState.open && ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(event.key)) {
+          const matches = filterQuickPhrases(currentQuickPhrases, currentSlashState.query);
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setSlashState((prev) => ({
+              ...prev,
+              activeIndex: matches.length ? (prev.activeIndex + 1) % matches.length : 0
+            }));
+            return true;
+          }
+          if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setSlashState((prev) => ({
+              ...prev,
+              activeIndex: matches.length ? (prev.activeIndex - 1 + matches.length) % matches.length : 0
+            }));
+            return true;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            closeSlashSuggestions();
+            return true;
+          }
+          if (event.key === 'Enter') {
+            const selected = matches[currentSlashState.activeIndex] || matches[0];
+            if (selected) {
+              event.preventDefault();
+              insertQuickPhrase(selected);
+              return true;
+            }
+          }
+        }
+
+        window.setTimeout(() => refreshSlashSuggestions(), 0);
+        return false;
       }
     },
     onUpdate: ({ editor: currentEditor }) => {
@@ -88,6 +140,17 @@ export default function RichTextEditor({
     if (!editor) return;
     editor.setEditable(!disabled);
   }, [disabled, editor]);
+
+  useEffect(() => {
+    quickPhrasesRef.current = quickPhrases;
+    if (!quickPhrases.length) {
+      closeSlashSuggestions();
+    }
+  }, [quickPhrases]);
+
+  useEffect(() => {
+    slashStateRef.current = slashState;
+  }, [slashState]);
 
   useEffect(() => {
     if (!editor) return;
@@ -164,6 +227,44 @@ export default function RichTextEditor({
     }
   };
 
+  const refreshSlashSuggestions = () => {
+    if (!editor || disabled) return;
+    const slashContext = getSlashContext(editor);
+    if (!slashContext) {
+      closeSlashSuggestions();
+      return;
+    }
+
+    setSlashState((prev) => ({
+      open: true,
+      query: slashContext.query,
+      activeIndex: prev.query === slashContext.query ? prev.activeIndex : 0
+    }));
+  };
+
+  const closeSlashSuggestions = () => {
+    setSlashState((prev) => {
+      if (prev.open === false && prev.query === '' && prev.activeIndex === 0) {
+        return prev;
+      }
+      return { open: false, query: '', activeIndex: 0 };
+    });
+  };
+
+  const insertQuickPhrase = (phrase) => {
+    if (!editor || !phrase?.content) return;
+    const slashContext = getSlashContext(editor);
+    if (!slashContext) return;
+
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: slashContext.from, to: slashContext.to })
+      .insertContent(phrase.content)
+      .run();
+    closeSlashSuggestions();
+  };
+
   const handleCreateLink = () => {
     if (!editor || disabled) return;
     const currentHref = editor.getAttributes('link').href || '';
@@ -209,6 +310,10 @@ export default function RichTextEditor({
   const adjustImageWidthPercent = (delta) => {
     setImageWidthPercent(imageWidthPercent + delta);
   };
+  const phraseMatches = slashState.open ? filterQuickPhrases(quickPhrases, slashState.query) : [];
+  const activePhraseIndex = phraseMatches.length
+    ? Math.min(slashState.activeIndex, phraseMatches.length - 1)
+    : 0;
 
   return (
     <div className="rich-text-editor">
@@ -312,6 +417,34 @@ export default function RichTextEditor({
         </Space>
       </div>
       <EditorContent editor={editor} />
+      {slashState.open && (
+        <div className="quick-phrase-suggestions">
+          <div className="quick-phrase-suggestions-header">
+            <Typography.Text strong>常用话术</Typography.Text>
+            <Typography.Text type="secondary">↑↓ 选择，Enter 插入</Typography.Text>
+          </div>
+          {phraseMatches.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无匹配话术" />
+          ) : (
+            <div className="quick-phrase-suggestions-list">
+              {phraseMatches.map((phrase, index) => (
+                <button
+                  type="button"
+                  key={phrase.id}
+                  className={`quick-phrase-suggestion-item${index === activePhraseIndex ? ' is-active' : ''}`}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    insertQuickPhrase(phrase);
+                  }}
+                >
+                  <span className="quick-phrase-suggestion-title">{phrase.title}</span>
+                  <span className="quick-phrase-suggestion-content">{phrase.content}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <input
         ref={fileInputRef}
         type="file"
@@ -321,6 +454,24 @@ export default function RichTextEditor({
       />
     </div>
   );
+}
+
+function getSlashContext(editor) {
+  if (!editor) return null;
+  const { state } = editor;
+  const cursor = state.selection.from;
+  const blockStart = state.selection.$from.start();
+  const textBeforeCursor = state.doc.textBetween(blockStart, cursor, '\n', '\n');
+  const query = getSlashQuery(textBeforeCursor, textBeforeCursor.length);
+  if (query === null) return null;
+  const slashOffset = textBeforeCursor.lastIndexOf('/');
+  if (slashOffset < 0) return null;
+
+  return {
+    query,
+    from: blockStart + slashOffset,
+    to: cursor
+  };
 }
 
 function normalizeEditorValue(value) {

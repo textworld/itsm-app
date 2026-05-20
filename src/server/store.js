@@ -76,6 +76,29 @@ export function getTicketById(ticketId) {
   return row ? normalizeTicket(parseRow(row)) : null;
 }
 
+export function listOaApplications() {
+  return listTickets()
+    .filter((ticket) => ticket.oaApplication?.oaId)
+    .map((ticket) => {
+      const oaApplication = ticket.oaApplication || {};
+      return {
+        ...oaApplication,
+        ticketId: ticket.id,
+        title: ticket.title,
+        toolType: ticket.toolType,
+        requesterName: ticket.requesterName,
+        ticketStatus: ticket.status,
+        oaStatus: oaApplication.status,
+        formalTicketCreated: ticket.formalTicketCreated === true,
+        oaLocked: ticket.oaLocked === true
+      };
+    });
+}
+
+export function getTicketByOaId(oaId) {
+  return listTickets().find((ticket) => ticket.oaApplication?.oaId === oaId) || null;
+}
+
 export function addMessageToTicket(ticketId, message) {
   const ticket = getTicketById(ticketId);
   if (!ticket) return null;
@@ -344,7 +367,7 @@ function prepareCreateTicketPayload(event, payload = {}) {
     };
   }
 
-  if (event === EVENTS.SUBMIT) {
+  if (event === EVENTS.SUBMIT || isOaCreateEvent(event)) {
     return {
       ...payload,
       id: isFormalTicketId(payload.id) ? payload.id : generateTicketId(listTickets())
@@ -378,7 +401,7 @@ function prepareTicketEventPayload(ticket, event, payload = {}, user = null) {
     };
   }
 
-  if ((event === EVENTS.SUBMIT || event === EVENTS.AI_RESOLVE) && isInternalDraftId(ticket.id)) {
+  if ((event === EVENTS.SUBMIT || event === EVENTS.AI_RESOLVE || isOaCreateEvent(event)) && isInternalDraftId(ticket.id)) {
     return {
       ...payload,
       id: generateTicketId(listTickets()),
@@ -518,6 +541,10 @@ function isInternalDraftId(id) {
 
 function isFormalTicketId(id) {
   return typeof id === 'string' && id.startsWith('TKT-');
+}
+
+function isOaCreateEvent(event) {
+  return event === EVENTS.SUBMIT_TO_OA || event === EVENTS.SUBMIT_DATA_FIX_SCHEME_REVIEW;
 }
 
 function sanitizeUser(user) {

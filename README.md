@@ -332,3 +332,6 @@ pm2 restart itsm-app-nextjs
 ## 九、License
 
 仅用于原型演示与学习。
+
+
+固定方案编码

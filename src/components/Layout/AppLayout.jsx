@@ -25,7 +25,10 @@ import {
   CalendarOutlined,
   TeamOutlined,
   CoffeeOutlined,
-  SettingOutlined
+  SettingOutlined,
+  ProfileOutlined,
+  FileTextOutlined,
+  FileProtectOutlined
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -78,6 +81,11 @@ export default function AppLayout({ children }) {
         icon: <HistoryOutlined />,
         label: <Link href="/tickets/history">历史工单</Link>
       });
+      base.push({
+        key: '/personal/quick-phrases',
+        icon: <ProfileOutlined />,
+        label: <Link href="/personal/quick-phrases">个人配置</Link>
+      });
     }
     if (user?.role === ROLES.ADMIN) {
       base.push({
@@ -104,6 +112,16 @@ export default function AppLayout({ children }) {
             key: '/support-rests',
             icon: <CoffeeOutlined />,
             label: <Link href="/support-rests">休息时间配置</Link>
+          },
+          {
+            key: '/data-fix-schemes',
+            icon: <FileTextOutlined />,
+            label: <Link href="/data-fix-schemes">数据修正方案</Link>
+          },
+          {
+            key: '/oa-simulator',
+            icon: <FileProtectOutlined />,
+            label: <Link href="/oa-simulator">OA 模拟审批台</Link>
           }
         ]
       });
@@ -119,10 +137,13 @@ export default function AppLayout({ children }) {
   const selectedKey = useMemo(() => {
     if (pathname.startsWith('/tickets/new')) return '/tickets/new';
     if (pathname.startsWith('/tickets/history')) return '/tickets/history';
+    if (pathname.startsWith('/personal/quick-phrases')) return '/personal/quick-phrases';
     if (pathname.startsWith('/admin/users')) return '/admin/users';
     if (pathname.startsWith('/dictionaries/insurance-types')) return '/dictionaries/insurance-types';
     if (pathname.startsWith('/schedules')) return '/schedules';
     if (pathname.startsWith('/support-rests')) return '/support-rests';
+    if (pathname.startsWith('/data-fix-schemes')) return '/data-fix-schemes';
+    if (pathname.startsWith('/oa-simulator')) return '/oa-simulator';
     if (pathname.startsWith('/tickets')) return '/tickets';
     if (pathname.startsWith('/state-machine')) return '/state-machine';
     return '/tickets';
@@ -222,6 +243,8 @@ function pageTitle(key) {
       return '提交工单';
     case '/tickets/history':
       return '历史工单';
+    case '/personal/quick-phrases':
+      return '常用话术';
     case '/state-machine':
       return '工单流转规则';
     case '/admin/users':
@@ -232,6 +255,10 @@ function pageTitle(key) {
       return '排班配置';
     case '/support-rests':
       return '休息时间配置';
+    case '/data-fix-schemes':
+      return '数据修正方案';
+    case '/oa-simulator':
+      return 'OA 模拟审批台';
     case '/tickets':
     default:
       return '工单列表';

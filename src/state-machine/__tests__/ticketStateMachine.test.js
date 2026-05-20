@@ -794,3 +794,282 @@ test('subtask tickets use independent claim complete no-action and transfer even
   assert.equal(completedSubtask.subtaskStatus, 'COMPLETED');
   assert.equal(completedSubtask.noMainTicketActionRequired, true);
 });
+
+test('审批类工单通过 SUBMIT_TO_OA 进入审批中并锁定', () => {
+  const nextTicket = applyTransition(
+    null,
+    EVENTS.SUBMIT_TO_OA,
+    {
+      id: 'TKT-OA-1',
+      title: '数据提取审批',
+      toolType: 'DATA_EXTRACT',
+      priority: PRIORITIES.P4,
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '需要提取数据' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  assert.equal(nextTicket.status, STATUS.APPROVING);
+  assert.equal(nextTicket.requesterStatus, STATUS.APPROVING);
+  assert.equal(nextTicket.supportStatus, STATUS.APPROVING);
+  assert.equal(nextTicket.oaLocked, true);
+  assert.equal(nextTicket.oaApplication.status, 'APPROVING');
+  assert.match(nextTicket.oaApplication.oaId, /^OA-/);
+  assert.throws(
+    () => applyTransition(nextTicket, EVENTS.WITHDRAW, {}, requesterUser),
+    /无权|狀態|状态|权限|操作|当前/
+  );
+});
+
+test('数据修正有方案进入一线方案审核，无方案自动转咨询并保留原类型', () => {
+  const withSolution = applyTransition(
+    null,
+    EVENTS.SUBMIT_DATA_FIX_SCHEME_REVIEW,
+    {
+      id: 'TKT-FIX-SOLUTION',
+      title: '修正保单数据',
+      toolType: 'DATA_FIX',
+      priority: PRIORITIES.P4,
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      dataFixSolution: {
+        requesterSolution: '按附件 SQL 修正',
+        relatedTicketId: ''
+      },
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '需要修正' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  assert.equal(withSolution.status, STATUS.DATA_FIX_SCHEME_REVIEW);
+  assert.equal(withSolution.supportStatus, STATUS.DATA_FIX_SCHEME_REVIEW);
+  assert.equal(withSolution.oaLocked, false);
+
+  const withoutSolution = applyTransition(
+    null,
+    EVENTS.SUBMIT,
+    {
+      id: 'TKT-FIX-NO-SOLUTION',
+      title: '修正无方案',
+      toolType: 'DATA_FIX',
+      priority: PRIORITIES.P4,
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '需要一线确认方案' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  assert.equal(withoutSolution.status, STATUS.PENDING);
+  assert.equal(withoutSolution.toolType, 'CONSULT');
+  assert.equal(withoutSolution.originalToolType, 'DATA_FIX');
+});
+
+test('数据修正无方案由一线确认方案后发起人一键提交 OA', () => {
+  const processing = {
+    id: 'TKT-FIX-OA-READY',
+    status: STATUS.PROCESSING,
+    requesterStatus: STATUS.PROCESSING,
+    supportStatus: STATUS.PROCESSING,
+    processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+    toolType: 'CONSULT',
+    originalToolType: 'DATA_FIX',
+    timeline: []
+  };
+
+  const ready = applyTransition(
+    processing,
+    EVENTS.CONFIRM_DATA_FIX_SOLUTION,
+    {
+      dataFixSolution: {
+        supportReason: '数据同步异常',
+        supportSolution: '按确认口径修正字段'
+      }
+    },
+    l1User
+  );
+
+  assert.equal(ready.status, STATUS.OA_READY);
+  assert.equal(ready.dataFixSolution.supportReason, '数据同步异常');
+
+  const approving = applyTransition(
+    ready,
+    EVENTS.REQUESTER_SUBMIT_OA,
+    {},
+    requesterUser
+  );
+
+  assert.equal(approving.status, STATUS.APPROVING);
+  assert.equal(approving.oaLocked, true);
+  assert.equal(approving.oaApplication.status, 'APPROVING');
+});
+
+test('OA 审核生成正式工单或直接办结都通过状态机联动', () => {
+  const approving = applyTransition(
+    null,
+    EVENTS.SUBMIT_TO_OA,
+    {
+      id: 'TKT-OA-RESULT',
+      title: '权限审批',
+      toolType: 'PERMISSION',
+      priority: PRIORITIES.P4,
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '申请权限' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  const generated = applyTransition(
+    approving,
+    EVENTS.OA_ITSM_GENERATE_TICKET,
+    { opinion: '需要一线处理' },
+    { id: 'u_admin_1', name: '管理员', role: ROLES.ADMIN }
+  );
+
+  assert.equal(generated.status, STATUS.PENDING);
+  assert.equal(generated.formalTicketCreated, true);
+  assert.equal(generated.oaLocked, false);
+  assert.equal(generated.oaApplication.status, 'COMPLETED_GENERATED');
+
+  const closed = applyTransition(
+    approving,
+    EVENTS.OA_DIRECT_CLOSE,
+    { opinion: '无需继续处理' },
+    { id: 'u_admin_1', name: '管理员', role: ROLES.ADMIN }
+  );
+
+  assert.equal(closed.status, STATUS.CONFIRMING);
+  assert.equal(closed.formalTicketCreated, false);
+  assert.equal(closed.oaApplication.status, 'COMPLETED_CLOSED');
+});
+
+test('OA reject returns approving ticket to draft and unlocks it', () => {
+  const approving = applyTransition(
+    null,
+    EVENTS.SUBMIT_TO_OA,
+    {
+      id: 'TKT-OA-REJECT',
+      title: 'permission approval',
+      toolType: 'PERMISSION',
+      priority: PRIORITIES.P4,
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'permission' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  const rejected = applyTransition(
+    approving,
+    EVENTS.OA_REJECT,
+    { opinion: '材料不完整' },
+    { id: 'u_admin_1', name: 'Admin', role: ROLES.ADMIN }
+  );
+
+  assert.equal(rejected.status, STATUS.DRAFT);
+  assert.equal(rejected.requesterStatus, STATUS.DRAFT);
+  assert.equal(rejected.supportStatus, STATUS.DRAFT);
+  assert.equal(rejected.oaLocked, false);
+  assert.equal(rejected.oaApplication.status, 'REJECTED');
+  assert.equal(rejected.isDraft, true);
+});
+
+test('OA 重新打开正式工单后挂起，重新审批继续处理后恢复', () => {
+  const formalProcessing = {
+    id: 'TKT-OA-REOPEN',
+    status: STATUS.PROCESSING,
+    requesterStatus: STATUS.PROCESSING,
+    supportStatus: STATUS.PROCESSING,
+    processingSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+    formalTicketCreated: true,
+    oaApplication: {
+      oaId: 'OA-TKT-OA-REOPEN',
+      status: 'COMPLETED_GENERATED',
+      approvalRecords: []
+    },
+    timeline: []
+  };
+
+  const reopened = applyTransition(
+    formalProcessing,
+    EVENTS.OA_REOPEN,
+    { opinion: 'OA 重新打开' },
+    { id: 'u_admin_1', name: '管理员', role: ROLES.ADMIN }
+  );
+
+  assert.equal(reopened.status, STATUS.SUSPENDED);
+  assert.equal(reopened.oaApplication.status, 'REOPENED');
+  assert.equal(reopened.suspendedReturnSubStatus, PROCESSING_SUB_STATUS.L1_INVESTIGATION);
+
+  const restored = applyTransition(
+    reopened,
+    EVENTS.OA_REAPPROVE_GENERATE,
+    { opinion: '重新审批后继续处理' },
+    { id: 'u_admin_1', name: '管理员', role: ROLES.ADMIN }
+  );
+
+  assert.equal(restored.status, STATUS.PROCESSING);
+  assert.equal(restored.processingSubStatus, PROCESSING_SUB_STATUS.L1_INVESTIGATION);
+  assert.equal(restored.oaApplication.status, 'COMPLETED_GENERATED');
+});
+
+test('data fix without requester solution keeps original type when AI resolves it as consult', () => {
+  const draft = applyTransition(
+    null,
+    EVENTS.CREATE_DRAFT,
+    {
+      id: 'draft_data_fix_ai',
+      title: 'data fix without solution',
+      toolType: 'DATA_FIX',
+      priority: PRIORITIES.P4,
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'no solution' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  const closed = applyTransition(
+    draft,
+    EVENTS.AI_RESOLVE,
+    {
+      id: 'TKT-AI-DATA-FIX',
+      aiResolution: {
+        answer: 'consult answer',
+        messages: []
+      }
+    },
+    requesterUser
+  );
+
+  assert.equal(closed.status, STATUS.CLOSED);
+  assert.equal(closed.toolType, 'CONSULT');
+  assert.equal(closed.originalToolType, 'DATA_FIX');
+});

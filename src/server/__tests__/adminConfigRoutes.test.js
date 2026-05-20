@@ -16,6 +16,13 @@ import {
   GET as supportRestsGet,
   PUT as supportRestsPut
 } from '../../../app/api/admin/support-rests/route.js';
+import {
+  GET as adminDataFixSchemesGet,
+  PUT as adminDataFixSchemesPut
+} from '../../../app/api/admin/data-fix-schemes/route.js';
+import {
+  GET as dataFixSchemesGet
+} from '../../../app/api/data-fix-schemes/route.js';
 import { reseedDb } from '../db.js';
 
 test.beforeEach(() => {
@@ -165,6 +172,69 @@ test('admin support rest routes load L1 users, save config and return structured
   assert.deepEqual(invalidPayload.errors, [
     { path: ['restPeriods', 0, 'userIds'], message: '请选择一线技术支持人员' },
     { path: ['restPeriods', 0, 'endsAt'], message: '结束时间必须晚于开始时间' }
+  ]);
+});
+
+test('admin data fix scheme routes require admin users', async () => {
+  const unauthenticated = await adminDataFixSchemesGet(buildRequest({ userId: null }));
+  assert.equal(unauthenticated.status, 401);
+  assert.equal((await unauthenticated.json()).reason, '未登录');
+
+  const forbidden = await adminDataFixSchemesPut(buildRequest({
+    userId: 'u_l1_1',
+    body: { schemes: [] }
+  }));
+  assert.equal(forbidden.status, 403);
+  assert.equal((await forbidden.json()).reason, '无管理员权限');
+});
+
+test('data fix scheme routes save admin config and expose schemes to logged-in requesters', async () => {
+  const putResponse = await adminDataFixSchemesPut(buildRequest({
+    body: {
+      schemes: [
+        {
+          id: 'scheme_route',
+          title: '客户资料同步',
+          description: '修复客户资料同步异常'
+        }
+      ]
+    }
+  }));
+  const putPayload = await putResponse.json();
+
+  assert.equal(putResponse.status, 200);
+  assert.equal(putPayload.ok, true);
+  assert.equal(putPayload.config.schemes[0].title, '客户资料同步');
+
+  const getResponse = await adminDataFixSchemesGet(buildRequest());
+  const getPayload = await getResponse.json();
+
+  assert.equal(getResponse.status, 200);
+  assert.equal(getPayload.ok, true);
+  assert.equal(getPayload.config.schemes[0].description, '修复客户资料同步异常');
+
+  const publicResponse = await dataFixSchemesGet(buildRequest({ userId: 'u_requester_1' }));
+  const publicPayload = await publicResponse.json();
+
+  assert.equal(publicResponse.status, 200);
+  assert.equal(publicPayload.ok, true);
+  assert.deepEqual(publicPayload.schemes, getPayload.config.schemes);
+
+  const unauthenticated = await dataFixSchemesGet(buildRequest({ userId: null }));
+  assert.equal(unauthenticated.status, 401);
+});
+
+test('admin data fix scheme route returns structured validation errors', async () => {
+  const response = await adminDataFixSchemesPut(buildRequest({
+    body: { schemes: [{ id: 'scheme_invalid', title: '', description: '' }] }
+  }));
+  const payload = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(payload.reason, '数据修正方案配置校验失败');
+  assert.deepEqual(payload.errors, [
+    { path: ['schemes', 0, 'title'], message: '请输入方案标题' },
+    { path: ['schemes', 0, 'description'], message: '请输入方案描述' }
   ]);
 });
 

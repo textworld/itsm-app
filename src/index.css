@@ -236,6 +236,18 @@ body {
   border-radius: 2px !important;
 }
 
+.reference-ticket-form .field-error-emphasis .ant-input,
+.reference-ticket-form .field-error-emphasis .ant-select-selector,
+.reference-ticket-form .field-error-emphasis .ant-radio-group,
+.reference-ticket-form .field-error-emphasis .rich-text-editor {
+  outline: 2px solid #ff4d4f;
+  outline-offset: 2px;
+}
+
+.reference-ticket-form .field-error-emphasis .rich-text-editor {
+  border-color: #ff4d4f;
+}
+
 .ai-ticket-chat-panel {
   display: flex;
   flex-direction: column;
@@ -361,6 +373,7 @@ body {
   border: 1px solid #d9d9d9;
   background: #fff;
   max-width: calc(100vw - 360px);
+  position: relative;
 }
 
 .rich-text-toolbar {
@@ -406,6 +419,65 @@ body {
 
 .rich-text-content p {
   margin: 0 0 8px;
+}
+
+.quick-phrase-suggestions {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 20;
+  max-width: 520px;
+  border: 1px solid #91caff;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.quick-phrase-suggestions-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #f6faff;
+}
+
+.quick-phrase-suggestions-list {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.quick-phrase-suggestion-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid #f5f5f5;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quick-phrase-suggestion-item.is-active,
+.quick-phrase-suggestion-item:hover {
+  background: #e6f4ff;
+}
+
+.quick-phrase-suggestion-title {
+  display: block;
+  margin-bottom: 2px;
+  color: #1f1f1f;
+  font-weight: 600;
+}
+
+.quick-phrase-suggestion-content {
+  display: block;
+  color: #595959;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ticket-rich-description img {

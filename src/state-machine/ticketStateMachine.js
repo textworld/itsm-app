@@ -29,6 +29,16 @@ import { canUserHandleSubtaskSystem } from '../utils/subtaskRouting.js';
 export const EVENTS = {
   CREATE_DRAFT: 'CREATE_DRAFT',
   SUBMIT: 'SUBMIT',
+  SUBMIT_TO_OA: 'SUBMIT_TO_OA',
+  SUBMIT_DATA_FIX_SCHEME_REVIEW: 'SUBMIT_DATA_FIX_SCHEME_REVIEW',
+  CONFIRM_DATA_FIX_SOLUTION: 'CONFIRM_DATA_FIX_SOLUTION',
+  REQUESTER_SUBMIT_OA: 'REQUESTER_SUBMIT_OA',
+  OA_ITSM_GENERATE_TICKET: 'OA_ITSM_GENERATE_TICKET',
+  OA_DIRECT_CLOSE: 'OA_DIRECT_CLOSE',
+  OA_REJECT: 'OA_REJECT',
+  OA_REOPEN: 'OA_REOPEN',
+  OA_REAPPROVE_GENERATE: 'OA_REAPPROVE_GENERATE',
+  OA_REAPPROVE_CLOSE: 'OA_REAPPROVE_CLOSE',
   UPDATE_DRAFT: 'UPDATE_DRAFT',
   AI_RESOLVE: 'AI_RESOLVE',
   WITHDRAW: 'WITHDRAW',
@@ -67,6 +77,16 @@ export const EVENTS = {
 export const EVENT_LABELS = {
   [EVENTS.CREATE_DRAFT]: '暂存草稿',
   [EVENTS.SUBMIT]: '提交工单',
+  [EVENTS.SUBMIT_TO_OA]: '提交OA审批',
+  [EVENTS.SUBMIT_DATA_FIX_SCHEME_REVIEW]: '提交数据修正方案审核',
+  [EVENTS.CONFIRM_DATA_FIX_SOLUTION]: '确认数据修正方案',
+  [EVENTS.REQUESTER_SUBMIT_OA]: '发起人提交OA',
+  [EVENTS.OA_ITSM_GENERATE_TICKET]: 'OA审核通过并生成正式工单',
+  [EVENTS.OA_DIRECT_CLOSE]: 'OA直接办结',
+  [EVENTS.OA_REJECT]: 'OA审批驳回',
+  [EVENTS.OA_REOPEN]: 'OA重新打开',
+  [EVENTS.OA_REAPPROVE_GENERATE]: 'OA重新审批继续处理',
+  [EVENTS.OA_REAPPROVE_CLOSE]: 'OA重新审批无需处理',
   [EVENTS.UPDATE_DRAFT]: '修改草稿',
   [EVENTS.AI_RESOLVE]: '大模型解决',
   [EVENTS.WITHDRAW]: '撤回工单',
@@ -148,6 +168,129 @@ export const TRANSITIONS = [
         user,
         now
       )
+  },
+  {
+    id: 'T-OA-SUBMIT-NEW',
+    from: null,
+    event: EVENTS.SUBMIT_TO_OA,
+    to: STATUS.APPROVING,
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, user, now) => buildOaSubmittedTicket(ticket, payload, user, now)
+  },
+  {
+    id: 'T-OA-SUBMIT-DRAFT',
+    from: STATUS.DRAFT,
+    event: EVENTS.SUBMIT_TO_OA,
+    to: STATUS.APPROVING,
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, user, now) =>
+      buildOaSubmittedTicket(
+        ticket,
+        {
+          ...ticket,
+          ...payload,
+          draftCreatedAt: ticket?.draftCreatedAt || ticket?.createdAt || null,
+          createdAt: payload.createdAt || now,
+          submittedAt: payload.submittedAt || now
+        },
+        user,
+        now
+      )
+  },
+  {
+    id: 'T-OA-DATA-FIX-SCHEME-NEW',
+    from: null,
+    event: EVENTS.SUBMIT_DATA_FIX_SCHEME_REVIEW,
+    to: STATUS.DATA_FIX_SCHEME_REVIEW,
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, user, now) => buildDataFixSchemeReviewTicket(ticket, payload, user, now)
+  },
+  {
+    id: 'T-OA-DATA-FIX-SCHEME-DRAFT',
+    from: STATUS.DRAFT,
+    event: EVENTS.SUBMIT_DATA_FIX_SCHEME_REVIEW,
+    to: STATUS.DATA_FIX_SCHEME_REVIEW,
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, user, now) =>
+      buildDataFixSchemeReviewTicket(ticket, { ...ticket, ...payload }, user, now)
+  },
+  {
+    id: 'T-OA-DATA-FIX-SCHEME-APPROVE',
+    from: STATUS.DATA_FIX_SCHEME_REVIEW,
+    event: EVENTS.SUBMIT_TO_OA,
+    to: STATUS.APPROVING,
+    role: ROLES.L1,
+    transform: (ticket, payload, user, now) => buildOaApplicationUpdate(ticket, payload, user, now, 'APPROVING')
+  },
+  {
+    id: 'T-OA-CONFIRM-DATA-FIX-SOLUTION',
+    from: STATUS.PROCESSING,
+    fromSubStatus: PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+    event: EVENTS.CONFIRM_DATA_FIX_SOLUTION,
+    to: STATUS.OA_READY,
+    role: ROLES.L1,
+    guard: (ticket) => ticket?.originalToolType === TOOL_TYPES.DATA_FIX,
+    transform: (ticket, payload, user, now) => ({
+      dataFixSolution: {
+        ...(ticket.dataFixSolution || {}),
+        ...(payload.dataFixSolution || {}),
+        confirmedBy: user?.name || '',
+        confirmedById: user?.id || null,
+        confirmedAt: now
+      },
+      updatedAt: now
+    })
+  },
+  {
+    id: 'T-OA-REQUESTER-SUBMIT',
+    from: STATUS.OA_READY,
+    event: EVENTS.REQUESTER_SUBMIT_OA,
+    to: STATUS.APPROVING,
+    role: ROLES.REQUESTER,
+    transform: (ticket, payload, user, now) => buildOaApplicationUpdate(ticket, payload, user, now, 'APPROVING')
+  },
+  {
+    id: 'T-OA-ITSM-GENERATE',
+    from: STATUS.APPROVING,
+    event: EVENTS.OA_ITSM_GENERATE_TICKET,
+    to: STATUS.PENDING,
+    role: ROLES.ADMIN,
+    transform: (ticket, payload, user, now) => ({
+      ...buildOaApplicationUpdate(ticket, payload, user, now, 'COMPLETED_GENERATED'),
+      oaLocked: false,
+      formalTicketCreated: true,
+      assigneeL1Id: null,
+      assigneeL1Name: null,
+      assigneeL2Id: null,
+      assigneeL2Name: null
+    })
+  },
+  {
+    id: 'T-OA-DIRECT-CLOSE',
+    from: STATUS.APPROVING,
+    event: EVENTS.OA_DIRECT_CLOSE,
+    to: STATUS.CONFIRMING,
+    role: ROLES.ADMIN,
+    transform: (ticket, payload, user, now) => ({
+      ...buildOaApplicationUpdate(ticket, payload, user, now, 'COMPLETED_CLOSED'),
+      oaLocked: false,
+      formalTicketCreated: false
+    })
+  },
+  {
+    id: 'T-OA-REJECT',
+    from: STATUS.APPROVING,
+    event: EVENTS.OA_REJECT,
+    to: STATUS.DRAFT,
+    role: ROLES.ADMIN,
+    transform: (ticket, payload, user, now) => ({
+      ...buildOaApplicationUpdate(ticket, payload, user, now, 'REJECTED'),
+      isDraft: true,
+      oaLocked: false,
+      formalTicketCreated: false,
+      rejectionReason: payload.opinion || payload.rejectionReason || '',
+      updatedAt: now
+    })
   },
   {
     id: 'T01C',
@@ -494,6 +637,7 @@ export const TRANSITIONS = [
       return Boolean(reason && String(reason).trim());
     }
   },
+  ...createOaReopenTransitions(),
   ...createSubtaskTicketTransitions()
 ];
 
@@ -501,6 +645,9 @@ export const ROLE_EVENT_PERMISSIONS = {
   [ROLES.REQUESTER]: [
     EVENTS.CREATE_DRAFT,
     EVENTS.SUBMIT,
+    EVENTS.SUBMIT_TO_OA,
+    EVENTS.SUBMIT_DATA_FIX_SCHEME_REVIEW,
+    EVENTS.REQUESTER_SUBMIT_OA,
     EVENTS.UPDATE_DRAFT,
     EVENTS.AI_RESOLVE,
     EVENTS.WITHDRAW,
@@ -512,6 +659,8 @@ export const ROLE_EVENT_PERMISSIONS = {
   ],
   [ROLES.L1]: [
     EVENTS.ACCEPT,
+    EVENTS.SUBMIT_TO_OA,
+    EVENTS.CONFIRM_DATA_FIX_SOLUTION,
     EVENTS.TAG_DEFECT,
     EVENTS.UPDATE_LINKED_DEFECT,
     EVENTS.UPDATE_SUMMARY,
@@ -537,6 +686,14 @@ export const ROLE_EVENT_PERMISSIONS = {
     EVENTS.TRANSFER_TECH,
     EVENTS.START_SUBTASK,
     EVENTS.COMPLETE_SUBTASK
+  ],
+  [ROLES.ADMIN]: [
+    EVENTS.OA_ITSM_GENERATE_TICKET,
+    EVENTS.OA_DIRECT_CLOSE,
+    EVENTS.OA_REJECT,
+    EVENTS.OA_REOPEN,
+    EVENTS.OA_REAPPROVE_GENERATE,
+    EVENTS.OA_REAPPROVE_CLOSE
   ]
 };
 
@@ -706,6 +863,157 @@ function updateSubtask(ticket, subtaskId, updater, now) {
     ),
     updatedAt: now
   };
+}
+
+function buildOaSubmittedTicket(ticket, payload = {}, user, now) {
+  return {
+    ...buildSubmittedTicket(ticket, payload, user, now),
+    ...buildOaApplicationUpdate(ticket, payload, user, now, 'APPROVING'),
+    formalTicketCreated: false
+  };
+}
+
+function buildDataFixSchemeReviewTicket(ticket, payload = {}, user, now) {
+  return {
+    ...buildSubmittedTicket(ticket, payload, user, now),
+    toolType: TOOL_TYPES.DATA_FIX,
+    originalToolType: payload.originalToolType || TOOL_TYPES.DATA_FIX,
+    oaLocked: false,
+    formalTicketCreated: false,
+    dataFixSolution: {
+      requesterSolution: String(payload.dataFixSolution?.requesterSolution || payload.requesterSolution || '').trim(),
+      relatedTicketId: String(payload.dataFixSolution?.relatedTicketId || payload.relatedTicketId || '').trim()
+    },
+    updatedAt: now
+  };
+}
+
+function buildOaApplicationUpdate(ticket = {}, payload = {}, user, now, status) {
+  const currentApplication = ticket.oaApplication || {};
+  const oaId = currentApplication.oaId || payload.oaId || `OA-${payload.id || ticket.id || now.replace(/\D/g, '')}`;
+  const nextRecord = buildOaApprovalRecord(payload, user, now, status);
+
+  return {
+    oaLocked: status === 'APPROVING' || status === 'REOPENED',
+    oaApplication: {
+      ...currentApplication,
+      oaId,
+      status,
+      createdAt: currentApplication.createdAt || now,
+      updatedAt: now,
+      approvalRecords: [
+        ...(currentApplication.approvalRecords || []),
+        nextRecord
+      ]
+    },
+    updatedAt: now
+  };
+}
+
+function buildOaApprovalRecord(payload = {}, user, now, status) {
+  return {
+    id: payload.recordId || `oa_record_${now.replace(/\D/g, '')}`,
+    action: payload.action || status,
+    status,
+    opinion: payload.opinion || payload.__timelineRemark || '',
+    attachments: payload.attachments || [],
+    operatorId: user?.id || null,
+    operatorName: payload.operatorName || user?.name || 'OA',
+    operatorRole: user?.role || null,
+    handledAt: payload.handledAt || now
+  };
+}
+
+function createOaReopenTransitions() {
+  const reopenableStatuses = [
+    STATUS.PENDING,
+    STATUS.PROCESSING,
+    STATUS.CONFIRMING,
+    STATUS.CLOSED
+  ];
+
+  return [
+    ...reopenableStatuses.flatMap((status) => [
+      {
+        id: `T-OA-REOPEN-FORMAL-${status}`,
+        from: status,
+        event: EVENTS.OA_REOPEN,
+        to: STATUS.SUSPENDED,
+        role: ROLES.ADMIN,
+        guard: (ticket) => ticket?.formalTicketCreated === true,
+        transform: (ticket, payload, user, now) => ({
+          ...buildOaApplicationUpdate(ticket, payload, user, now, 'REOPENED'),
+          suspendedAt: now,
+          suspendedBy: user?.name || '',
+          suspendedReturnStatus: ticket.status,
+          suspendedReturnSubStatus: getProcessingSubStatus(ticket) || PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+          oaLocked: true
+        })
+      },
+      {
+        id: `T-OA-REOPEN-NO-FORMAL-${status}`,
+        from: status,
+        event: EVENTS.OA_REOPEN,
+        to: STATUS.APPROVING,
+        role: ROLES.ADMIN,
+        guard: (ticket) => ticket?.formalTicketCreated !== true && Boolean(ticket?.oaApplication?.oaId),
+        transform: (ticket, payload, user, now) => buildOaApplicationUpdate(ticket, payload, user, now, 'REOPENED')
+      }
+    ]),
+    {
+      id: 'T-OA-REAPPROVE-GENERATE-SUSPENDED',
+      from: STATUS.SUSPENDED,
+      event: EVENTS.OA_REAPPROVE_GENERATE,
+      to: STATUS.PROCESSING,
+      role: ROLES.ADMIN,
+      transform: (ticket, payload, user, now) => ({
+        ...buildOaApplicationUpdate(ticket, payload, user, now, 'COMPLETED_GENERATED'),
+        oaLocked: false,
+        formalTicketCreated: true,
+        processingSubStatus: ticket.suspendedReturnSubStatus || PROCESSING_SUB_STATUS.L1_INVESTIGATION,
+        suspendedReturnStatus: null,
+        suspendedReturnSubStatus: null,
+        resumedAt: now,
+        resumedBy: user?.name || ''
+      })
+    },
+    {
+      id: 'T-OA-REAPPROVE-GENERATE-APPROVING',
+      from: STATUS.APPROVING,
+      event: EVENTS.OA_REAPPROVE_GENERATE,
+      to: STATUS.PENDING,
+      role: ROLES.ADMIN,
+      transform: (ticket, payload, user, now) => ({
+        ...buildOaApplicationUpdate(ticket, payload, user, now, 'COMPLETED_GENERATED'),
+        oaLocked: false,
+        formalTicketCreated: true
+      })
+    },
+    {
+      id: 'T-OA-REAPPROVE-CLOSE-SUSPENDED',
+      from: STATUS.SUSPENDED,
+      event: EVENTS.OA_REAPPROVE_CLOSE,
+      to: STATUS.CONFIRMING,
+      role: ROLES.ADMIN,
+      transform: (ticket, payload, user, now) => ({
+        ...buildOaApplicationUpdate(ticket, payload, user, now, 'COMPLETED_CLOSED'),
+        oaLocked: false,
+        suspendedReturnStatus: null,
+        suspendedReturnSubStatus: null
+      })
+    },
+    {
+      id: 'T-OA-REAPPROVE-CLOSE-APPROVING',
+      from: STATUS.APPROVING,
+      event: EVENTS.OA_REAPPROVE_CLOSE,
+      to: STATUS.CONFIRMING,
+      role: ROLES.ADMIN,
+      transform: (ticket, payload, user, now) => ({
+        ...buildOaApplicationUpdate(ticket, payload, user, now, 'COMPLETED_CLOSED'),
+        oaLocked: false
+      })
+    }
+  ];
 }
 
 function buildAssigneeHistory(previousTicket, nextTicket, now) {
@@ -945,10 +1253,16 @@ function buildSubmittedTicket(_ticket, payload = {}, user, now) {
   const description = payload.description || richTextToPlainText(descriptionDoc);
   const descriptionHtml = payload.descriptionHtml || '';
   const expiresAt = payload.expiresAt || calculateTicketExpiresAt(submittedAt, payload.priority || PRIORITIES.P4);
+  const shouldConvertDataFixToConsult =
+    payload.toolType === TOOL_TYPES.DATA_FIX && !hasDataFixSubmissionSolution(payload);
 
   return {
     ...payload,
     isDraft: false,
+    toolType: shouldConvertDataFixToConsult ? TOOL_TYPES.CONSULT : payload.toolType,
+    originalToolType: shouldConvertDataFixToConsult
+      ? TOOL_TYPES.DATA_FIX
+      : payload.originalToolType || payload.toolType,
     descriptionDoc,
     description,
     createdAt,
@@ -988,6 +1302,14 @@ function buildSubmittedTicket(_ticket, payload = {}, user, now) {
             })
           ]
   };
+}
+
+function hasDataFixSubmissionSolution(payload = {}) {
+  const solution = payload.dataFixSolution || {};
+  return Boolean(
+    String(solution.requesterSolution || payload.requesterSolution || '').trim() ||
+      String(solution.relatedTicketId || payload.relatedTicketId || '').trim()
+  );
 }
 
 function buildDraftTicket(_ticket, payload = {}, user, now) {
@@ -1072,6 +1394,10 @@ function buildAiResolvedTicket(ticket = {}, payload = {}, user, now) {
     ...ticket,
     ...payload,
     isDraft: false,
+    toolType: shouldConvertDataFixToConsult(ticket) ? TOOL_TYPES.CONSULT : payload.toolType || ticket.toolType,
+    originalToolType: shouldConvertDataFixToConsult(ticket)
+      ? TOOL_TYPES.DATA_FIX
+      : payload.originalToolType || ticket.originalToolType || ticket.toolType,
     id: payload.id || ticket.id,
     draftId: payload.draftId || ticket.draftId || null,
     submittedAt: ticket.submittedAt || now,
@@ -1083,4 +1409,8 @@ function buildAiResolvedTicket(ticket = {}, payload = {}, user, now) {
     requesterId: ticket.requesterId || user?.id || null,
     requesterName: ticket.requesterName || user?.name || '未知用户'
   };
+}
+
+function shouldConvertDataFixToConsult(ticket = {}) {
+  return ticket.toolType === TOOL_TYPES.DATA_FIX && !hasDataFixSubmissionSolution(ticket);
 }

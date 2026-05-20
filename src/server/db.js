@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { withDualStatuses } from '../constants/ticketStatus.js';
+import { DATA_FIX_SCHEME_CONFIG_KEY } from '../utils/adminConfigValidation.js';
 
 const dataDir = path.join(process.cwd(), 'data');
 const dbPath = path.join(dataDir, 'itsm.sqlite');
@@ -13,6 +14,109 @@ const DEFAULT_INSURANCE_TYPES = [
   { id: 'ins_medical', code: 'MEDICAL', name: '医疗险', enabled: true },
   { id: 'ins_life', code: 'LIFE', name: '寿险', enabled: true },
   { id: 'ins_accident', code: 'ACCIDENT', name: '意外险', enabled: true }
+];
+
+const DEFAULT_DATA_FIX_SCHEMES = [
+  {
+    id: 'scheme_customer_profile_sync',
+    title: '客户资料同步修正',
+    description: '用于修正客户主数据在 CRM、保单、理赔等系统间同步不一致的问题，核对客户编号、证件号和联系方式后执行同步补偿。'
+  },
+  {
+    id: 'scheme_policy_status_repair',
+    title: '保单状态修正',
+    description: '用于修正保单状态展示与实际业务状态不一致的问题，确认承保、退保、失效或复效记录后刷新保单状态。'
+  },
+  {
+    id: 'scheme_premium_payment_match',
+    title: '缴费记录匹配',
+    description: '用于处理缴费流水已到账但业务系统未匹配的问题，核验支付流水、保单号和缴费期次后补做缴费匹配。'
+  },
+  {
+    id: 'scheme_claim_amount_recalculate',
+    title: '理赔金额重算',
+    description: '用于修正理赔金额计算异常的问题，基于责任、免赔额、赔付比例和历史赔付记录重新计算并更新结果。'
+  },
+  {
+    id: 'scheme_invoice_status_refresh',
+    title: '发票状态刷新',
+    description: '用于修正发票开具、红冲或作废状态不同步的问题，核对发票平台结果后刷新业务系统发票状态。'
+  },
+  {
+    id: 'scheme_endorsement_data_rebuild',
+    title: '批改数据重建',
+    description: '用于处理批改完成后保单附属信息未正确更新的问题，根据批改单记录重建受影响字段。'
+  },
+  {
+    id: 'scheme_commission_settlement_fix',
+    title: '佣金结算修正',
+    description: '用于修正代理人佣金结算数据异常的问题，核对结算周期、保费、佣金比例和扣回规则后重新生成结算数据。'
+  },
+  {
+    id: 'scheme_renewal_notice_regenerate',
+    title: '续保通知重生成',
+    description: '用于处理续保通知缺失或内容错误的问题，确认续保规则和客户触达信息后重新生成通知记录。'
+  },
+  {
+    id: 'scheme_underwriting_result_sync',
+    title: '核保结果同步',
+    description: '用于修正核保结果未同步到出单或销售系统的问题，核验核保结论后重新同步业务结果。'
+  },
+  {
+    id: 'scheme_surrender_value_repair',
+    title: '退保金额修正',
+    description: '用于修正退保试算或退保入账金额异常的问题，按产品规则、现金价值和费用扣减重新计算并更新。'
+  },
+  {
+    id: 'scheme_beneficiary_info_fix',
+    title: '受益人信息修正',
+    description: '用于修正受益人姓名、证件号、比例或顺序展示异常的问题，按最新有效申请记录更新受益人信息。'
+  },
+  {
+    id: 'scheme_group_policy_member_sync',
+    title: '团单成员同步',
+    description: '用于处理团体保单成员增减员结果未同步的问题，核对成员清单和生效日期后补齐成员关系。'
+  },
+  {
+    id: 'scheme_account_binding_repair',
+    title: '账户绑定修正',
+    description: '用于修正银行卡、扣款账户或收款账户绑定异常的问题，核验账户合法性和授权记录后更新绑定关系。'
+  },
+  {
+    id: 'scheme_product_liability_refresh',
+    title: '产品责任刷新',
+    description: '用于处理产品责任、险种计划或保障项目展示异常的问题，按产品配置重新刷新保单责任数据。'
+  },
+  {
+    id: 'scheme_channel_attribution_fix',
+    title: '渠道归属修正',
+    description: '用于修正工单、保单或客户渠道归属错误的问题，按销售渠道、机构和人员归属规则重新写入。'
+  },
+  {
+    id: 'scheme_batch_import_rollback',
+    title: '批量导入回滚',
+    description: '用于处理批量导入产生错误数据的问题，按导入批次识别影响范围并回滚或覆盖修正相关记录。'
+  },
+  {
+    id: 'scheme_duplicate_record_merge',
+    title: '重复记录合并',
+    description: '用于合并重复客户、保单扩展或业务附属记录，确认主记录后迁移关联关系并标记重复记录失效。'
+  },
+  {
+    id: 'scheme_month_end_summary_rebuild',
+    title: '月结汇总重建',
+    description: '用于修正月结报表或汇总表数据不一致的问题，按指定月份和业务范围重新生成汇总数据。'
+  },
+  {
+    id: 'scheme_permission_data_refresh',
+    title: '权限数据刷新',
+    description: '用于处理岗位、机构或数据权限变更后业务数据可见范围异常的问题，重新刷新权限缓存和授权数据。'
+  },
+  {
+    id: 'scheme_external_interface_resend',
+    title: '外部接口补发',
+    description: '用于处理对接银行、税控、监管或第三方平台接口发送失败的问题，确认幂等键后补发受影响数据。'
+  }
 ];
 
 function readMockJson(filename) {
@@ -102,8 +206,11 @@ function seedDatabase(db, { force = false } = {}) {
   const shouldSeedInsuranceTypes =
     force ||
     db.prepare('SELECT COUNT(*) AS count FROM dictionary_items WHERE type = ?').get(INSURANCE_DICTIONARY_TYPE).count === 0;
+  const shouldSeedDataFixSchemes =
+    force ||
+    !db.prepare('SELECT data FROM app_configs WHERE key = ?').get(DATA_FIX_SCHEME_CONFIG_KEY);
 
-  if (!shouldSeed && !shouldSeedInsuranceTypes) {
+  if (!shouldSeed && !shouldSeedInsuranceTypes && !shouldSeedDataFixSchemes) {
     return;
   }
 
@@ -188,6 +295,26 @@ function seedDatabase(db, { force = false } = {}) {
           data: JSON.stringify(data)
         });
       }
+    }
+
+    if (shouldSeedDataFixSchemes) {
+      const now = new Date().toISOString();
+      const config = {
+        schemes: DEFAULT_DATA_FIX_SCHEMES,
+        updatedAt: now,
+        updatedBy: null
+      };
+      db.prepare(`
+        INSERT INTO app_configs (key, updated_at, data)
+        VALUES (@key, @updated_at, @data)
+        ON CONFLICT(key) DO UPDATE SET
+          updated_at = excluded.updated_at,
+          data = excluded.data
+      `).run({
+        key: DATA_FIX_SCHEME_CONFIG_KEY,
+        updated_at: now,
+        data: JSON.stringify(config)
+      });
     }
   });
 

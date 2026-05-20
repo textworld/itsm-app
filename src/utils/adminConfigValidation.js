@@ -1,6 +1,7 @@
 export const INSURANCE_DICTIONARY_TYPE = 'INSURANCE_TYPE';
 export const SCHEDULE_CONFIG_KEY = 'SCHEDULE_CONFIG';
 export const SUPPORT_REST_CONFIG_KEY = 'SUPPORT_REST_CONFIG';
+export const DATA_FIX_SCHEME_CONFIG_KEY = 'DATA_FIX_SCHEME_CONFIG';
 
 export function validateInsuranceTypeInput(input = {}, existingItems = [], currentId = null) {
   const code = normalizeCode(input.code);
@@ -166,6 +167,34 @@ export function validateSupportRestConfig(input = {}, context = {}) {
       }
       currentUserPeriods.push({ startsAtTime, endsAtTime });
       periodsByUser.set(userId, currentUserPeriods);
+    }
+  });
+
+  return { ok: errors.length === 0, errors, value };
+}
+
+export function normalizeDataFixSchemeConfig(input = {}) {
+  return {
+    schemes: Array.isArray(input.schemes)
+      ? input.schemes.map((scheme, schemeIndex) => ({
+          id: String(scheme.id || `scheme_${schemeIndex + 1}`),
+          title: String(scheme.title || '').trim(),
+          description: String(scheme.description || '').trim()
+        }))
+      : []
+  };
+}
+
+export function validateDataFixSchemeConfig(input = {}) {
+  const value = normalizeDataFixSchemeConfig(input);
+  const errors = [];
+
+  value.schemes.forEach((scheme, schemeIndex) => {
+    if (!scheme.title) {
+      errors.push({ path: ['schemes', schemeIndex, 'title'], message: '请输入方案标题' });
+    }
+    if (!scheme.description) {
+      errors.push({ path: ['schemes', schemeIndex, 'description'], message: '请输入方案描述' });
     }
   });
 

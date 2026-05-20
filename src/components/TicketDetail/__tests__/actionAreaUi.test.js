@@ -421,6 +421,24 @@ test('工单详情页 tabs 导航滚动到顶部后吸顶', () => {
   assert.match(cssSource, /\.ticket-detail-sticky-tabs\s*>\s*\.ant-tabs-nav[\s\S]*top:\s*0/);
   assert.match(cssSource, /\.ticket-detail-sticky-tabs\s*>\s*\.ant-tabs-nav[\s\S]*z-index:\s*\d+/);
 });
+
+test('OA 审批信息在详情页展示且锁定时不显示撤回编辑入口', () => {
+  assert.match(ticketInfoCardSource, /oaApplication/);
+  assert.match(ticketInfoCardSource, /OA 申请单/);
+  assert.match(ticketInfoCardSource, /approvalRecords/);
+  assert.match(draftTicketEditButtonSource, /ticket\.oaLocked/);
+  assert.match(requesterActionsSource, /ticket\.oaLocked/);
+});
+
+test('数据修正 OA 待提交和一线方案确认操作通过状态机事件触发', () => {
+  assert.match(requesterActionsSource, /EVENTS\.REQUESTER_SUBMIT_OA/);
+  assert.match(requesterActionsSource, /一键提交 OA/);
+  assert.match(l1ActionsSource, /EVENTS\.CONFIRM_DATA_FIX_SOLUTION/);
+  assert.match(l1ActionsSource, /EVENTS\.SUBMIT_TO_OA/);
+  assert.match(l1ActionsSource, /方案审核通过创建 OA/);
+  assert.match(l1ActionsSource, /确认修正方案/);
+});
+
 test('L1 closure summary generation can be stopped before editing and submission', () => {
   const modalStart = l1ActionsSource.indexOf('<Modal');
   const modalEnd = l1ActionsSource.indexOf('</Modal>', modalStart);

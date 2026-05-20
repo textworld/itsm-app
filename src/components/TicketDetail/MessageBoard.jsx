@@ -17,6 +17,7 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
+import { ROLES } from '../../constants/roles.js';
 import { ROLE_LABELS } from '../../constants/roles.js';
 import { formatDateTime, byCreatedAtDesc } from '../../utils/format.js';
 import { createEmptyRichTextDoc } from '../../utils/richText.js';
@@ -39,6 +40,7 @@ export default function MessageBoard({ ticket, readOnly }) {
   const [fileList, setFileList] = useState([]);
   const [sending, setSending] = useState(false);
   const [quotedMessage, setQuotedMessage] = useState(null);
+  const [quickPhrases, setQuickPhrases] = useState([]);
   const sendingRef = useRef(false);
 
   const messages = useMemo(
@@ -46,6 +48,35 @@ export default function MessageBoard({ ticket, readOnly }) {
     [ticket?.messages]
   );
   const allowMessage = isTicketMessageAllowed(ticket);
+
+  React.useEffect(() => {
+    let active = true;
+
+    if (user?.role !== ROLES.L1 && user?.role !== ROLES.L2) {
+      setQuickPhrases([]);
+      return undefined;
+    }
+
+    (async () => {
+      try {
+        const response = await fetch('/api/personal/quick-phrases', { cache: 'no-store' });
+        const data = await response.json();
+        if (!active) return;
+        if (response.ok && data?.ok !== false) {
+          setQuickPhrases((data.config?.phrases || []).filter((phrase) => phrase.enabled !== false));
+        } else {
+          setQuickPhrases([]);
+        }
+      } catch (error) {
+        console.error(error);
+        if (active) setQuickPhrases([]);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.role]);
 
   const handleSend = async () => {
     if (sendingRef.current) {
@@ -116,6 +147,7 @@ export default function MessageBoard({ ticket, readOnly }) {
             value={contentDoc}
             onChange={setContentDoc}
             disabled={sending}
+            quickPhrases={quickPhrases}
             placeholder="输入留言内容，支持富文本、图片和引用回复..."
           />
           <Space wrap>
