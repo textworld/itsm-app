@@ -47,5 +47,7 @@ test('提交页先选择新老系统标签再选择系统名称', () => {
   assert.notEqual(categoryIndex, -1);
   assert.notEqual(systemNameIndex, -1);
   assert.ok(categoryIndex < systemNameIndex);
-  assert.match(ticketSubmitView, /getSystemOptionsByCategory/);
+  assert.match(ticketSubmitView, /useSystems/);
+  assert.match(ticketSubmitView, /getSystemOptionsByCategory\(systems/);
+  assert.match(ticketSubmitView, /resolveSelectedSystem\(systems/);
 });

@@ -14,7 +14,6 @@ import {
   Typography
 } from 'antd';
 import { EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import { SYSTEM_OPTIONS } from '../../constants/systems.js';
 import {
   buildScheduleGroupRow,
   filterScheduleGroups
@@ -38,7 +37,7 @@ async function requestJson(url, options = {}) {
 
 export default function AdminScheduleConfigPage() {
   const [groups, setGroups] = useState([]);
-  const [systems, setSystems] = useState(SYSTEM_OPTIONS);
+  const [systems, setSystems] = useState([]);
   const [users, setUsers] = useState([]);
   const [systemKeyword, setSystemKeyword] = useState('');
   const [userKeyword, setUserKeyword] = useState('');
@@ -54,7 +53,7 @@ export default function AdminScheduleConfigPage() {
         throw new Error(data?.reason || '加载排班配置失败');
       }
       setGroups(data.config?.groups || []);
-      setSystems(data.systems || SYSTEM_OPTIONS);
+      setSystems(data.systems || []);
       setUsers(data.users || []);
     } catch (error) {
       console.error(error);

@@ -8,31 +8,53 @@ export const SYSTEM_CATEGORY_OPTIONS = [
   { value: SYSTEM_CATEGORY.NEW, label: '新系统' }
 ];
 
-export const SYSTEM_OPTIONS = [
-  { value: 'ERP_CORE', label: 'ERP 核心系统', category: SYSTEM_CATEGORY.OLD },
-  { value: 'MES_PORTAL', label: 'MES 制造执行平台', category: SYSTEM_CATEGORY.NEW },
-  { value: 'CRM_CENTER', label: 'CRM 客户管理系统', category: SYSTEM_CATEGORY.NEW },
-  { value: 'FINANCE_BI', label: '财务 BI 报表平台', category: SYSTEM_CATEGORY.OLD },
-  { value: 'OA_CENTER', label: 'OA 协同办公系统', category: SYSTEM_CATEGORY.OLD },
-  { value: 'HR_MASTER', label: 'HR 人员主数据平台', category: SYSTEM_CATEGORY.OLD },
-  { value: 'SUPPLY_CHAIN', label: '供应链协同平台', category: SYSTEM_CATEGORY.OLD },
-  { value: 'OPS_MONITOR', label: '运维监控中心', category: SYSTEM_CATEGORY.NEW }
-];
-
-export const SYSTEM_LABELS = SYSTEM_OPTIONS.reduce((accumulator, option) => {
-  accumulator[option.value] = option.label;
-  return accumulator;
-}, {});
-
 export const SYSTEM_CATEGORY_LABELS = SYSTEM_CATEGORY_OPTIONS.reduce((accumulator, option) => {
   accumulator[option.value] = option.label;
   return accumulator;
 }, {});
 
-export function getSystemOptionsByCategory(category) {
-  return SYSTEM_OPTIONS.filter((option) => option.category === category);
+export function normalizeSystemCode(value) {
+  return String(value || '').trim().toUpperCase();
 }
 
-export function getSystemCategoryByCode(systemCode) {
-  return SYSTEM_OPTIONS.find((option) => option.value === systemCode)?.category || SYSTEM_CATEGORY.OLD;
+export function normalizeSystemOption(system = {}) {
+  const code = normalizeSystemCode(system.code || system.value);
+  const name = String(system.name || system.label || code).trim();
+  return {
+    ...system,
+    id: String(system.id || code || '').trim(),
+    code,
+    name,
+    value: code,
+    label: name,
+    category: Object.values(SYSTEM_CATEGORY).includes(system.category) ? system.category : SYSTEM_CATEGORY.OLD,
+    visibleInSubmit: system.visibleInSubmit !== false
+  };
+}
+
+export function normalizeSystemOptions(systems = []) {
+  return (Array.isArray(systems) ? systems : [])
+    .map(normalizeSystemOption)
+    .filter((system) => system.code && system.name);
+}
+
+export function getSystemOptionsByCategory(systems = [], category = SYSTEM_CATEGORY.OLD) {
+  return normalizeSystemOptions(systems).filter((option) => option.category === category);
+}
+
+export function buildSystemLabels(systems = []) {
+  return normalizeSystemOptions(systems).reduce((accumulator, option) => {
+    accumulator[option.code] = option.name;
+    return accumulator;
+  }, {});
+}
+
+export function getSystemCategoryByCode(systems = [], systemCode) {
+  const code = normalizeSystemCode(systemCode);
+  return normalizeSystemOptions(systems).find((option) => option.code === code)?.category || SYSTEM_CATEGORY.OLD;
+}
+
+export function resolveSelectedSystem(systems = [], systemCode) {
+  const code = normalizeSystemCode(systemCode);
+  return normalizeSystemOptions(systems).find((option) => option.code === code) || null;
 }

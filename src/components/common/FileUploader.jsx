@@ -17,7 +17,10 @@ export default function FileUploader({
   maxCount = 10,
   disabled = false,
   variant = 'button',
-  buttonText = '上传附件'
+  buttonText = '上传附件',
+  acceptedTypes = ACCEPTED_ATTACHMENT_TYPES,
+  validator = isAllowedAttachment,
+  invalidTypeMessage = '不支持的附件类型'
 }) {
   const { message } = AntdApp.useApp();
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -34,8 +37,8 @@ export default function FileUploader({
   );
 
   const beforeUpload = async (file) => {
-    if (!isAllowedAttachment(file)) {
-      message.error(`不支持的附件类型：${file.name}`);
+    if (!validator(file)) {
+      message.error(`${invalidTypeMessage}：${file.name}`);
       return Upload.LIST_IGNORE;
     }
 
@@ -76,7 +79,7 @@ export default function FileUploader({
   };
 
   const uploadProps = {
-    accept: ACCEPTED_ATTACHMENT_TYPES,
+    accept: acceptedTypes,
     multiple,
     maxCount,
     beforeUpload,

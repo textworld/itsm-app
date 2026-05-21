@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server.js';
 import {
-  getScheduleConfig,
   getSystemConfig,
-  listInsuranceTypes,
-  listL1Users,
-  saveScheduleConfig
+  saveSystemConfig
 } from '../../../../src/server/adminConfigStore.js';
 import { requireAdminUser } from '../../../../src/server/adminAuth.js';
 import { getSessionUserFromRequest } from '../../../../src/server/session.js';
@@ -23,10 +20,7 @@ export async function GET(request) {
 
   return NextResponse.json({
     ok: true,
-    config: getScheduleConfig(),
-    systems: getSystemConfig({ visibleOnly: true }).systems,
-    insuranceTypes: listInsuranceTypes().filter((item) => item.enabled),
-    users: listL1Users()
+    config: getSystemConfig()
   });
 }
 
@@ -35,6 +29,6 @@ export async function PUT(request) {
   if (!auth.ok) return authResponse(auth);
 
   const input = await request.json();
-  const result = saveScheduleConfig(input, auth.user);
+  const result = saveSystemConfig(input, auth.user);
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
 }

@@ -3,22 +3,16 @@ import path from 'node:path';
 
 import { ROLES } from '../constants/roles.js';
 import { PRIORITIES } from '../constants/priorities.js';
-import { STATUS, SUPPORT_STATUSES } from '../constants/ticketStatus.js';
-import { SYSTEM_CATEGORY, SYSTEM_LABELS } from '../constants/systems.js';
+import { REQUESTER_STATUSES, STATUS, SUPPORT_STATUSES } from '../constants/ticketStatus.js';
+import { SYSTEM_CATEGORY, resolveSelectedSystem } from '../constants/systems.js';
 import { TOOL_TYPES } from '../constants/toolTypes.js';
 import { EVENTS } from '../state-machine/ticketStateMachine.js';
 import { createEmptyRichTextDoc } from '../utils/richText.js';
 import { dispatchCreateTicketEvent, dispatchTicketEvent, listTickets, resetDatabase } from './store.js';
+import { getSystemConfig } from './adminConfigStore.js';
 
 const DEFAULT_PER_STATUS = 3;
-const DEFAULT_REQUESTER_STATUSES = [
-  STATUS.DRAFT,
-  STATUS.PENDING,
-  STATUS.PROCESSING,
-  STATUS.INFO_SUPPLEMENT,
-  STATUS.CONFIRMING,
-  STATUS.CLOSED
-];
+const DEFAULT_REQUESTER_STATUSES = REQUESTER_STATUSES;
 const REACHABLE_SUPPORT_STATUSES = [
   STATUS.PENDING,
   STATUS.PROCESSING,
@@ -108,6 +102,40 @@ function createRequesterStatusTicket({ serial, requester, l1, l2, status, index 
       requester,
       title: `批量测试-${requester.username}-草稿-${index + 1}`
     });
+    return serial + 1;
+  }
+
+  if (status === STATUS.APPROVING) {
+    createOaApprovalTicket({
+      id: makeTicketId(serial),
+      requester,
+      title: `批量测试-${requester.username}-${status}-${index + 1}`
+    });
+    return serial + 1;
+  }
+
+  if (status === STATUS.DATA_FIX_SCHEME_REVIEW) {
+    createDataFixSchemeReviewTicket({
+      id: makeTicketId(serial),
+      requester,
+      title: `批量测试-${requester.username}-${status}-${index + 1}`
+    });
+    return serial + 1;
+  }
+
+  if (status === STATUS.OA_READY) {
+    const ticket = createDataFixPendingTicket({
+      id: makeTicketId(serial),
+      requester,
+      title: `批量测试-${requester.username}-${status}-${index + 1}`
+    });
+    acceptTicket(ticket.id, l1);
+    dispatchOrThrow(ticket.id, EVENTS.CONFIRM_DATA_FIX_SOLUTION, {
+      dataFixSolution: {
+        requesterSolution: '批量测试数据：一线确认数据修正方案'
+      },
+      __timelineRemark: '批量测试数据：确认数据修正方案'
+    }, l1);
     return serial + 1;
   }
 
@@ -228,6 +256,42 @@ function createSubmittedTicket({ id, requester, title, assigneeL1Id = null, assi
   );
 }
 
+function createOaApprovalTicket({ id, requester, title }) {
+  return createTicketOrThrow(
+    EVENTS.SUBMIT_TO_OA,
+    {
+      ...buildTicketPayload({ id, requester, title }),
+      toolType: TOOL_TYPES.PERMISSION
+    },
+    requester
+  );
+}
+
+function createDataFixSchemeReviewTicket({ id, requester, title }) {
+  return createTicketOrThrow(
+    EVENTS.SUBMIT_DATA_FIX_SCHEME_REVIEW,
+    {
+      ...buildTicketPayload({ id, requester, title }),
+      toolType: TOOL_TYPES.DATA_FIX,
+      dataFixSolution: {
+        requesterSolution: '批量测试数据：提单人提供修正方案'
+      }
+    },
+    requester
+  );
+}
+
+function createDataFixPendingTicket({ id, requester, title }) {
+  return createTicketOrThrow(
+    EVENTS.SUBMIT,
+    {
+      ...buildTicketPayload({ id, requester, title }),
+      toolType: TOOL_TYPES.DATA_FIX
+    },
+    requester
+  );
+}
+
 function createPendingL2Subtask({ id, requester, l1, l2, title }) {
   return createTicketOrThrow(
     EVENTS.CREATE_SUBTASK_TICKET,
@@ -276,7 +340,10 @@ function dispatchOrThrow(ticketId, event, payload, user) {
 }
 
 function buildTicketPayload({ id, requester, title }) {
-  const systemCode = SYSTEM_CODES[Math.abs(hashString(id)) % SYSTEM_CODES.length];
+  const systems = getSystemConfig({ visibleOnly: true }).systems;
+  const configuredSystem = systems[Math.abs(hashString(id)) % Math.max(systems.length, 1)];
+  const systemCode = configuredSystem?.code || SYSTEM_CODES[Math.abs(hashString(id)) % SYSTEM_CODES.length];
+  const selectedSystem = resolveSelectedSystem(systems, systemCode);
   const priority = PRIORITY_VALUES[Math.abs(hashString(title)) % PRIORITY_VALUES.length];
 
   return {
@@ -284,9 +351,9 @@ function buildTicketPayload({ id, requester, title }) {
     title,
     toolType: TOOL_TYPES.DATA_EXTRACT,
     priority,
-    systemCategory: SYSTEM_CATEGORY.OLD,
+    systemCategory: selectedSystem?.category || SYSTEM_CATEGORY.OLD,
     systemCode,
-    systemName: SYSTEM_LABELS[systemCode] || systemCode,
+    systemName: selectedSystem?.name || systemCode,
     reporterPhone: '13800138000',
     reporterEmail: `${requester.username}@example.com`,
     reportForOthers: false,

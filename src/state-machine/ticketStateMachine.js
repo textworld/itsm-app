@@ -18,7 +18,7 @@ import {
 import { ROLES } from '../constants/roles.js';
 import { PRIORITIES, PRIORITY_LABELS } from '../constants/priorities.js';
 import { SUBTASK_STATUS } from '../constants/subtaskStatus.js';
-import { SYSTEM_CATEGORY, SYSTEM_LABELS } from '../constants/systems.js';
+import { SYSTEM_CATEGORY } from '../constants/systems.js';
 import { TOOL_TYPES } from '../constants/toolTypes.js';
 import { buildDescriptionHistoryEntry, buildDescriptionUpdate } from '../utils/descriptionHistory.js';
 import { buildDraftTicketUpdate } from '../utils/draftTicketEditing.js';
@@ -556,7 +556,7 @@ export const TRANSITIONS = [
         ? {
             systemCategory: payload.systemCategory || ticket.systemCategory || SYSTEM_CATEGORY.OLD,
             systemCode: payload.systemName,
-            systemName: SYSTEM_LABELS[payload.systemName] || payload.systemName
+            systemName: payload.systemDisplayName || payload.systemLabel || payload.systemName
           }
         : {};
 
@@ -1158,7 +1158,7 @@ function buildTechTransferUpdate(_ticket, payload, user, now) {
     communicated: payload.communicated === true,
     targetSystemCategory: payload.targetSystemCategory || null,
     targetSystemCode: payload.targetSystemCode || null,
-    targetSystemName: payload.targetSystemName || SYSTEM_LABELS[payload.targetSystemCode] || null,
+    targetSystemName: payload.targetSystemName || null,
     transferredBy: user?.name || '',
     transferredAt: now
   };
@@ -1193,7 +1193,7 @@ function buildSubtaskTicket(payload = {}, user, now) {
     priorityLabel: payload.priorityLabel || PRIORITY_LABELS[payload.priority || PRIORITIES.P4],
     systemCategory: payload.systemCategory || SYSTEM_CATEGORY.OLD,
     systemCode: payload.systemCode || payload.systemName || '',
-    systemName: payload.systemName || SYSTEM_LABELS[payload.systemCode] || payload.systemCode || '',
+    systemName: payload.systemDisplayName || payload.systemName || payload.systemCode || '',
     description,
     descriptionDoc: payload.descriptionDoc || createEmptyRichTextDoc(),
     descriptionHtml: payload.descriptionHtml || '',
@@ -1253,6 +1253,7 @@ function buildSubmittedTicket(_ticket, payload = {}, user, now) {
   const description = payload.description || richTextToPlainText(descriptionDoc);
   const descriptionHtml = payload.descriptionHtml || '';
   const expiresAt = payload.expiresAt || calculateTicketExpiresAt(submittedAt, payload.priority || PRIORITIES.P4);
+  const systemCode = payload.systemCode || payload.systemName || '';
   const shouldConvertDataFixToConsult =
     payload.toolType === TOOL_TYPES.DATA_FIX && !hasDataFixSubmissionSolution(payload);
 
@@ -1265,6 +1266,9 @@ function buildSubmittedTicket(_ticket, payload = {}, user, now) {
       : payload.originalToolType || payload.toolType,
     descriptionDoc,
     description,
+    systemCategory: payload.systemCategory || SYSTEM_CATEGORY.OLD,
+    systemCode,
+    systemName: payload.systemDisplayName || payload.systemLabel || payload.systemName || payload.systemCode || '',
     createdAt,
     submittedAt,
     expiresAt,
@@ -1334,7 +1338,7 @@ function buildDraftTicket(_ticket, payload = {}, user, now) {
     priorityLabel: payload.priorityLabel || PRIORITY_LABELS[priority] || priority,
     systemCategory: payload.systemCategory || SYSTEM_CATEGORY.OLD,
     systemCode,
-    systemName: SYSTEM_LABELS[systemCode] || payload.systemName || payload.systemCode || '',
+    systemName: payload.systemDisplayName || payload.systemLabel || payload.systemName || payload.systemCode || '',
     reporterPhone: String(payload.reporterPhone || '').trim(),
     reporterEmail: String(payload.reporterEmail || '').trim(),
     reportForOthers,

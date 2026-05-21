@@ -2,6 +2,8 @@ export const INSURANCE_DICTIONARY_TYPE = 'INSURANCE_TYPE';
 export const SCHEDULE_CONFIG_KEY = 'SCHEDULE_CONFIG';
 export const SUPPORT_REST_CONFIG_KEY = 'SUPPORT_REST_CONFIG';
 export const DATA_FIX_SCHEME_CONFIG_KEY = 'DATA_FIX_SCHEME_CONFIG';
+export const SYSTEM_CONFIG_KEY = 'SYSTEM_CONFIG';
+export const SYSTEM_CATEGORIES = ['OLD', 'NEW'];
 
 export function validateInsuranceTypeInput(input = {}, existingItems = [], currentId = null) {
   const code = normalizeCode(input.code);
@@ -183,6 +185,50 @@ export function normalizeDataFixSchemeConfig(input = {}) {
         }))
       : []
   };
+}
+
+export function normalizeSystemConfig(input = {}) {
+  return {
+    systems: Array.isArray(input.systems)
+      ? input.systems.map((system, systemIndex) => {
+          const code = normalizeCode(system.code || system.value);
+          return {
+            id: String(system.id || `sys_${code || systemIndex + 1}`),
+            code,
+            name: String(system.name || system.label || '').trim(),
+            category: SYSTEM_CATEGORIES.includes(system.category) ? system.category : 'OLD',
+            visibleInSubmit: system.visibleInSubmit !== false
+          };
+        })
+      : []
+  };
+}
+
+export function validateSystemConfig(input = {}) {
+  const value = normalizeSystemConfig(input);
+  const errors = [];
+  const codeOwner = new Map();
+
+  value.systems.forEach((system, systemIndex) => {
+    if (!system.code) {
+      errors.push({ path: ['systems', systemIndex, 'code'], message: '请输入系统编码' });
+    }
+    if (!system.name) {
+      errors.push({ path: ['systems', systemIndex, 'name'], message: '请输入系统名称' });
+    }
+    if (!SYSTEM_CATEGORIES.includes(system.category)) {
+      errors.push({ path: ['systems', systemIndex, 'category'], message: '请选择新老系统标签' });
+    }
+    if (system.code) {
+      if (codeOwner.has(system.code)) {
+        errors.push({ path: ['systems', systemIndex, 'code'], message: `系统编码 ${system.code} 已存在` });
+      } else {
+        codeOwner.set(system.code, systemIndex);
+      }
+    }
+  });
+
+  return { ok: errors.length === 0, errors, value };
 }
 
 export function validateDataFixSchemeConfig(input = {}) {

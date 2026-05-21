@@ -1,6 +1,7 @@
 import { PRIORITY_LABELS } from '../constants/priorities.js';
-import { SYSTEM_LABELS } from '../constants/systems.js';
+import { resolveSelectedSystem } from '../constants/systems.js';
 import { TOOL_TYPE_LABELS, TOOL_TYPES } from '../constants/toolTypes.js';
+import { getSystemConfig } from './adminConfigStore.js';
 
 const ASSISTANT_ARTIFACT_PATTERNS = [
   /(^|\n)\s*可以[，,]/,
@@ -114,12 +115,12 @@ function formatPriority(priority) {
 }
 
 function formatSystem(ticket) {
-  const systemCode = normalizeField(ticket.systemName || ticket.systemCode, '');
-  if (!systemCode) return '相关业务系统';
-
-  const systemLabel = SYSTEM_LABELS[systemCode];
-  if (!systemLabel || systemLabel === systemCode) return systemCode;
-  return `${systemLabel}（${systemCode}）`;
+  const systemName = normalizeField(ticket.systemName, '');
+  const systemCode = normalizeField(ticket.systemCode, '');
+  if (systemName && systemCode && systemName !== systemCode) return `${systemName}（${systemCode}）`;
+  const configuredSystem = resolveSelectedSystem(getSystemConfig().systems, systemCode || systemName);
+  if (configuredSystem) return `${configuredSystem.name}（${configuredSystem.code}）`;
+  return systemName || systemCode || '相关业务系统';
 }
 
 function stripMockPrefix(title) {

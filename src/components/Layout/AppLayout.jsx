@@ -104,6 +104,11 @@ export default function AppLayout({ children }) {
             label: <Link href="/dictionaries/insurance-types">险种词典</Link>
           },
           {
+            key: '/systems',
+            icon: <DatabaseOutlined />,
+            label: <Link href="/systems">系统配置</Link>
+          },
+          {
             key: '/schedules',
             icon: <CalendarOutlined />,
             label: <Link href="/schedules">排班配置</Link>
@@ -140,6 +145,7 @@ export default function AppLayout({ children }) {
     if (pathname.startsWith('/personal/quick-phrases')) return '/personal/quick-phrases';
     if (pathname.startsWith('/admin/users')) return '/admin/users';
     if (pathname.startsWith('/dictionaries/insurance-types')) return '/dictionaries/insurance-types';
+    if (pathname.startsWith('/systems')) return '/systems';
     if (pathname.startsWith('/schedules')) return '/schedules';
     if (pathname.startsWith('/support-rests')) return '/support-rests';
     if (pathname.startsWith('/data-fix-schemes')) return '/data-fix-schemes';
@@ -251,6 +257,8 @@ function pageTitle(key) {
       return '账号管理';
     case '/dictionaries/insurance-types':
       return '险种词典';
+    case '/systems':
+      return '系统配置';
     case '/schedules':
       return '排班配置';
     case '/support-rests':

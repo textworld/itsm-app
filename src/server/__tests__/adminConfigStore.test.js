@@ -6,11 +6,13 @@ import {
   getDataFixSchemeConfig,
   getScheduleConfig,
   getSupportRestConfig,
+  getSystemConfig,
   listInsuranceTypes,
   listL1Users,
   saveDataFixSchemeConfig,
   saveScheduleConfig,
   saveSupportRestConfig,
+  saveSystemConfig,
   setInsuranceTypeEnabled,
   updateInsuranceType
 } from '../adminConfigStore.js';
@@ -27,6 +29,34 @@ test('admin config store seeds 20 default data fix schemes', () => {
   assert.ok(config.schemes.every((scheme) => scheme.id));
   assert.ok(config.schemes.every((scheme) => scheme.title));
   assert.ok(config.schemes.every((scheme) => scheme.description));
+});
+
+test('admin config store seeds default systems from database config', () => {
+  reseedDb();
+
+  const config = getSystemConfig();
+
+  assert.ok(config.systems.length >= 8);
+  assert.ok(config.systems.some((system) => system.code === 'ERP_CORE' && system.name === 'ERP 核心系统'));
+  assert.ok(config.systems.every((system) => Object.hasOwn(system, 'visibleInSubmit')));
+});
+
+test('admin config store saves systems and exposes only visible systems to selectors', () => {
+  const result = saveSystemConfig(
+    {
+      systems: [
+        { id: 'sys_erp', code: 'erp_core', name: 'ERP 新名称', category: 'OLD', visibleInSubmit: true },
+        { id: 'sys_hidden', code: 'HIDDEN_SYS', name: '隐藏系统', category: 'NEW', visibleInSubmit: false }
+      ]
+    },
+    adminUser
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(getSystemConfig().systems.length, 2);
+  assert.equal(getSystemConfig().systems[0].code, 'ERP_CORE');
+  assert.equal(getSystemConfig({ visibleOnly: true }).systems.length, 1);
+  assert.equal(getSystemConfig({ visibleOnly: true }).systems[0].name, 'ERP 新名称');
 });
 
 test('admin config store lists sanitized L1 users only', () => {

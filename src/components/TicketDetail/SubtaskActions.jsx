@@ -6,12 +6,13 @@ import { SUBTASK_STATUS, SUBTASK_STATUS_LABELS } from '../../constants/subtaskSt
 import {
   SYSTEM_CATEGORY,
   SYSTEM_CATEGORY_OPTIONS,
-  SYSTEM_LABELS,
-  getSystemOptionsByCategory
+  getSystemOptionsByCategory,
+  resolveSelectedSystem
 } from '../../constants/systems.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { listSubtaskAssignees } from '../../utils/subtaskRouting.js';
 import { useSupportAssignees } from '../../hooks/useSupportAssignees.js';
+import { useSystems } from '../../hooks/useSystems.js';
 
 export default function SubtaskActions({ ticket }) {
   const { dispatchEvent } = useTickets();
@@ -20,6 +21,7 @@ export default function SubtaskActions({ ticket }) {
   const [transferForm] = Form.useForm();
   const isCompleted = ticket.subtaskStatus === SUBTASK_STATUS.COMPLETED;
   const supportAssignees = useSupportAssignees();
+  const { systems, loading: systemsLoading } = useSystems();
 
   const handleDispatch = async (event, payload = {}, successText = '操作成功') => {
     const result = await dispatchEvent(ticket.id, event, payload);
@@ -41,14 +43,16 @@ export default function SubtaskActions({ ticket }) {
 
   const handleTransfer = async () => {
     const values = await transferForm.validateFields();
+    const selectedSystem = resolveSelectedSystem(systems, values.systemCode);
     const assignee = getOnlineSubtaskAssignees(values.systemCode, supportAssignees)
       .find((item) => item.id === values.assigneeId);
     await handleDispatch(
       EVENTS.TRANSFER_SUBTASK,
       {
-        systemCategory: values.systemCategory,
-        systemCode: values.systemCode,
-        systemName: SYSTEM_LABELS[values.systemCode] || values.systemCode,
+        systemCategory: selectedSystem?.category || values.systemCategory,
+        systemCode: selectedSystem?.code || values.systemCode,
+        systemName: selectedSystem?.name || values.systemCode,
+        systemDisplayName: selectedSystem?.name || values.systemCode,
         assigneeId: assignee?.id || null,
         assigneeName: assignee?.name || null,
         assigneeRole: assignee?.role || null
@@ -114,7 +118,8 @@ export default function SubtaskActions({ ticket }) {
                   showSearch
                   optionFilterProp="label"
                   onChange={() => transferForm.setFieldValue('assigneeId', undefined)}
-                  options={getSystemOptionsByCategory(getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
+                  loading={systemsLoading}
+                  options={getSystemOptionsByCategory(systems, getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
                 />
               </Form.Item>
             )}

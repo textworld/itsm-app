@@ -10,11 +10,72 @@ import {
   listTickets
 } from '../store.js';
 import { reseedDb } from '../db.js';
+import { saveSystemConfig } from '../adminConfigStore.js';
 
 const requesterUser = { id: 'u_requester_1', name: '张三', role: 'REQUESTER' };
 
 test.beforeEach(() => {
   reseedDb();
+});
+
+test('工单保存系统编码和中文名快照，后台改名不影响历史工单', () => {
+  const firstResult = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      title: '系统名称快照',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P3',
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '提交时记录系统中文名' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  assert.equal(firstResult.ok, true);
+  assert.equal(firstResult.ticket.systemCode, 'ERP_CORE');
+  assert.equal(firstResult.ticket.systemName, 'ERP 核心系统');
+
+  const saveResult = saveSystemConfig(
+    {
+      systems: [
+        { id: 'sys_erp_core', code: 'ERP_CORE', name: 'ERP 改名后系统', category: 'OLD', visibleInSubmit: true }
+      ]
+    },
+    { id: 'u_admin_1', name: '管理员', role: 'ADMIN' }
+  );
+
+  assert.equal(saveResult.ok, true);
+  assert.equal(getTicketById(firstResult.ticket.id).systemName, 'ERP 核心系统');
+
+  const secondResult = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      title: '系统名称新快照',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P3',
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '改名后新工单使用新名称' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  assert.equal(secondResult.ok, true);
+  assert.equal(secondResult.ticket.systemCode, 'ERP_CORE');
+  assert.equal(secondResult.ticket.systemName, 'ERP 改名后系统');
 });
 
 test('暂存草稿不生成正式工单号', () => {

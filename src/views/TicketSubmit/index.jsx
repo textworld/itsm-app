@@ -26,20 +26,27 @@ import { PRIORITIES, PRIORITY_OPTIONS, PRIORITY_LABELS } from '../../constants/p
 import {
   SYSTEM_CATEGORY,
   SYSTEM_CATEGORY_OPTIONS,
-  SYSTEM_LABELS,
-  getSystemOptionsByCategory
+  getSystemOptionsByCategory,
+  resolveSelectedSystem
 } from '../../constants/systems.js';
 import { ROLES } from '../../constants/roles.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
-import { buildAttachments, mapAttachmentsToUploadFileList } from '../../utils/fileUtils.js';
+import {
+  EXCEL_ATTACHMENT_TYPES,
+  buildAttachments,
+  isExcelAttachment,
+  mapAttachmentsToUploadFileList
+} from '../../utils/fileUtils.js';
 import { buildDraftTicketFormValues } from '../../utils/draftTicketEditing.js';
 import { buildMockTicketDescriptionDoc, buildMockTicketFormValues } from '../../utils/ticketSubmitMock.js';
 import { createEmptyRichTextDoc, richTextHasContent, richTextToPlainText } from '../../utils/richText.js';
 import FileUploader from '../../components/common/FileUploader.jsx';
 import RichTextEditor from '../../components/common/RichTextEditor.jsx';
 import AiTicketAssistantDrawer from '../../components/TicketSubmit/AiTicketAssistantDrawer.jsx';
+import { useSystems } from '../../hooks/useSystems.js';
 
 const PHONE_PATTERN = /^1[3-9]\d{9}$/;
+const PERMISSION_APPLICATION_ATTACHMENT_CATEGORY = 'PERMISSION_APPLICATION';
 
 export default function TicketSubmitPage() {
   return <TicketSubmitForm />;
@@ -52,6 +59,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
   const { message, modal } = AntdApp.useApp();
   const [form] = Form.useForm();
   const [fileList, setFileList] = useState([]);
+  const [permissionFileList, setPermissionFileList] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [draftSaving, setDraftSaving] = useState(false);
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
@@ -64,12 +72,15 @@ export function TicketSubmitForm({ draftTicket = null }) {
   const [selectedDataFixSchemeId, setSelectedDataFixSchemeId] = useState('');
   const [dataFixSchemeTitleKeyword, setDataFixSchemeTitleKeyword] = useState('');
   const [invalidFieldKeys, setInvalidFieldKeys] = useState(new Set());
+  const { systems, loading: systemsLoading } = useSystems();
   const isDraftEdit = Boolean(draftTicket);
 
   useEffect(() => {
     if (!draftTicket) return;
     form.setFieldsValue(buildDraftTicketFormValues(draftTicket));
-    setFileList(mapAttachmentsToUploadFileList(draftTicket.attachments || []));
+    const { generalAttachments, permissionAttachments } = splitPermissionApplicationAttachments(draftTicket.attachments || []);
+    setFileList(mapAttachmentsToUploadFileList(generalAttachments));
+    setPermissionFileList(mapAttachmentsToUploadFileList(permissionAttachments));
   }, [draftTicket, form]);
 
   if (!user || user.role !== ROLES.REQUESTER) {
@@ -138,6 +149,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
     const mockValues = buildMockTicketFormValues();
     form.setFieldsValue(mockValues);
     setFileList([]);
+    setPermissionFileList([]);
     setMockGenerating(true);
 
     try {
@@ -168,14 +180,41 @@ export function TicketSubmitForm({ draftTicket = null }) {
 
   const handleFinish = async (values) => {
     setInvalidFieldKeys(new Set());
+    if (isStructuredDataExtractTicket(values)) {
+      setInvalidFieldKeys(new Set(['isStructuredDataExtract']));
+      form.scrollToField('isStructuredDataExtract', { block: 'center' });
+      modal.warning({
+        title: '结构化数据提取请去提数平台',
+        content: '该类需求不通过 ITSM 工单提交，请前往提数平台发起结构化数据提取。',
+        okText: '知道了'
+      });
+      return;
+    }
+
+    if (isPermissionTicket(values) && !permissionFileList.length) {
+      setInvalidFieldKeys(new Set(['permissionApplicationFile']));
+      form.scrollToField('permissionApplicationFile', { block: 'center' });
+      modal.warning({
+        title: '请上传 Excel 格式的权限申请文件',
+        content: '权限申请类工单需要上传 .xls 或 .xlsx 格式的权限申请文件后再提交。',
+        okText: '知道了'
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const attachments = await buildAttachments(fileList, user);
-      const ticket = buildTicketPayload(values, attachments, user, new Date().toISOString());
+      const permissionAttachments = await buildPermissionApplicationAttachments(permissionFileList, user, values);
+      const allAttachments = [
+        ...attachments,
+        ...permissionAttachments
+      ];
+      const ticket = buildTicketPayload(values, allAttachments, user, new Date().toISOString(), systems);
       if (isDraftEdit) {
         const updateResult = await dispatchEvent(draftTicket.id, EVENTS.UPDATE_DRAFT, {
           values,
-          attachments
+          attachments: allAttachments
         });
         if (!updateResult.ok) {
           throw new Error(updateResult.reason || '草稿工单更新失败');
@@ -273,10 +312,15 @@ export function TicketSubmitForm({ draftTicket = null }) {
     try {
       const values = form.getFieldsValue(true);
       const attachments = await buildAttachments(fileList, user);
+      const permissionAttachments = await buildPermissionApplicationAttachments(permissionFileList, user, values);
+      const allAttachments = [
+        ...attachments,
+        ...permissionAttachments
+      ];
       if (isDraftEdit) {
         const result = await dispatchEvent(draftTicket.id, EVENTS.UPDATE_DRAFT, {
           values,
-          attachments
+          attachments: allAttachments
         });
         if (!result.ok) {
           throw new Error(result.reason || '草稿工单更新失败');
@@ -286,7 +330,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
         return;
       }
 
-      const ticket = buildTicketPayload(values, attachments, user, new Date().toISOString());
+      const ticket = buildTicketPayload(values, allAttachments, user, new Date().toISOString(), systems);
 
       await addTicket(ticket, EVENTS.CREATE_DRAFT);
       message.success('草稿已暂存');
@@ -352,6 +396,15 @@ export function TicketSubmitForm({ draftTicket = null }) {
       }
     });
     setDataFixSchemeModalOpen(false);
+  };
+
+  const handlePermissionFileChange = (nextFileList) => {
+    setPermissionFileList(nextFileList);
+    setInvalidFieldKeys((previous) => {
+      const next = new Set(previous);
+      next.delete('permissionApplicationFile');
+      return next;
+    });
   };
 
   const filteredDataFixSchemes = dataFixSchemes.filter((scheme) =>
@@ -423,7 +476,8 @@ export function TicketSubmitForm({ draftTicket = null }) {
                 toolType: TOOL_TYPES.DATA_EXTRACT,
                 priority: PRIORITIES.P4,
                 systemCategory: SYSTEM_CATEGORY.OLD,
-                reportForOthers: false
+                reportForOthers: false,
+                isStructuredDataExtract: false
               })
         }}
       >
@@ -517,7 +571,8 @@ export function TicketSubmitForm({ draftTicket = null }) {
                       placeholder="请选择..."
                       showSearch
                       optionFilterProp="label"
-                      options={getSystemOptionsByCategory(getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
+                      loading={systemsLoading}
+                      options={getSystemOptionsByCategory(systems, getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
                     />
                   </Form.Item>
                 )}
@@ -571,6 +626,71 @@ export function TicketSubmitForm({ draftTicket = null }) {
             </Col>
           </Row>
         </div>
+
+        <Form.Item noStyle shouldUpdate={(previous, current) => previous.toolType !== current.toolType || previous.isStructuredDataExtract !== current.isStructuredDataExtract}>
+          {({ getFieldValue }) =>
+            getFieldValue('toolType') === TOOL_TYPES.DATA_EXTRACT ? (
+              <div className="reference-form-line">
+                <Row gutter={24}>
+                  <Col span={24}>
+                    <Form.Item
+                      label="是否结构化"
+                      name="isStructuredDataExtract"
+                      className={getFieldErrorClass('isStructuredDataExtract')}
+                      rules={[{ required: true, message: '请选择是否结构化' }]}
+                    >
+                      <Radio.Group>
+                        <Radio value={false}>否</Radio>
+                        <Radio value={true}>是</Radio>
+                      </Radio.Group>
+                    </Form.Item>
+                    {getFieldValue('isStructuredDataExtract') === true && (
+                      <Typography.Text type="danger" style={{ marginLeft: 112 }}>
+                        结构化数据提取请去提数平台
+                      </Typography.Text>
+                    )}
+                  </Col>
+                </Row>
+              </div>
+            ) : null
+          }
+        </Form.Item>
+
+        <Form.Item noStyle shouldUpdate={(previous, current) => previous.toolType !== current.toolType}>
+          {({ getFieldValue }) =>
+            getFieldValue('toolType') === TOOL_TYPES.PERMISSION ? (
+              <div className="reference-form-line reference-attachment-line">
+                <Row gutter={24}>
+                  <Col span={24}>
+                    <Form.Item
+                      label="权限申请文件"
+                      required
+                      name="permissionApplicationFile"
+                      className={getFieldErrorClass('permissionApplicationFile')}
+                    >
+                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Typography.Link href="/api/templates/permission-request" download="权限申请模板.xls">
+                          下载权限申请模板
+                        </Typography.Link>
+                        <FileUploader
+                          fileList={permissionFileList}
+                          onChange={handlePermissionFileChange}
+                          disabled={submitting || draftSaving}
+                          maxCount={1}
+                          multiple={false}
+                          buttonText="上传权限申请文件"
+                          acceptedTypes={EXCEL_ATTACHMENT_TYPES}
+                          validator={isExcelAttachment}
+                          invalidTypeMessage="请上传 Excel 格式的权限申请文件"
+                        />
+                      </Space>
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </div>
+            ) : null
+          }
+        </Form.Item>
 
         <Form.Item noStyle shouldUpdate={(previous, current) => previous.toolType !== current.toolType || previous.dataFixSolution !== current.dataFixSolution}>
           {({ getFieldValue }) =>
@@ -759,9 +879,10 @@ export function TicketSubmitForm({ draftTicket = null }) {
   );
 }
 
-function buildTicketPayload(values = {}, attachments, user, now) {
+function buildTicketPayload(values = {}, attachments, user, now, systems = []) {
   const reportForOthers = values.reportForOthers === true;
-  const systemName = SYSTEM_LABELS[values.systemName] || values.systemName || '';
+  const selectedSystem = resolveSelectedSystem(systems, values.systemName);
+  const systemName = selectedSystem?.name || values.systemDisplayName || values.systemName || '';
   const priority = values.priority || PRIORITIES.P4;
   const priorityLabel = PRIORITY_LABELS[priority] || priority;
   const descriptionDoc = values.descriptionDoc || createEmptyRichTextDoc();
@@ -771,9 +892,10 @@ function buildTicketPayload(values = {}, attachments, user, now) {
     toolType: values.toolType || TOOL_TYPES.DATA_EXTRACT,
     priority,
     priorityLabel,
-    systemCategory: values.systemCategory || SYSTEM_CATEGORY.OLD,
-    systemCode: values.systemName || '',
+    systemCategory: selectedSystem?.category || values.systemCategory || SYSTEM_CATEGORY.OLD,
+    systemCode: selectedSystem?.code || values.systemName || '',
     systemName,
+    systemDisplayName: systemName,
     reporterPhone: String(values.reporterPhone || '').trim(),
     reporterEmail: String(values.reporterEmail || '').trim(),
     reportForOthers,
@@ -798,6 +920,38 @@ function buildDataFixSolution(values = {}) {
     selectedSchemeTitle: String(solution.selectedSchemeTitle || '').trim(),
     selectedSchemeDescription: String(solution.selectedSchemeDescription || '').trim()
   };
+}
+
+function splitPermissionApplicationAttachments(attachments = []) {
+  return attachments.reduce(
+    (result, attachment) => {
+      if (attachment?.category === PERMISSION_APPLICATION_ATTACHMENT_CATEGORY) {
+        result.permissionAttachments.push(attachment);
+      } else {
+        result.generalAttachments.push(attachment);
+      }
+      return result;
+    },
+    { generalAttachments: [], permissionAttachments: [] }
+  );
+}
+
+async function buildPermissionApplicationAttachments(permissionFileList, user, values = {}) {
+  if (!isPermissionTicket(values)) return [];
+  const attachments = await buildAttachments(permissionFileList, user);
+
+  return attachments.map((attachment) => ({
+    ...attachment,
+    category: PERMISSION_APPLICATION_ATTACHMENT_CATEGORY
+  }));
+}
+
+function isPermissionTicket(values = {}) {
+  return values.toolType === TOOL_TYPES.PERMISSION;
+}
+
+function isStructuredDataExtractTicket(values = {}) {
+  return values.toolType === TOOL_TYPES.DATA_EXTRACT && values.isStructuredDataExtract === true;
 }
 
 function shouldUseAiFlow(ticket = {}) {

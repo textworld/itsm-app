@@ -1,15 +1,17 @@
 import { ROLES } from '../constants/roles.js';
-import { SYSTEM_OPTIONS } from '../constants/systems.js';
+import { normalizeSystemOptions } from '../constants/systems.js';
 import { shortId } from '../utils/idGenerator.js';
 import {
   DATA_FIX_SCHEME_CONFIG_KEY,
   INSURANCE_DICTIONARY_TYPE,
   SCHEDULE_CONFIG_KEY,
+  SYSTEM_CONFIG_KEY,
   SUPPORT_REST_CONFIG_KEY,
   buildUpcomingSupportRestDays,
   validateInsuranceTypeInput,
   validateDataFixSchemeConfig,
   validateScheduleConfig,
+  validateSystemConfig,
   validateSupportRestConfig
 } from '../utils/adminConfigValidation.js';
 import {
@@ -153,7 +155,7 @@ export function getScheduleConfig() {
 
 export function saveScheduleConfig(input, user) {
   const validation = validateScheduleConfig(input, {
-    systems: SYSTEM_OPTIONS,
+    systems: getSystemConfig({ visibleOnly: true }).systems,
     enabledInsuranceTypes: listInsuranceTypes().filter((item) => item.enabled),
     assignableUsers: listL1Users()
   });
@@ -181,6 +183,58 @@ export function saveScheduleConfig(input, user) {
       data = excluded.data
   `).run({
     key: SCHEDULE_CONFIG_KEY,
+    updated_at: config.updatedAt,
+    data: JSON.stringify(config)
+  });
+
+  return { ok: true, config };
+}
+
+export function getSystemConfig(options = {}) {
+  const db = getDb();
+  const row = db.prepare('SELECT data FROM app_configs WHERE key = ?').get(SYSTEM_CONFIG_KEY);
+  const config = parseRow(row) || {
+    systems: [],
+    updatedAt: null,
+    updatedBy: null
+  };
+  const systems = normalizeSystemOptions(config.systems || []);
+
+  return {
+    ...config,
+    systems: options.visibleOnly
+      ? systems.filter((system) => system.visibleInSubmit !== false)
+      : systems
+  };
+}
+
+export function saveSystemConfig(input, user) {
+  const validation = validateSystemConfig(input);
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      reason: '系统配置校验失败',
+      errors: validation.errors
+    };
+  }
+
+  const config = {
+    ...validation.value,
+    systems: normalizeSystemOptions(validation.value.systems),
+    updatedAt: nowIso(),
+    updatedBy: actorFromUser(user)
+  };
+
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO app_configs (key, updated_at, data)
+    VALUES (@key, @updated_at, @data)
+    ON CONFLICT(key) DO UPDATE SET
+      updated_at = excluded.updated_at,
+      data = excluded.data
+  `).run({
+    key: SYSTEM_CONFIG_KEY,
     updated_at: config.updatedAt,
     data: JSON.stringify(config)
   });

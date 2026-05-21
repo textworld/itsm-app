@@ -21,8 +21,13 @@ import {
   PUT as adminDataFixSchemesPut
 } from '../../../app/api/admin/data-fix-schemes/route.js';
 import {
+  GET as adminSystemsGet,
+  PUT as adminSystemsPut
+} from '../../../app/api/admin/systems/route.js';
+import {
   GET as dataFixSchemesGet
 } from '../../../app/api/data-fix-schemes/route.js';
+import { GET as systemsGet } from '../../../app/api/systems/route.js';
 import { reseedDb } from '../db.js';
 
 test.beforeEach(() => {
@@ -236,6 +241,31 @@ test('admin data fix scheme route returns structured validation errors', async (
     { path: ['schemes', 0, 'title'], message: '请输入方案标题' },
     { path: ['schemes', 0, 'description'], message: '请输入方案描述' }
   ]);
+});
+
+test('admin system routes save configured systems and public route returns visible systems', async () => {
+  const forbidden = await adminSystemsGet(buildRequest({ userId: 'u_l1_1' }));
+  assert.equal(forbidden.status, 403);
+
+  const putResponse = await adminSystemsPut(buildRequest({
+    body: {
+      systems: [
+        { id: 'sys_erp', code: 'ERP_CORE', name: 'ERP 核心系统', category: 'OLD', visibleInSubmit: true },
+        { id: 'sys_hidden', code: 'HIDDEN_SYS', name: '隐藏系统', category: 'NEW', visibleInSubmit: false }
+      ]
+    }
+  }));
+  const putPayload = await putResponse.json();
+
+  assert.equal(putResponse.status, 200);
+  assert.equal(putPayload.config.systems.length, 2);
+
+  const publicResponse = await systemsGet(buildRequest({ userId: 'u_requester_1' }));
+  const publicPayload = await publicResponse.json();
+
+  assert.equal(publicResponse.status, 200);
+  assert.equal(publicPayload.systems.length, 1);
+  assert.equal(publicPayload.systems[0].code, 'ERP_CORE');
 });
 
 function buildRequest({ userId = 'u_admin_1', body = {} } = {}) {

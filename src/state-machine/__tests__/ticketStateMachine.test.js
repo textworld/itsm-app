@@ -407,7 +407,8 @@ test('UPDATE_INFO_SUPPLEMENT 允许信息补充阶段修改系统', () => {
     EVENTS.UPDATE_INFO_SUPPLEMENT,
     {
       systemCategory: 'NEW',
-      systemName: 'OPS_MONITOR'
+      systemName: 'OPS_MONITOR',
+      systemDisplayName: '运维监控中心'
     },
     requesterUser
   );

@@ -20,7 +20,6 @@ import {
   Typography
 } from 'antd';
 import { DeleteOutlined, PlusOutlined, SaveOutlined, ArrowLeftOutlined } from '@ant-design/icons';
-import { SYSTEM_OPTIONS } from '../../constants/systems.js';
 import { validateScheduleConfig } from '../../utils/adminConfigValidation.js';
 
 const API_URL = '/api/admin/schedules';
@@ -44,7 +43,7 @@ export default function ScheduleDetailPage({ mode = 'edit', groupId = null }) {
   const { message } = AntdApp.useApp();
   const [groups, setGroups] = useState([]);
   const [group, setGroup] = useState(null);
-  const [systems, setSystems] = useState(SYSTEM_OPTIONS);
+  const [systems, setSystems] = useState([]);
   const [insuranceTypes, setInsuranceTypes] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -78,7 +77,7 @@ export default function ScheduleDetailPage({ mode = 'edit', groupId = null }) {
 
       const loadedGroups = data.config?.groups || [];
       setGroups(loadedGroups);
-      setSystems(data.systems || SYSTEM_OPTIONS);
+      setSystems(data.systems || []);
       setInsuranceTypes(data.insuranceTypes || []);
       setUsers(data.users || []);
 

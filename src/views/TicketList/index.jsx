@@ -16,11 +16,11 @@ import {
 } from '../../constants/ticketStatus.js';
 import { TOOL_TYPE_OPTIONS } from '../../constants/toolTypes.js';
 import { PRIORITY_OPTIONS } from '../../constants/priorities.js';
-import { SYSTEM_OPTIONS } from '../../constants/systems.js';
 import TicketTable from '../../components/TicketList/TicketTable.jsx';
 import DataActionBar from '../../components/TicketList/DataActionBar.jsx';
 import { filterTicketsBySearch } from '../../utils/ticketListFilters.js';
 import { TICKET_LIST_MODES, buildView } from '../../utils/ticketListView.js';
+import { useSystems } from '../../hooks/useSystems.js';
 
 const { RangePicker } = DatePicker;
 
@@ -64,6 +64,7 @@ export default function TicketListPage({ mode = TICKET_LIST_MODES.CURRENT }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const { systems, loading: systemsLoading } = useSystems();
 
   const myView = useMemo(() => buildView(tickets, user, { mode }), [mode, tickets, user]);
   const statusOptions = useMemo(() => buildStatusOptions(user), [user]);
@@ -188,7 +189,8 @@ export default function TicketListPage({ mode = TICKET_LIST_MODES.CURRENT }) {
                 showSearch
                 placeholder="所属系统"
                 optionFilterProp="label"
-                options={SYSTEM_OPTIONS}
+                loading={systemsLoading}
+                options={systems}
                 value={filters.systemKeyword || undefined}
                 onChange={(value) => setFilters((prev) => ({ ...prev, systemKeyword: value || '' }))}
                 style={{ width: 240 }}

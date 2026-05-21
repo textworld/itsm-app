@@ -38,7 +38,7 @@ test('schedule list view loads groups and exposes searchable table entries', () 
 
 test('schedule detail view saves one editable group through admin API', () => {
   assert.match(detailSource, /\/api\/admin\/schedules/);
-  assert.match(detailSource, /SYSTEM_OPTIONS/);
+  assert.match(detailSource, /setSystems\(data\.systems \|\| \[\]\)/);
   assert.match(detailSource, /validateScheduleConfig/);
   assert.match(detailSource, /method: 'PUT'/);
   assert.match(detailSource, /addInsuranceTeam/);

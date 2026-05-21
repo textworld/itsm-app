@@ -35,6 +35,7 @@ import {
   getSystemCategoryByCode,
   getSystemOptionsByCategory
 } from '../../constants/systems.js';
+import { useSystems } from '../../hooks/useSystems.js';
 
 /**
  * 提单人操作区
@@ -62,6 +63,7 @@ export default function RequesterActions({ ticket }) {
   const [rejectForm] = Form.useForm();
   const [withdrawForm] = Form.useForm();
   const [infoSupplementForm] = Form.useForm();
+  const { systems, loading: systemsLoading } = useSystems();
 
   React.useEffect(() => {
     setEditingDescriptionDoc(ticket.descriptionDoc || richTextValueToDoc(ticket.descriptionHtml));
@@ -248,7 +250,7 @@ export default function RequesterActions({ ticket }) {
     const handleOpenDescriptionEdit = () => {
       setEditingDescriptionDoc(ticket.descriptionDoc || richTextValueToDoc(ticket.descriptionHtml));
       infoSupplementForm.setFieldsValue({
-        systemCategory: ticket.systemCategory || getSystemCategoryByCode(ticket.systemCode || ticket.systemName),
+        systemCategory: ticket.systemCategory || getSystemCategoryByCode(systems, ticket.systemCode || ticket.systemName),
         systemName: ticket.systemCode || ticket.systemName || undefined
       });
       setEditOpen(true);
@@ -397,7 +399,8 @@ export default function RequesterActions({ ticket }) {
                       placeholder="请选择..."
                       showSearch
                       optionFilterProp="label"
-                      options={getSystemOptionsByCategory(getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
+                      loading={systemsLoading}
+                      options={getSystemOptionsByCategory(systems, getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
                     />
                   </Form.Item>
                 )}

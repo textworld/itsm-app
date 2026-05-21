@@ -1,5 +1,5 @@
 import { PRIORITY_LABELS } from '../constants/priorities.js';
-import { SYSTEM_CATEGORY, SYSTEM_LABELS, getSystemCategoryByCode } from '../constants/systems.js';
+import { SYSTEM_CATEGORY, getSystemCategoryByCode } from '../constants/systems.js';
 import { buildDescriptionHistoryEntry } from './descriptionHistory.js';
 import {
   richTextHtmlToDoc,
@@ -12,7 +12,7 @@ export function buildDraftTicketFormValues(ticket = {}) {
     toolType: ticket.toolType,
     title: ticket.title || '',
     priority: ticket.priority,
-    systemCategory: ticket.systemCategory || getSystemCategoryByCode(ticket.systemCode || ticket.systemName),
+    systemCategory: ticket.systemCategory || getSystemCategoryByCode([], ticket.systemCode || ticket.systemName),
     systemName: ticket.systemCode || ticket.systemName || undefined,
     reporterPhone: ticket.reporterPhone || '',
     reporterEmail: ticket.reporterEmail || '',
@@ -48,7 +48,7 @@ export function buildDraftTicketUpdate({
     priorityLabel: PRIORITY_LABELS[values.priority] || values.priority || '',
     systemCategory: values.systemCategory || SYSTEM_CATEGORY.OLD,
     systemCode: values.systemName || '',
-    systemName: SYSTEM_LABELS[values.systemName] || values.systemName || '',
+    systemName: values.systemDisplayName || values.systemName || '',
     reporterPhone: String(values.reporterPhone || '').trim(),
     reporterEmail: String(values.reporterEmail || '').trim(),
     reportForOthers,

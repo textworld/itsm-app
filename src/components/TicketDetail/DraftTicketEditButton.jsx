@@ -16,12 +16,13 @@ import { STATUS, getRequesterStatus } from '../../constants/ticketStatus.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { TOOL_TYPE_OPTIONS } from '../../constants/toolTypes.js';
 import { PRIORITY_OPTIONS } from '../../constants/priorities.js';
-import { SYSTEM_OPTIONS } from '../../constants/systems.js';
+import { SYSTEM_CATEGORY, getSystemOptionsByCategory } from '../../constants/systems.js';
 import RichTextEditor from '../common/RichTextEditor.jsx';
 import FileUploader from '../common/FileUploader.jsx';
 import { buildAttachments, mapAttachmentsToUploadFileList } from '../../utils/fileUtils.js';
 import { buildDraftTicketFormValues } from '../../utils/draftTicketEditing.js';
 import { richTextHasContent } from '../../utils/richText.js';
+import { useSystems } from '../../hooks/useSystems.js';
 
 const PHONE_PATTERN = /^1[3-9]\d{9}$/;
 
@@ -33,6 +34,7 @@ export default function DraftTicketEditButton({ ticket }) {
   const [fileList, setFileList] = useState([]);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
+  const { systems, loading: systemsLoading } = useSystems();
 
   if (!ticket || !user || ticket.oaLocked || getRequesterStatus(ticket) !== STATUS.DRAFT) {
     return null;
@@ -129,6 +131,13 @@ export default function DraftTicketEditButton({ ticket }) {
           </Form.Item>
 
           <Form.Item
+            hidden
+            name="systemCategory"
+          >
+            <Input />
+          </Form.Item>
+
+          <Form.Item
             label="系统名称"
             name="systemName"
             rules={[{ required: true, message: '请选择系统名称' }]}
@@ -137,7 +146,8 @@ export default function DraftTicketEditButton({ ticket }) {
               placeholder="请选择..."
               showSearch
               optionFilterProp="label"
-              options={SYSTEM_OPTIONS}
+              loading={systemsLoading}
+              options={getSystemOptionsByCategory(systems, form.getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
             />
           </Form.Item>
 

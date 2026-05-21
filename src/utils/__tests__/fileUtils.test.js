@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildAttachments,
+  isExcelAttachment,
   mapAttachmentsToUploadFileList
 } from '../fileUtils.js';
 
@@ -25,4 +26,10 @@ test('已上传附件可映射为可编辑 fileList 并在保存时保留', asyn
   assert.equal(fileList.length, 1);
   assert.equal(fileList[0].attachmentData.id, 'att_1');
   assert.deepEqual(rebuiltAttachments, originalAttachments);
+});
+
+test('权限申请附件仅接受 Excel 文件', () => {
+  assert.equal(isExcelAttachment({ name: '权限申请.xlsx', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), true);
+  assert.equal(isExcelAttachment({ name: '权限申请.xls', type: 'application/vnd.ms-excel' }), true);
+  assert.equal(isExcelAttachment({ name: '权限说明.pdf', type: 'application/pdf' }), false);
 });

@@ -7,6 +7,7 @@ import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { ROLES } from '../../constants/roles.js';
 import { SYSTEM_CATEGORY_OPTIONS, getSystemOptionsByCategory } from '../../constants/systems.js';
 import { useSupportAssignees } from '../../hooks/useSupportAssignees.js';
+import { useSystems } from '../../hooks/useSystems.js';
 
 export default function TechTransferPanel({
   ticket,
@@ -20,6 +21,7 @@ export default function TechTransferPanel({
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
   const onlineAssignees = useSupportAssignees(role);
+  const { systems, loading: systemsLoading } = useSystems();
   const assignees = onlineAssignees.filter((assignee) => assignee.id !== user?.id);
   const requiresTargetSystem = role === ROLES.L1;
 
@@ -39,7 +41,7 @@ export default function TechTransferPanel({
       ? assignees.find((item) => item.id === values.assigneeId)
       : null;
     const targetSystem = !values.communicated && requiresTargetSystem
-      ? getSystemOptionsByCategory(values.targetSystemCategory).find((item) => item.value === values.targetSystemCode)
+      ? getSystemOptionsByCategory(systems, values.targetSystemCategory).find((item) => item.value === values.targetSystemCode)
       : null;
 
     const result = await dispatchEvent(ticket.id, EVENTS.TRANSFER_TECH, {
@@ -118,7 +120,7 @@ export default function TechTransferPanel({
 
               const targetSystemCategory = getFieldValue('targetSystemCategory');
               const targetSystemOptions = targetSystemCategory
-                ? getSystemOptionsByCategory(targetSystemCategory).filter((option) => option.value !== ticket.systemCode)
+                ? getSystemOptionsByCategory(systems, targetSystemCategory).filter((option) => option.value !== ticket.systemCode)
                 : [];
 
               return (
@@ -142,6 +144,7 @@ export default function TechTransferPanel({
                       showSearch
                       optionFilterProp="label"
                       placeholder="请选择其他系统"
+                      loading={systemsLoading}
                       options={targetSystemOptions}
                     />
                   </Form.Item>

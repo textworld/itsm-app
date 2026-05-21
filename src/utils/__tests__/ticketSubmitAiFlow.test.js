@@ -65,3 +65,20 @@ test('data fix submit form can switch to regular consult when requester has no s
   assert.match(submitPageSource, /toolType:\s*TOOL_TYPES\.CONSULT/);
   assert.match(submitPageSource, /dataFixSolution:\s*\{\}/);
 });
+
+test('data extract submit form blocks structured extraction tickets', () => {
+  assert.match(submitPageSource, /name="isStructuredDataExtract"/);
+  assert.match(submitPageSource, /结构化数据提取请去提数平台/);
+  assert.match(submitPageSource, /isStructuredDataExtractTicket\(values\)/);
+  assert.match(submitPageSource, /modal\.warning\(\{[\s\S]*结构化数据提取请去提数平台/);
+});
+
+test('permission submit form requires an Excel application file and exposes template download', () => {
+  assert.match(submitPageSource, /permissionFileList/);
+  assert.match(submitPageSource, /权限申请文件/);
+  assert.match(submitPageSource, /\/api\/templates\/permission-request/);
+  assert.match(submitPageSource, /acceptedTypes=\{EXCEL_ATTACHMENT_TYPES\}/);
+  assert.match(submitPageSource, /validator=\{isExcelAttachment\}/);
+  assert.match(submitPageSource, /请上传 Excel 格式的权限申请文件/);
+  assert.match(submitPageSource, /\.\.\.attachments,\s*\.\.\.permissionAttachments/);
+});

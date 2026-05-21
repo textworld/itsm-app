@@ -7,12 +7,13 @@ import { ROLES } from '../../constants/roles.js';
 import {
   SYSTEM_CATEGORY,
   SYSTEM_CATEGORY_OPTIONS,
-  SYSTEM_LABELS,
-  getSystemOptionsByCategory
+  getSystemOptionsByCategory,
+  resolveSelectedSystem
 } from '../../constants/systems.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { TICKET_ACTIONS, canPerformTicketAction } from '../../permissions/ticketPermissionMatrix.js';
 import { useSupportAssignees } from '../../hooks/useSupportAssignees.js';
+import { useSystems } from '../../hooks/useSystems.js';
 
 const SUBTASK_STATUS_LABELS = {
   PENDING: '待受理',
@@ -29,6 +30,7 @@ export default function SubtaskPanel({ ticket }) {
   const [form] = Form.useForm();
   const [completeForm] = Form.useForm();
   const supportAssignees = useSupportAssignees();
+  const { systems, loading: systemsLoading } = useSystems();
 
   if (![ROLES.L1, ROLES.L2].includes(user?.role)) {
     return (
@@ -44,11 +46,13 @@ export default function SubtaskPanel({ ticket }) {
   const handleCreate = async () => {
     const values = await form.validateFields();
     const assignee = supportAssignees.find((item) => item.id === values.assigneeId);
+    const selectedSystem = resolveSelectedSystem(systems, values.systemName);
     const result = await dispatchEvent(ticket.id, EVENTS.CREATE_SUBTASK, {
       subtask: {
-        systemCategory: values.systemCategory,
-        systemCode: values.systemName,
-        systemName: SYSTEM_LABELS[values.systemName] || values.systemName,
+        systemCategory: selectedSystem?.category || values.systemCategory,
+        systemCode: selectedSystem?.code || values.systemName,
+        systemName: selectedSystem?.name || values.systemName,
+        systemDisplayName: selectedSystem?.name || values.systemName,
         description: values.description.trim(),
         assigneeId: assignee?.id || null,
         assigneeName: assignee?.name || null,
@@ -177,7 +181,8 @@ export default function SubtaskPanel({ ticket }) {
                   showSearch
                   optionFilterProp="label"
                   onChange={() => form.setFieldValue('assigneeId', undefined)}
-                  options={getSystemOptionsByCategory(getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
+                  loading={systemsLoading}
+                  options={getSystemOptionsByCategory(systems, getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
                 />
               </Form.Item>
             )}

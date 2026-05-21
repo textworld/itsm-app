@@ -23,6 +23,8 @@ export const ACCEPTED_ATTACHMENT_TYPES = [
   'image/*'
 ].join(',');
 
+export const EXCEL_ATTACHMENT_TYPES = ['.xls', '.xlsx'].join(',');
+
 const ALLOWED_ATTACHMENT_EXTENSIONS = [
   '.pdf',
   '.doc',
@@ -52,6 +54,13 @@ const ALLOWED_ATTACHMENT_MIME_TYPES = [
   'application/x-zip-compressed'
 ];
 
+const EXCEL_ATTACHMENT_EXTENSIONS = ['.xls', '.xlsx'];
+
+const EXCEL_ATTACHMENT_MIME_TYPES = [
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+];
+
 export function isAllowedAttachment(file) {
   if (!file) return false;
   const name = (file.name || '').toLowerCase();
@@ -61,6 +70,17 @@ export function isAllowedAttachment(file) {
     ALLOWED_ATTACHMENT_EXTENSIONS.some((extension) => name.endsWith(extension)) ||
     ALLOWED_ATTACHMENT_MIME_TYPES.includes(type) ||
     ALLOWED_ATTACHMENT_MIME_PREFIXES.some((prefix) => type.startsWith(prefix))
+  );
+}
+
+export function isExcelAttachment(file) {
+  if (!file) return false;
+  const name = (file.name || '').toLowerCase();
+  const type = (file.type || '').toLowerCase();
+
+  return (
+    EXCEL_ATTACHMENT_EXTENSIONS.some((extension) => name.endsWith(extension)) ||
+    EXCEL_ATTACHMENT_MIME_TYPES.includes(type)
   );
 }
 

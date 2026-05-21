@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { withDualStatuses } from '../constants/ticketStatus.js';
-import { DATA_FIX_SCHEME_CONFIG_KEY } from '../utils/adminConfigValidation.js';
+import { DATA_FIX_SCHEME_CONFIG_KEY, SYSTEM_CONFIG_KEY } from '../utils/adminConfigValidation.js';
 
 const dataDir = path.join(process.cwd(), 'data');
 const dbPath = path.join(dataDir, 'itsm.sqlite');
@@ -14,6 +14,17 @@ const DEFAULT_INSURANCE_TYPES = [
   { id: 'ins_medical', code: 'MEDICAL', name: '医疗险', enabled: true },
   { id: 'ins_life', code: 'LIFE', name: '寿险', enabled: true },
   { id: 'ins_accident', code: 'ACCIDENT', name: '意外险', enabled: true }
+];
+
+const DEFAULT_SYSTEMS = [
+  { id: 'sys_erp_core', code: 'ERP_CORE', name: 'ERP 核心系统', category: 'OLD', visibleInSubmit: true },
+  { id: 'sys_mes_portal', code: 'MES_PORTAL', name: 'MES 制造执行平台', category: 'NEW', visibleInSubmit: true },
+  { id: 'sys_crm_center', code: 'CRM_CENTER', name: 'CRM 客户管理系统', category: 'NEW', visibleInSubmit: true },
+  { id: 'sys_finance_bi', code: 'FINANCE_BI', name: '财务 BI 报表平台', category: 'OLD', visibleInSubmit: true },
+  { id: 'sys_oa_center', code: 'OA_CENTER', name: 'OA 协同办公系统', category: 'OLD', visibleInSubmit: true },
+  { id: 'sys_hr_master', code: 'HR_MASTER', name: 'HR 人员主数据平台', category: 'OLD', visibleInSubmit: true },
+  { id: 'sys_supply_chain', code: 'SUPPLY_CHAIN', name: '供应链协同平台', category: 'OLD', visibleInSubmit: true },
+  { id: 'sys_ops_monitor', code: 'OPS_MONITOR', name: '运维监控中心', category: 'NEW', visibleInSubmit: true }
 ];
 
 const DEFAULT_DATA_FIX_SCHEMES = [
@@ -209,8 +220,11 @@ function seedDatabase(db, { force = false } = {}) {
   const shouldSeedDataFixSchemes =
     force ||
     !db.prepare('SELECT data FROM app_configs WHERE key = ?').get(DATA_FIX_SCHEME_CONFIG_KEY);
+  const shouldSeedSystems =
+    force ||
+    !db.prepare('SELECT data FROM app_configs WHERE key = ?').get(SYSTEM_CONFIG_KEY);
 
-  if (!shouldSeed && !shouldSeedInsuranceTypes && !shouldSeedDataFixSchemes) {
+  if (!shouldSeed && !shouldSeedInsuranceTypes && !shouldSeedDataFixSchemes && !shouldSeedSystems) {
     return;
   }
 
@@ -312,6 +326,26 @@ function seedDatabase(db, { force = false } = {}) {
           data = excluded.data
       `).run({
         key: DATA_FIX_SCHEME_CONFIG_KEY,
+        updated_at: now,
+        data: JSON.stringify(config)
+      });
+    }
+
+    if (shouldSeedSystems) {
+      const now = new Date().toISOString();
+      const config = {
+        systems: DEFAULT_SYSTEMS,
+        updatedAt: now,
+        updatedBy: null
+      };
+      db.prepare(`
+        INSERT INTO app_configs (key, updated_at, data)
+        VALUES (@key, @updated_at, @data)
+        ON CONFLICT(key) DO UPDATE SET
+          updated_at = excluded.updated_at,
+          data = excluded.data
+      `).run({
+        key: SYSTEM_CONFIG_KEY,
         updated_at: now,
         data: JSON.stringify(config)
       });

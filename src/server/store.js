@@ -5,6 +5,8 @@ import { buildCustomTagUpdate } from '../utils/customTicketTags.js';
 import { routeRandomTechTransferAssignee } from '../utils/techTransferRouting.js';
 import { TICKET_ACTIONS, canPerformTicketAction } from '../permissions/ticketPermissionMatrix.js';
 import { getDb, reseedDb } from './db.js';
+import { getSystemConfig } from './adminConfigStore.js';
+import { normalizeSystemCode, resolveSelectedSystem } from '../constants/systems.js';
 
 const USER_AVAILABILITY_STATUS = {
   ONLINE: 'ONLINE',
@@ -360,34 +362,37 @@ export function makeExportFilename(now = new Date()) {
 }
 
 function prepareCreateTicketPayload(event, payload = {}) {
+  const normalizedPayload = enrichSystemSnapshot(payload);
   if (event === EVENTS.CREATE_DRAFT) {
     return {
-      ...payload,
-      id: isInternalDraftId(payload.id) ? payload.id : shortId('draft')
+      ...normalizedPayload,
+      id: isInternalDraftId(normalizedPayload.id) ? normalizedPayload.id : shortId('draft')
     };
   }
 
   if (event === EVENTS.SUBMIT || isOaCreateEvent(event)) {
     return {
-      ...payload,
-      id: isFormalTicketId(payload.id) ? payload.id : generateTicketId(listTickets())
+      ...normalizedPayload,
+      id: isFormalTicketId(normalizedPayload.id) ? normalizedPayload.id : generateTicketId(listTickets())
     };
   }
 
-  return payload;
+  return normalizedPayload;
 }
 
 function prepareTicketEventPayload(ticket, event, payload = {}, user = null) {
+  const normalizedPayload = enrichSystemSnapshot(payload);
   if (event === EVENTS.CREATE_SUBTASK) {
-    const subtaskId = payload.subtask?.id || generateSubtaskTicketId(ticket, listTickets());
+    const subtaskPayload = enrichSystemSnapshot(normalizedPayload.subtask || {});
+    const subtaskId = subtaskPayload.id || generateSubtaskTicketId(ticket, listTickets());
     const subtask = {
-      ...(payload.subtask || {}),
+      ...subtaskPayload,
       id: subtaskId,
       parentTicketId: ticket.id,
       status: 'PENDING'
     };
     return {
-      ...payload,
+      ...normalizedPayload,
       subtask,
       subtaskTicket: {
         ...subtask,
@@ -403,7 +408,7 @@ function prepareTicketEventPayload(ticket, event, payload = {}, user = null) {
 
   if ((event === EVENTS.SUBMIT || event === EVENTS.AI_RESOLVE || isOaCreateEvent(event)) && isInternalDraftId(ticket.id)) {
     return {
-      ...payload,
+      ...normalizedPayload,
       id: generateTicketId(listTickets()),
       draftId: ticket.id
     };
@@ -411,13 +416,13 @@ function prepareTicketEventPayload(ticket, event, payload = {}, user = null) {
 
   if (event === EVENTS.WITHDRAW && !isInternalDraftId(ticket.id)) {
     return {
-      ...payload,
-      id: isInternalDraftId(payload.id) ? payload.id : shortId('draft')
+      ...normalizedPayload,
+      id: isInternalDraftId(normalizedPayload.id) ? normalizedPayload.id : shortId('draft')
     };
   }
 
-  if (event === EVENTS.TRANSFER_TECH && shouldAutoAssignTechTransfer(payload)) {
-    const targetRole = payload.targetRole || user?.role;
+  if (event === EVENTS.TRANSFER_TECH && shouldAutoAssignTechTransfer(normalizedPayload)) {
+    const targetRole = normalizedPayload.targetRole || user?.role;
     const assignee = routeRandomTechTransferAssignee(
       targetRole,
       user?.id,
@@ -425,13 +430,45 @@ function prepareTicketEventPayload(ticket, event, payload = {}, user = null) {
       listActiveSupportAssignees(targetRole)
     );
     return {
-      ...payload,
+      ...normalizedPayload,
       assigneeId: assignee.id,
       assigneeName: assignee.name
     };
   }
 
-  return payload;
+  return normalizedPayload;
+}
+
+function enrichSystemSnapshot(payload = {}) {
+  if (!payload || typeof payload !== 'object') return payload;
+  const systems = getSystemConfig().systems;
+  const systemCode = normalizeSystemCode(payload.systemCode || payload.systemName);
+  const system = resolveSelectedSystem(systems, systemCode);
+  const targetSystemCode = normalizeSystemCode(payload.targetSystemCode);
+  const targetSystem = resolveSelectedSystem(systems, targetSystemCode);
+  const values = payload.values && typeof payload.values === 'object'
+    ? enrichSystemSnapshot(payload.values)
+    : payload.values;
+
+  return {
+    ...payload,
+    ...(values ? { values } : {}),
+    ...(system
+      ? {
+          systemCategory: payload.systemCategory || system.category,
+          systemCode: system.code,
+          systemName: payload.systemName || system.code,
+          systemDisplayName: payload.systemDisplayName || system.name
+        }
+      : {}),
+    ...(targetSystem
+      ? {
+          targetSystemCategory: payload.targetSystemCategory || targetSystem.category,
+          targetSystemCode: targetSystem.code,
+          targetSystemName: payload.targetSystemName || targetSystem.name
+        }
+      : {})
+  };
 }
 
 function shouldAutoAssignTechTransfer(payload = {}) {
