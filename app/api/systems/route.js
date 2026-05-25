@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server.js';
-import { getSystemConfig } from '../../../src/server/adminConfigStore.js';
+import {
+  getSystemConfig,
+  getTicketClassificationDictionaryName
+} from '../../../src/server/adminConfigStore.js';
 import { getSessionUserFromRequest } from '../../../src/server/session.js';
 
 export async function GET(request) {
@@ -10,6 +13,16 @@ export async function GET(request) {
 
   return NextResponse.json({
     ok: true,
-    systems: getSystemConfig({ visibleOnly: true }).systems
+    systems: getSystemConfig({ visibleOnly: true }).systems.map((system) => ({
+      ...system,
+      ...(system.ticketClassification
+        ? {
+            ticketClassification: {
+              ...system.ticketClassification,
+              dictionaryName: getTicketClassificationDictionaryName(system.ticketClassification.dictionaryType)
+            }
+          }
+        : {})
+    }))
   });
 }

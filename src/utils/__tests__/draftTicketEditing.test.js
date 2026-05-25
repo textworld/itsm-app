@@ -14,6 +14,7 @@ test('草稿工单可生成编辑表单初始值', () => {
     title: '原始标题',
     priority: PRIORITIES.P2,
     systemCode: 'ERP',
+    ticketClassification: { optionId: 'module_policy' },
     reporterPhone: '13800138000',
     reporterEmail: 'draft@example.com',
     reportForOthers: true,
@@ -28,6 +29,7 @@ test('草稿工单可生成编辑表单初始值', () => {
     priority: PRIORITIES.P2,
     systemCategory: 'OLD',
     systemName: 'ERP',
+    ticketClassificationOptionId: 'module_policy',
     reporterPhone: '13800138000',
     reporterEmail: 'draft@example.com',
     reportForOthers: true,
@@ -84,6 +86,14 @@ test('草稿工单保存时会更新工单要素并追加描述历史', () => {
       title: '修改后的标题',
       priority: PRIORITIES.P1,
       systemName: 'OA',
+      ticketClassification: {
+        fieldLabel: '模块',
+        dictionaryType: 'SYSTEM_MODULE',
+        dictionaryName: '模块词典',
+        optionId: 'module_claim',
+        optionCode: 'CLAIM',
+        optionName: '理赔模块'
+      },
       reporterPhone: '13800138001',
       reporterEmail: 'updated@example.com',
       reportForOthers: false,
@@ -100,6 +110,7 @@ test('草稿工单保存时会更新工单要素并追加描述历史', () => {
   assert.equal(nextTicket.title, '修改后的标题');
   assert.equal(nextTicket.priority, PRIORITIES.P1);
   assert.equal(nextTicket.systemCode, 'OA');
+  assert.equal(nextTicket.ticketClassification.optionName, '理赔模块');
   assert.equal(nextTicket.reportForOthers, false);
   assert.equal(nextTicket.reportedUserName, '');
   assert.equal(nextTicket.reportedUserPhone, '');

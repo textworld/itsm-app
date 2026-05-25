@@ -1,5 +1,9 @@
 import { ROLES } from '../constants/roles.js';
-import { normalizeSystemOptions } from '../constants/systems.js';
+import {
+  TICKET_CLASSIFICATION_DICTIONARY_TYPE_OPTIONS,
+  getTicketClassificationDictionaryTypeName,
+  normalizeSystemOptions
+} from '../constants/systems.js';
 import { shortId } from '../utils/idGenerator.js';
 import {
   DATA_FIX_SCHEME_CONFIG_KEY,
@@ -64,11 +68,45 @@ function getDictionaryItemById(id) {
 }
 
 export function listInsuranceTypes() {
+  return listDictionaryItemsByType(INSURANCE_DICTIONARY_TYPE);
+}
+
+export function listDictionaryItemsByType(type) {
+  const dictionaryType = String(type || '').trim().toUpperCase();
+  if (!dictionaryType) return [];
   const db = getDb();
   return db
     .prepare('SELECT data FROM dictionary_items WHERE type = ? ORDER BY updated_at DESC, code ASC')
-    .all(INSURANCE_DICTIONARY_TYPE)
+    .all(dictionaryType)
     .map(parseRow);
+}
+
+export function listEnabledDictionaryOptions(type) {
+  return listDictionaryItemsByType(type)
+    .filter((item) => item?.enabled !== false)
+    .map((item) => ({
+      id: item.id,
+      code: item.code,
+      name: item.name,
+      label: item.name,
+      value: item.id,
+      type: item.type,
+      dictionaryType: item.type
+    }));
+}
+
+export function listTicketClassificationDictionaryTypes() {
+  return TICKET_CLASSIFICATION_DICTIONARY_TYPE_OPTIONS.map(({ type, name }) => ({ type, name }));
+}
+
+export function getTicketClassificationDictionaryName(type) {
+  return getTicketClassificationDictionaryTypeName(type);
+}
+
+export function findEnabledDictionaryOption(type, optionId) {
+  const id = String(optionId || '').trim();
+  if (!id) return null;
+  return listDictionaryItemsByType(type).find((item) => item.id === id && item.enabled !== false) || null;
 }
 
 export function createInsuranceType(input, user) {

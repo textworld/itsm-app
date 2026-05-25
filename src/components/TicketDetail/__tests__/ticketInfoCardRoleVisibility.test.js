@@ -44,6 +44,12 @@ test('OA 申请单编号链接到审批详情页', () => {
   assert.match(ticketInfoCardSource, /审批详情/);
 });
 
+test('详情页展示已保存的工单分类快照', () => {
+  assert.match(ticketInfoCardSource, /ticket\.ticketClassification/);
+  assert.match(ticketInfoCardSource, /label=\{ticket\.ticketClassification\.fieldLabel\}/);
+  assert.match(ticketInfoCardSource, /ticket\.ticketClassification\.optionName/);
+});
+
 test('提单人详情不展示标签和打标入口', () => {
   assert.match(ticketDetailPageSource, /user\?\.role !== ROLES\.REQUESTER[\s\S]*<CustomTicketTags ticket=\{ticket\}/);
   assert.match(ticketInfoCardSource, /showTechnicalTags[\s\S]*ticket\.defectTag/);

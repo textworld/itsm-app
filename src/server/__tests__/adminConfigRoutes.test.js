@@ -28,6 +28,7 @@ import {
   GET as dataFixSchemesGet
 } from '../../../app/api/data-fix-schemes/route.js';
 import { GET as systemsGet } from '../../../app/api/systems/route.js';
+import { GET as dictionaryOptionsGet } from '../../../app/api/dictionaries/options/route.js';
 import { reseedDb } from '../db.js';
 
 test.beforeEach(() => {
@@ -243,6 +244,27 @@ test('admin data fix scheme route returns structured validation errors', async (
   ]);
 });
 
+test('dictionary options route returns enabled options and requires a type', async () => {
+  const response = await dictionaryOptionsGet(buildRequest({
+    userId: 'u_requester_1',
+    url: 'http://localhost/api/dictionaries/options?type=SYSTEM_MODULE'
+  }));
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.dictionary.type, 'SYSTEM_MODULE');
+  assert.ok(payload.options.some((item) => item.id === 'module_policy' && item.name === '保单模块'));
+  assert.ok(payload.options.every((item) => item.enabled === undefined));
+
+  const invalidResponse = await dictionaryOptionsGet(buildRequest({
+    userId: 'u_requester_1',
+    url: 'http://localhost/api/dictionaries/options'
+  }));
+  assert.equal(invalidResponse.status, 400);
+  assert.equal((await invalidResponse.json()).reason, '字典类型不能为空');
+});
+
 test('admin system routes save configured systems and public route returns visible systems', async () => {
   const forbidden = await adminSystemsGet(buildRequest({ userId: 'u_l1_1' }));
   assert.equal(forbidden.status, 403);
@@ -250,7 +272,14 @@ test('admin system routes save configured systems and public route returns visib
   const putResponse = await adminSystemsPut(buildRequest({
     body: {
       systems: [
-        { id: 'sys_erp', code: 'ERP_CORE', name: 'ERP 核心系统', category: 'OLD', visibleInSubmit: true },
+        {
+          id: 'sys_erp',
+          code: 'ERP_CORE',
+          name: 'ERP 核心系统',
+          category: 'OLD',
+          visibleInSubmit: true,
+          ticketClassification: { fieldLabel: '模块', dictionaryType: 'SYSTEM_MODULE' }
+        },
         { id: 'sys_hidden', code: 'HIDDEN_SYS', name: '隐藏系统', category: 'NEW', visibleInSubmit: false }
       ]
     }
@@ -260,16 +289,26 @@ test('admin system routes save configured systems and public route returns visib
   assert.equal(putResponse.status, 200);
   assert.equal(putPayload.config.systems.length, 2);
 
+  const getResponse = await adminSystemsGet(buildRequest());
+  const getPayload = await getResponse.json();
+  assert.ok(Array.isArray(getPayload.dictionaryTypes));
+
   const publicResponse = await systemsGet(buildRequest({ userId: 'u_requester_1' }));
   const publicPayload = await publicResponse.json();
 
   assert.equal(publicResponse.status, 200);
   assert.equal(publicPayload.systems.length, 1);
   assert.equal(publicPayload.systems[0].code, 'ERP_CORE');
+  assert.deepEqual(publicPayload.systems[0].ticketClassification, {
+    fieldLabel: '模块',
+    dictionaryType: 'SYSTEM_MODULE',
+    dictionaryName: '模块词典'
+  });
 });
 
-function buildRequest({ userId = 'u_admin_1', body = {} } = {}) {
+function buildRequest({ userId = 'u_admin_1', body = {}, url = 'http://localhost/api/test' } = {}) {
   return {
+    url,
     cookies: {
       get(name) {
         if (name !== 'itsm_session_user_id' || !userId) return undefined;

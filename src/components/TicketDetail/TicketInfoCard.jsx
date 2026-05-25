@@ -84,6 +84,11 @@ export default function TicketInfoCard({ ticket }) {
         <Descriptions.Item label="系统名称">
           {ticket.systemName || ticket.systemCode || '-'}
         </Descriptions.Item>
+        {ticket.ticketClassification && (
+          <Descriptions.Item label={ticket.ticketClassification.fieldLabel}>
+            {ticket.ticketClassification.optionName || '-'}
+          </Descriptions.Item>
+        )}
         <Descriptions.Item label="提单人">{ticket.requesterName}</Descriptions.Item>
         <Descriptions.Item label="手机号码">
           {ticket.reporterPhone || '-'}

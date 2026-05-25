@@ -44,6 +44,7 @@ export default function AdminSystemsPage() {
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSystem, setEditingSystem] = useState(null);
+  const [dictionaryTypes, setDictionaryTypes] = useState([]);
   const [error, setError] = useState('');
 
   const loadSystems = async () => {
@@ -55,6 +56,10 @@ export default function AdminSystemsPage() {
         throw new Error(data?.reason || '加载系统配置失败');
       }
       setSystems(data.config?.systems || []);
+      setDictionaryTypes((data.dictionaryTypes || []).map((item) => ({
+        value: item.type,
+        label: item.name
+      })));
     } catch (loadError) {
       console.error(loadError);
       setError(loadError.message || '加载系统配置失败');
@@ -92,7 +97,13 @@ export default function AdminSystemsPage() {
 
   const openCreateModal = () => {
     setEditingSystem(null);
-    form.setFieldsValue({ code: '', name: '', category: 'OLD', visibleInSubmit: true });
+    form.setFieldsValue({
+      code: '',
+      name: '',
+      category: 'OLD',
+      visibleInSubmit: true,
+      ticketClassification: { fieldLabel: '', dictionaryType: undefined }
+    });
     setModalOpen(true);
   };
 
@@ -102,19 +113,25 @@ export default function AdminSystemsPage() {
       code: system.code,
       name: system.name,
       category: system.category,
-      visibleInSubmit: system.visibleInSubmit !== false
+      visibleInSubmit: system.visibleInSubmit !== false,
+      ticketClassification: {
+        fieldLabel: system.ticketClassification?.fieldLabel || '',
+        dictionaryType: system.ticketClassification?.dictionaryType || undefined
+      }
     });
     setModalOpen(true);
   };
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    const ticketClassification = buildTicketClassificationConfig(values.ticketClassification);
     const nextSystem = {
       id: editingSystem?.id || `sys_${Date.now().toString(36)}`,
       code: values.code,
       name: values.name,
       category: values.category,
-      visibleInSubmit: values.visibleInSubmit !== false
+      visibleInSubmit: values.visibleInSubmit !== false,
+      ...(ticketClassification ? { ticketClassification } : {})
     };
     const nextSystems = editingSystem
       ? systems.map((system) => (system.id === editingSystem.id ? nextSystem : system))
@@ -143,6 +160,12 @@ export default function AdminSystemsPage() {
       dataIndex: 'category',
       width: 140,
       render: (value) => SYSTEM_CATEGORY_LABELS[value] || value
+    },
+    {
+      title: '分类字段',
+      dataIndex: 'ticketClassification',
+      width: 220,
+      render: (value) => value ? `${value.fieldLabel} / ${getDictionaryTypeLabel(dictionaryTypes, value.dictionaryType)}` : '-'
     },
     {
       title: '是否显示在前台',
@@ -222,6 +245,31 @@ export default function AdminSystemsPage() {
           <Form.Item name="category" label="新老系统标签" rules={[{ required: true, message: '请选择新老系统标签' }]}>
             <Select options={SYSTEM_CATEGORY_OPTIONS} />
           </Form.Item>
+          <Form.Item shouldUpdate noStyle>
+            {({ getFieldValue }) => {
+              const fieldLabel = String(getFieldValue(['ticketClassification', 'fieldLabel']) || '').trim();
+              const dictionaryType = getFieldValue(['ticketClassification', 'dictionaryType']);
+              const partialRules = fieldLabel || dictionaryType;
+              return (
+                <>
+                  <Form.Item
+                    name={['ticketClassification', 'fieldLabel']}
+                    label="分类字段名称"
+                    rules={partialRules ? [{ required: true, message: '请输入分类字段名称' }] : []}
+                  >
+                    <Input allowClear placeholder="例如 模块、险种" />
+                  </Form.Item>
+                  <Form.Item
+                    name={['ticketClassification', 'dictionaryType']}
+                    label="分类词典"
+                    rules={partialRules ? [{ required: true, message: '请选择分类词典' }] : []}
+                  >
+                    <Select allowClear placeholder="请选择分类词典" options={dictionaryTypes} />
+                  </Form.Item>
+                </>
+              );
+            }}
+          </Form.Item>
           <Form.Item name="visibleInSubmit" label="是否显示在前台" valuePropName="checked">
             <Switch checkedChildren="是" unCheckedChildren="否" />
           </Form.Item>
@@ -229,6 +277,17 @@ export default function AdminSystemsPage() {
       </Modal>
     </Space>
   );
+}
+
+function buildTicketClassificationConfig(input = {}) {
+  const fieldLabel = String(input.fieldLabel || '').trim();
+  const dictionaryType = String(input.dictionaryType || '').trim();
+  if (!fieldLabel && !dictionaryType) return null;
+  return { fieldLabel, dictionaryType };
+}
+
+function getDictionaryTypeLabel(dictionaryTypes, dictionaryType) {
+  return dictionaryTypes.find((item) => item.value === dictionaryType)?.label || dictionaryType || '-';
 }
 
 function formatValidationMessage(data, fallback) {

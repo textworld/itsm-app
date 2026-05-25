@@ -14,6 +14,7 @@ export function buildDraftTicketFormValues(ticket = {}) {
     priority: ticket.priority,
     systemCategory: ticket.systemCategory || getSystemCategoryByCode([], ticket.systemCode || ticket.systemName),
     systemName: ticket.systemCode || ticket.systemName || undefined,
+    ticketClassificationOptionId: ticket.ticketClassification?.optionId || undefined,
     reporterPhone: ticket.reporterPhone || '',
     reporterEmail: ticket.reporterEmail || '',
     reportForOthers: ticket.reportForOthers === true,
@@ -47,8 +48,14 @@ export function buildDraftTicketUpdate({
     priority: values.priority || '',
     priorityLabel: PRIORITY_LABELS[values.priority] || values.priority || '',
     systemCategory: values.systemCategory || SYSTEM_CATEGORY.OLD,
-    systemCode: values.systemName || '',
-    systemName: values.systemDisplayName || values.systemName || '',
+    systemCode: values.systemCode || values.systemName || '',
+    systemName: values.systemDisplayName || values.systemName || values.systemCode || '',
+    ticketClassification: values.ticketClassification || (values.ticketClassificationOptionId
+      ? {
+          optionId: values.ticketClassificationOptionId,
+          dictionaryType: values.ticketClassificationDictionaryType
+        }
+      : undefined),
     reporterPhone: String(values.reporterPhone || '').trim(),
     reporterEmail: String(values.reporterEmail || '').trim(),
     reportForOthers,

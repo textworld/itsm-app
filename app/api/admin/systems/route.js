@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server.js';
 import {
   getSystemConfig,
+  listTicketClassificationDictionaryTypes,
   saveSystemConfig
 } from '../../../../src/server/adminConfigStore.js';
 import { requireAdminUser } from '../../../../src/server/adminAuth.js';
@@ -20,7 +21,8 @@ export async function GET(request) {
 
   return NextResponse.json({
     ok: true,
-    config: getSystemConfig()
+    config: getSystemConfig(),
+    dictionaryTypes: listTicketClassificationDictionaryTypes()
   });
 }
 

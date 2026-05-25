@@ -5,7 +5,11 @@ import { buildCustomTagUpdate } from '../utils/customTicketTags.js';
 import { routeRandomTechTransferAssignee } from '../utils/techTransferRouting.js';
 import { TICKET_ACTIONS, canPerformTicketAction } from '../permissions/ticketPermissionMatrix.js';
 import { getDb, reseedDb } from './db.js';
-import { getSystemConfig } from './adminConfigStore.js';
+import {
+  findEnabledDictionaryOption,
+  getSystemConfig,
+  getTicketClassificationDictionaryName
+} from './adminConfigStore.js';
 import { normalizeSystemCode, resolveSelectedSystem } from '../constants/systems.js';
 
 const USER_AVAILABILITY_STATUS = {
@@ -135,7 +139,12 @@ export function dispatchTicketEvent(ticketId, event, payload, user) {
     return { ok: false, reason: '工单不存在' };
   }
 
-  const nextPayload = prepareTicketEventPayload(ticket, event, payload, user);
+  let nextPayload;
+  try {
+    nextPayload = prepareTicketEventPayload(ticket, event, payload, user);
+  } catch (error) {
+    return { ok: false, reason: error.message || '工单数据校验失败' };
+  }
   const assignmentCheck = validateTicketAssignmentTargets(ticket, event, nextPayload, user);
   if (!assignmentCheck.ok) {
     return assignmentCheck;
@@ -184,7 +193,12 @@ export function dispatchTicketEvent(ticketId, event, payload, user) {
 }
 
 export function dispatchCreateTicketEvent(event, payload, user) {
-  const nextPayload = prepareCreateTicketPayload(event, payload);
+  let nextPayload;
+  try {
+    nextPayload = prepareCreateTicketPayload(event, payload);
+  } catch (error) {
+    return { ok: false, reason: error.message || '工单数据校验失败' };
+  }
   const check = canTransition(null, event, user, nextPayload);
   if (!check.ok) {
     return { ok: false, reason: check.reason };
@@ -449,6 +463,7 @@ function enrichSystemSnapshot(payload = {}) {
   const values = payload.values && typeof payload.values === 'object'
     ? enrichSystemSnapshot(payload.values)
     : payload.values;
+  const ticketClassification = normalizeTicketClassificationSnapshot(payload.ticketClassification, system);
 
   return {
     ...payload,
@@ -457,8 +472,9 @@ function enrichSystemSnapshot(payload = {}) {
       ? {
           systemCategory: payload.systemCategory || system.category,
           systemCode: system.code,
-          systemName: payload.systemName || system.code,
-          systemDisplayName: payload.systemDisplayName || system.name
+          systemName: system.name,
+          systemDisplayName: payload.systemDisplayName || system.name,
+          ...(ticketClassification ? { ticketClassification } : { ticketClassification: undefined })
         }
       : {}),
     ...(targetSystem
@@ -468,6 +484,35 @@ function enrichSystemSnapshot(payload = {}) {
           targetSystemName: payload.targetSystemName || targetSystem.name
         }
       : {})
+  };
+}
+
+function normalizeTicketClassificationSnapshot(input = {}, system = null) {
+  const optionId = String(input?.optionId || input?.value || '').trim();
+  if (!optionId) return null;
+
+  const config = system?.ticketClassification;
+  if (!config?.fieldLabel || !config?.dictionaryType) {
+    throw new Error('当前系统未配置分类字段');
+  }
+
+  const dictionaryType = String(input.dictionaryType || config.dictionaryType || '').trim().toUpperCase();
+  if (dictionaryType !== config.dictionaryType) {
+    throw new Error('分类词典与系统配置不一致');
+  }
+
+  const option = findEnabledDictionaryOption(dictionaryType, optionId);
+  if (!option) {
+    throw new Error('分类选项不存在或已停用');
+  }
+
+  return {
+    fieldLabel: config.fieldLabel,
+    dictionaryType,
+    dictionaryName: getTicketClassificationDictionaryName(dictionaryType),
+    optionId: option.id,
+    optionCode: option.code,
+    optionName: option.name
   };
 }
 

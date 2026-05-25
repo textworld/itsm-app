@@ -68,6 +68,8 @@ export function TicketSubmitForm({ draftTicket = null }) {
   const [mockGenerating, setMockGenerating] = useState(false);
   const [dataFixSchemes, setDataFixSchemes] = useState([]);
   const [dataFixSchemesLoading, setDataFixSchemesLoading] = useState(false);
+  const [classificationOptions, setClassificationOptions] = useState([]);
+  const [classificationLoading, setClassificationLoading] = useState(false);
   const [dataFixSchemeModalOpen, setDataFixSchemeModalOpen] = useState(false);
   const [selectedDataFixSchemeId, setSelectedDataFixSchemeId] = useState('');
   const [dataFixSchemeTitleKeyword, setDataFixSchemeTitleKeyword] = useState('');
@@ -82,6 +84,49 @@ export function TicketSubmitForm({ draftTicket = null }) {
     setFileList(mapAttachmentsToUploadFileList(generalAttachments));
     setPermissionFileList(mapAttachmentsToUploadFileList(permissionAttachments));
   }, [draftTicket, form]);
+
+  const selectedSystemCode = Form.useWatch('systemName', form);
+  const selectedSystem = resolveSelectedSystem(systems, selectedSystemCode);
+  const selectedClassificationConfig = selectedSystem?.ticketClassification || null;
+
+  useEffect(() => {
+    if (!selectedClassificationConfig?.dictionaryType) {
+      setClassificationOptions([]);
+      if (!selectedSystemCode || (!systemsLoading && systems.length > 0)) {
+        form.setFieldsValue({
+          ticketClassificationOptionId: undefined,
+          ticketClassificationDictionaryType: undefined
+        });
+      }
+      return;
+    }
+
+    let active = true;
+    setClassificationLoading(true);
+    form.setFieldValue('ticketClassificationDictionaryType', selectedClassificationConfig.dictionaryType);
+
+    (async () => {
+      try {
+        const response = await fetch(`/api/dictionaries/options?type=${encodeURIComponent(selectedClassificationConfig.dictionaryType)}`, { cache: 'no-store' });
+        const payload = await response.json();
+        if (!active) return;
+        if (!response.ok || payload?.ok === false) {
+          setClassificationOptions([]);
+          return;
+        }
+        setClassificationOptions(payload.options || []);
+      } catch (error) {
+        console.error(error);
+        if (active) setClassificationOptions([]);
+      } finally {
+        if (active) setClassificationLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [form, selectedClassificationConfig?.dictionaryType, selectedSystemCode, systems.length, systemsLoading]);
 
   if (!user || user.role !== ROLES.REQUESTER) {
     return (
@@ -553,7 +598,11 @@ export function TicketSubmitForm({ draftTicket = null }) {
                   showSearch
                   optionFilterProp="label"
                   options={SYSTEM_CATEGORY_OPTIONS}
-                  onChange={() => form.setFieldValue('systemName', undefined)}
+                  onChange={() => form.setFieldsValue({
+                    systemName: undefined,
+                    ticketClassificationOptionId: undefined,
+                    ticketClassificationDictionaryType: undefined
+                  })}
                 />
               </Form.Item>
             </Col>
@@ -573,6 +622,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
                       optionFilterProp="label"
                       loading={systemsLoading}
                       options={getSystemOptionsByCategory(systems, getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
+                      onChange={() => form.setFieldValue('ticketClassificationOptionId', undefined)}
                     />
                   </Form.Item>
                 )}
@@ -580,6 +630,32 @@ export function TicketSubmitForm({ draftTicket = null }) {
             </Col>
           </Row>
         </div>
+
+        {selectedClassificationConfig && (
+          <div className="reference-form-line">
+            <Row gutter={24}>
+              <Col span={12}>
+                <Form.Item
+                  label={selectedClassificationConfig.fieldLabel}
+                  name="ticketClassificationOptionId"
+                >
+                  <Select
+                    className="reference-medium-control"
+                    allowClear
+                    placeholder="请选择..."
+                    showSearch
+                    optionFilterProp="label"
+                    loading={classificationLoading}
+                    options={classificationOptions}
+                  />
+                </Form.Item>
+                <Form.Item hidden name="ticketClassificationDictionaryType">
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+          </div>
+        )}
 
         <div className="reference-form-line">
           <Row gutter={24}>
@@ -896,6 +972,12 @@ function buildTicketPayload(values = {}, attachments, user, now, systems = []) {
     systemCode: selectedSystem?.code || values.systemName || '',
     systemName,
     systemDisplayName: systemName,
+    ticketClassification: values.ticketClassificationOptionId
+      ? {
+          optionId: values.ticketClassificationOptionId,
+          dictionaryType: selectedSystem?.ticketClassification?.dictionaryType || values.ticketClassificationDictionaryType
+        }
+      : undefined,
     reporterPhone: String(values.reporterPhone || '').trim(),
     reporterEmail: String(values.reporterEmail || '').trim(),
     reportForOthers,

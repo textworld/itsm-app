@@ -7,8 +7,10 @@ import {
   getScheduleConfig,
   getSupportRestConfig,
   getSystemConfig,
+  listEnabledDictionaryOptions,
   listInsuranceTypes,
   listL1Users,
+  listTicketClassificationDictionaryTypes,
   saveDataFixSchemeConfig,
   saveScheduleConfig,
   saveSupportRestConfig,
@@ -41,11 +43,30 @@ test('admin config store seeds default systems from database config', () => {
   assert.ok(config.systems.every((system) => Object.hasOwn(system, 'visibleInSubmit')));
 });
 
+test('admin config store exposes classification dictionary types and enabled options', () => {
+  reseedDb();
+
+  const dictionaryTypes = listTicketClassificationDictionaryTypes();
+  const moduleOptions = listEnabledDictionaryOptions('SYSTEM_MODULE');
+
+  assert.ok(dictionaryTypes.some((item) => item.type === 'INSURANCE_TYPE' && item.name === '险种词典'));
+  assert.ok(dictionaryTypes.some((item) => item.type === 'SYSTEM_MODULE' && item.name === '模块词典'));
+  assert.ok(moduleOptions.some((item) => item.id === 'module_policy' && item.name === '保单模块'));
+  assert.ok(moduleOptions.every((item) => item.value === item.id && item.label === item.name));
+});
+
 test('admin config store saves systems and exposes only visible systems to selectors', () => {
   const result = saveSystemConfig(
     {
       systems: [
-        { id: 'sys_erp', code: 'erp_core', name: 'ERP 新名称', category: 'OLD', visibleInSubmit: true },
+        {
+          id: 'sys_erp',
+          code: 'erp_core',
+          name: 'ERP 新名称',
+          category: 'OLD',
+          visibleInSubmit: true,
+          ticketClassification: { fieldLabel: '模块', dictionaryType: 'SYSTEM_MODULE' }
+        },
         { id: 'sys_hidden', code: 'HIDDEN_SYS', name: '隐藏系统', category: 'NEW', visibleInSubmit: false }
       ]
     },
@@ -55,6 +76,7 @@ test('admin config store saves systems and exposes only visible systems to selec
   assert.equal(result.ok, true);
   assert.equal(getSystemConfig().systems.length, 2);
   assert.equal(getSystemConfig().systems[0].code, 'ERP_CORE');
+  assert.deepEqual(getSystemConfig().systems[0].ticketClassification, { fieldLabel: '模块', dictionaryType: 'SYSTEM_MODULE' });
   assert.equal(getSystemConfig({ visibleOnly: true }).systems.length, 1);
   assert.equal(getSystemConfig({ visibleOnly: true }).systems[0].name, 'ERP 新名称');
 });

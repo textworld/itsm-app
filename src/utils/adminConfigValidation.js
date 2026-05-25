@@ -1,4 +1,7 @@
+import { isKnownTicketClassificationDictionaryType } from '../constants/systems.js';
+
 export const INSURANCE_DICTIONARY_TYPE = 'INSURANCE_TYPE';
+export const SYSTEM_MODULE_DICTIONARY_TYPE = 'SYSTEM_MODULE';
 export const SCHEDULE_CONFIG_KEY = 'SCHEDULE_CONFIG';
 export const SUPPORT_REST_CONFIG_KEY = 'SUPPORT_REST_CONFIG';
 export const DATA_FIX_SCHEME_CONFIG_KEY = 'DATA_FIX_SCHEME_CONFIG';
@@ -192,12 +195,22 @@ export function normalizeSystemConfig(input = {}) {
     systems: Array.isArray(input.systems)
       ? input.systems.map((system, systemIndex) => {
           const code = normalizeCode(system.code || system.value);
+          const fieldLabel = String(system.ticketClassification?.fieldLabel || '').trim();
+          const dictionaryType = normalizeCode(system.ticketClassification?.dictionaryType);
           return {
             id: String(system.id || `sys_${code || systemIndex + 1}`),
             code,
             name: String(system.name || system.label || '').trim(),
             category: SYSTEM_CATEGORIES.includes(system.category) ? system.category : 'OLD',
-            visibleInSubmit: system.visibleInSubmit !== false
+            visibleInSubmit: system.visibleInSubmit !== false,
+            ...((fieldLabel || dictionaryType)
+              ? {
+                  ticketClassification: {
+                    fieldLabel,
+                    dictionaryType
+                  }
+                }
+              : {})
           };
         })
       : []
@@ -224,6 +237,18 @@ export function validateSystemConfig(input = {}) {
         errors.push({ path: ['systems', systemIndex, 'code'], message: `系统编码 ${system.code} 已存在` });
       } else {
         codeOwner.set(system.code, systemIndex);
+      }
+    }
+
+    const classification = system.ticketClassification;
+    if (classification) {
+      if (!classification.fieldLabel) {
+        errors.push({ path: ['systems', systemIndex, 'ticketClassification', 'fieldLabel'], message: '请输入分类字段名称' });
+      }
+      if (!classification.dictionaryType) {
+        errors.push({ path: ['systems', systemIndex, 'ticketClassification', 'dictionaryType'], message: '请选择分类词典' });
+      } else if (!isKnownTicketClassificationDictionaryType(classification.dictionaryType)) {
+        errors.push({ path: ['systems', systemIndex, 'ticketClassification', 'dictionaryType'], message: '分类词典不存在' });
       }
     }
   });

@@ -16,7 +16,7 @@ import { STATUS, getRequesterStatus } from '../../constants/ticketStatus.js';
 import { EVENTS } from '../../state-machine/ticketStateMachine.js';
 import { TOOL_TYPE_OPTIONS } from '../../constants/toolTypes.js';
 import { PRIORITY_OPTIONS } from '../../constants/priorities.js';
-import { SYSTEM_CATEGORY, getSystemOptionsByCategory } from '../../constants/systems.js';
+import { SYSTEM_CATEGORY, getSystemOptionsByCategory, resolveSelectedSystem } from '../../constants/systems.js';
 import RichTextEditor from '../common/RichTextEditor.jsx';
 import FileUploader from '../common/FileUploader.jsx';
 import { buildAttachments, mapAttachmentsToUploadFileList } from '../../utils/fileUtils.js';
@@ -32,9 +32,53 @@ export default function DraftTicketEditButton({ ticket }) {
   const { message } = AntdApp.useApp();
   const [open, setOpen] = useState(false);
   const [fileList, setFileList] = useState([]);
+  const [classificationOptions, setClassificationOptions] = useState([]);
+  const [classificationLoading, setClassificationLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
   const { systems, loading: systemsLoading } = useSystems();
+  const selectedSystemCode = Form.useWatch('systemName', form);
+  const selectedSystem = resolveSelectedSystem(systems, selectedSystemCode);
+  const selectedClassificationConfig = selectedSystem?.ticketClassification || null;
+
+  React.useEffect(() => {
+    if (!open || !selectedClassificationConfig?.dictionaryType) {
+      setClassificationOptions([]);
+      if (open && (!selectedSystemCode || (!systemsLoading && systems.length > 0))) {
+        form.setFieldsValue({
+          ticketClassificationOptionId: undefined,
+          ticketClassificationDictionaryType: undefined
+        });
+      }
+      return;
+    }
+
+    let active = true;
+    setClassificationLoading(true);
+    form.setFieldValue('ticketClassificationDictionaryType', selectedClassificationConfig.dictionaryType);
+
+    (async () => {
+      try {
+        const response = await fetch(`/api/dictionaries/options?type=${encodeURIComponent(selectedClassificationConfig.dictionaryType)}`, { cache: 'no-store' });
+        const payload = await response.json();
+        if (!active) return;
+        if (!response.ok || payload?.ok === false) {
+          setClassificationOptions([]);
+          return;
+        }
+        setClassificationOptions(payload.options || []);
+      } catch (error) {
+        console.error(error);
+        if (active) setClassificationOptions([]);
+      } finally {
+        if (active) setClassificationLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [form, open, selectedClassificationConfig?.dictionaryType, selectedSystemCode, systems.length, systemsLoading]);
 
   if (!ticket || !user || ticket.oaLocked || getRequesterStatus(ticket) !== STATUS.DRAFT) {
     return null;
@@ -148,8 +192,27 @@ export default function DraftTicketEditButton({ ticket }) {
               optionFilterProp="label"
               loading={systemsLoading}
               options={getSystemOptionsByCategory(systems, form.getFieldValue('systemCategory') || SYSTEM_CATEGORY.OLD)}
+              onChange={() => form.setFieldValue('ticketClassificationOptionId', undefined)}
             />
           </Form.Item>
+
+          {selectedClassificationConfig && (
+            <>
+              <Form.Item label={selectedClassificationConfig.fieldLabel} name="ticketClassificationOptionId">
+                <Select
+                  allowClear
+                  placeholder="请选择..."
+                  showSearch
+                  optionFilterProp="label"
+                  loading={classificationLoading}
+                  options={classificationOptions}
+                />
+              </Form.Item>
+              <Form.Item hidden name="ticketClassificationDictionaryType">
+                <Input />
+              </Form.Item>
+            </>
+          )}
 
           <Form.Item
             label="手机号码"

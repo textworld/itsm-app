@@ -78,6 +78,155 @@ test('工单保存系统编码和中文名快照，后台改名不影响历史�
   assert.equal(secondResult.ticket.systemName, 'ERP 改名后系统');
 });
 
+test('提交工单时可选分类会保存词典快照且历史显示不受配置变化影响', () => {
+  const saveResult = saveSystemConfig(
+    {
+      systems: [
+        {
+          id: 'sys_erp_core',
+          code: 'ERP_CORE',
+          name: 'ERP 核心系统',
+          category: 'OLD',
+          visibleInSubmit: true,
+          ticketClassification: { fieldLabel: '模块', dictionaryType: 'SYSTEM_MODULE' }
+        }
+      ]
+    },
+    { id: 'u_admin_1', name: '管理员', role: 'ADMIN' }
+  );
+  assert.equal(saveResult.ok, true);
+
+  const result = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      title: '分类快照',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P3',
+      systemName: 'ERP_CORE',
+      ticketClassification: { optionId: 'module_policy', dictionaryType: 'SYSTEM_MODULE' },
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '保存分类快照' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.ticket.ticketClassification, {
+    fieldLabel: '模块',
+    dictionaryType: 'SYSTEM_MODULE',
+    dictionaryName: '模块词典',
+    optionId: 'module_policy',
+    optionCode: 'POLICY',
+    optionName: '保单模块'
+  });
+
+  const renameResult = saveSystemConfig(
+    {
+      systems: [
+        {
+          id: 'sys_erp_core',
+          code: 'ERP_CORE',
+          name: 'ERP 核心系统',
+          category: 'OLD',
+          visibleInSubmit: true,
+          ticketClassification: { fieldLabel: '业务模块', dictionaryType: 'SYSTEM_MODULE' }
+        }
+      ]
+    },
+    { id: 'u_admin_1', name: '管理员', role: 'ADMIN' }
+  );
+  assert.equal(renameResult.ok, true);
+  assert.equal(getTicketById(result.ticket.id).ticketClassification.fieldLabel, '模块');
+});
+
+test('提交工单未选择分类时不保存空快照', () => {
+  const result = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      title: '无分类快照',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P3',
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '未选择分类' }] }]
+      },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.ticket.ticketClassification, undefined);
+});
+
+test('提交工单拒绝篡改的分类词典和选项', () => {
+  saveSystemConfig(
+    {
+      systems: [
+        {
+          id: 'sys_erp_core',
+          code: 'ERP_CORE',
+          name: 'ERP 核心系统',
+          category: 'OLD',
+          visibleInSubmit: true,
+          ticketClassification: { fieldLabel: '模块', dictionaryType: 'SYSTEM_MODULE' }
+        }
+      ]
+    },
+    { id: 'u_admin_1', name: '管理员', role: 'ADMIN' }
+  );
+
+  const dictionaryResult = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      title: '篡改词典',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P3',
+      systemName: 'ERP_CORE',
+      ticketClassification: { optionId: 'ins_medical', dictionaryType: 'INSURANCE_TYPE' },
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '篡改词典' }] }] },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  assert.equal(dictionaryResult.ok, false);
+  assert.equal(dictionaryResult.reason, '分类词典与系统配置不一致');
+
+  const optionResult = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      title: '篡改选项',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P3',
+      systemName: 'ERP_CORE',
+      ticketClassification: { optionId: 'missing_option', dictionaryType: 'SYSTEM_MODULE' },
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      descriptionDoc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '篡改选项' }] }] },
+      attachments: []
+    },
+    requesterUser
+  );
+
+  assert.equal(optionResult.ok, false);
+  assert.equal(optionResult.reason, '分类选项不存在或已停用');
+});
+
 test('暂存草稿不生成正式工单号', () => {
   const result = dispatchCreateTicketEvent(
     EVENTS.CREATE_DRAFT,

@@ -9,11 +9,18 @@ const dbPath = path.join(dataDir, 'itsm.sqlite');
 const jsonDbPath = path.join(dataDir, 'itsm-fallback.json');
 const mockDir = path.join(process.cwd(), 'src', 'mock');
 const INSURANCE_DICTIONARY_TYPE = 'INSURANCE_TYPE';
+const SYSTEM_MODULE_DICTIONARY_TYPE = 'SYSTEM_MODULE';
 
 const DEFAULT_INSURANCE_TYPES = [
   { id: 'ins_medical', code: 'MEDICAL', name: '医疗险', enabled: true },
   { id: 'ins_life', code: 'LIFE', name: '寿险', enabled: true },
   { id: 'ins_accident', code: 'ACCIDENT', name: '意外险', enabled: true }
+];
+
+const DEFAULT_SYSTEM_MODULES = [
+  { id: 'module_policy', code: 'POLICY', name: '保单模块', enabled: true },
+  { id: 'module_claim', code: 'CLAIM', name: '理赔模块', enabled: true },
+  { id: 'module_customer', code: 'CUSTOMER', name: '客户模块', enabled: true }
 ];
 
 const DEFAULT_SYSTEMS = [
@@ -217,6 +224,9 @@ function seedDatabase(db, { force = false } = {}) {
   const shouldSeedInsuranceTypes =
     force ||
     db.prepare('SELECT COUNT(*) AS count FROM dictionary_items WHERE type = ?').get(INSURANCE_DICTIONARY_TYPE).count === 0;
+  const shouldSeedSystemModules =
+    force ||
+    db.prepare('SELECT COUNT(*) AS count FROM dictionary_items WHERE type = ?').get(SYSTEM_MODULE_DICTIONARY_TYPE).count === 0;
   const shouldSeedDataFixSchemes =
     force ||
     !db.prepare('SELECT data FROM app_configs WHERE key = ?').get(DATA_FIX_SCHEME_CONFIG_KEY);
@@ -224,7 +234,7 @@ function seedDatabase(db, { force = false } = {}) {
     force ||
     !db.prepare('SELECT data FROM app_configs WHERE key = ?').get(SYSTEM_CONFIG_KEY);
 
-  if (!shouldSeed && !shouldSeedInsuranceTypes && !shouldSeedDataFixSchemes && !shouldSeedSystems) {
+  if (!shouldSeed && !shouldSeedInsuranceTypes && !shouldSeedSystemModules && !shouldSeedDataFixSchemes && !shouldSeedSystems) {
     return;
   }
 
@@ -284,31 +294,11 @@ function seedDatabase(db, { force = false } = {}) {
     }
 
     if (shouldSeedInsuranceTypes) {
-      const now = new Date().toISOString();
-      db.prepare('DELETE FROM dictionary_items WHERE type = ?').run(INSURANCE_DICTIONARY_TYPE);
-      const insertDictionaryItem = db.prepare(`
-        INSERT INTO dictionary_items (id, type, code, name, enabled, updated_at, data)
-        VALUES (@id, @type, @code, @name, @enabled, @updated_at, @data)
-      `);
+      seedDictionaryItems(db, INSURANCE_DICTIONARY_TYPE, DEFAULT_INSURANCE_TYPES);
+    }
 
-      for (const item of DEFAULT_INSURANCE_TYPES) {
-        const data = {
-          ...item,
-          type: INSURANCE_DICTIONARY_TYPE,
-          createdAt: now,
-          updatedAt: now,
-          updatedBy: null
-        };
-        insertDictionaryItem.run({
-          id: item.id,
-          type: INSURANCE_DICTIONARY_TYPE,
-          code: item.code,
-          name: item.name,
-          enabled: item.enabled ? 1 : 0,
-          updated_at: now,
-          data: JSON.stringify(data)
-        });
-      }
+    if (shouldSeedSystemModules) {
+      seedDictionaryItems(db, SYSTEM_MODULE_DICTIONARY_TYPE, DEFAULT_SYSTEM_MODULES);
     }
 
     if (shouldSeedDataFixSchemes) {
@@ -367,6 +357,34 @@ export function reseedDb() {
 }
 
 export { dbPath };
+
+function seedDictionaryItems(db, type, items) {
+  const now = new Date().toISOString();
+  db.prepare('DELETE FROM dictionary_items WHERE type = ?').run(type);
+  const insertDictionaryItem = db.prepare(`
+    INSERT INTO dictionary_items (id, type, code, name, enabled, updated_at, data)
+    VALUES (@id, @type, @code, @name, @enabled, @updated_at, @data)
+  `);
+
+  for (const item of items) {
+    const data = {
+      ...item,
+      type,
+      createdAt: now,
+      updatedAt: now,
+      updatedBy: null
+    };
+    insertDictionaryItem.run({
+      id: item.id,
+      type,
+      code: item.code,
+      name: item.name,
+      enabled: item.enabled ? 1 : 0,
+      updated_at: now,
+      data: JSON.stringify(data)
+    });
+  }
+}
 
 class JsonFallbackDatabase {
   constructor(filePath) {

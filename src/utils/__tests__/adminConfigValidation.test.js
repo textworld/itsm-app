@@ -5,11 +5,13 @@ import dayjs from 'dayjs';
 import {
   DATA_FIX_SCHEME_CONFIG_KEY,
   INSURANCE_DICTIONARY_TYPE,
+  SYSTEM_MODULE_DICTIONARY_TYPE,
   SUPPORT_REST_CONFIG_KEY,
   buildUpcomingSupportRestDays,
   validateInsuranceTypeInput,
   validateDataFixSchemeConfig,
   validateScheduleConfig,
+  validateSystemConfig,
   validateSupportRestConfig
 } from '../adminConfigValidation.js';
 
@@ -64,6 +66,47 @@ test('insurance type validation allows editing current item without duplicate er
     name: '医疗险',
     enabled: false
   });
+});
+
+test('system config validation accepts complete classification config and rejects partial config', () => {
+  const valid = validateSystemConfig({
+    systems: [
+      {
+        id: 'sys_erp_core',
+        code: 'erp_core',
+        name: 'ERP 核心系统',
+        category: 'OLD',
+        ticketClassification: {
+          fieldLabel: '模块',
+          dictionaryType: SYSTEM_MODULE_DICTIONARY_TYPE
+        }
+      }
+    ]
+  });
+
+  assert.equal(valid.ok, true);
+  assert.equal(valid.value.systems[0].code, 'ERP_CORE');
+  assert.deepEqual(valid.value.systems[0].ticketClassification, {
+    fieldLabel: '模块',
+    dictionaryType: SYSTEM_MODULE_DICTIONARY_TYPE
+  });
+
+  const invalid = validateSystemConfig({
+    systems: [
+      {
+        id: 'sys_invalid',
+        code: 'CRM_CENTER',
+        name: 'CRM 客户管理系统',
+        category: 'NEW',
+        ticketClassification: { fieldLabel: '险种' }
+      }
+    ]
+  });
+
+  assert.equal(invalid.ok, false);
+  assert.deepEqual(invalid.errors, [
+    { path: ['systems', 0, 'ticketClassification', 'dictionaryType'], message: '请选择分类词典' }
+  ]);
 });
 
 test('schedule validation requires each group to have systems and a base schedule', () => {
