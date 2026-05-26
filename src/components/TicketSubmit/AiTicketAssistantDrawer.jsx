@@ -48,7 +48,7 @@ export default function AiTicketAssistantDrawer({
     setMessages([...nextMessages, { role: 'assistant', content: '' }]);
 
     try {
-      const response = await fetch('/api/ai/ticket-assistant', {
+      const response = await fetch('/api/submission/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticket, messages: nextMessages }),

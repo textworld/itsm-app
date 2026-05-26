@@ -11,7 +11,7 @@ export function useSystems() {
 
     (async () => {
       try {
-        const response = await fetch('/api/systems', { cache: 'no-store' });
+        const response = await fetch('/api/config/systems', { cache: 'no-store' });
         const payload = await response.json();
         if (!active) return;
         if (!response.ok || payload?.ok === false) {

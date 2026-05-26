@@ -59,7 +59,7 @@ export default function DraftTicketEditButton({ ticket }) {
 
     (async () => {
       try {
-        const response = await fetch(`/api/dictionaries/options?type=${encodeURIComponent(selectedClassificationConfig.dictionaryType)}`, { cache: 'no-store' });
+        const response = await fetch(`/api/config/dictionaries/options?type=${encodeURIComponent(selectedClassificationConfig.dictionaryType)}`, { cache: 'no-store' });
         const payload = await response.json();
         if (!active) return;
         if (!response.ok || payload?.ok === false) {

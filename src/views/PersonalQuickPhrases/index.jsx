@@ -23,7 +23,7 @@ import {
 import { validateQuickPhraseConfig } from '../../utils/quickPhrases.js';
 import { shortId } from '../../utils/idGenerator.js';
 
-const API_URL = '/api/personal/quick-phrases';
+const API_URL = '/api/config/personal/quick-phrases';
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {

@@ -17,7 +17,7 @@ import {
 } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 
-const API_URL = '/api/admin/data-fix-schemes';
+const API_URL = '/api/config/admin/data-fix-schemes';
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {

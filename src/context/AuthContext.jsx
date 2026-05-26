@@ -24,7 +24,7 @@ export function AuthProvider({ children }) {
   const [initialized, setInitialized] = useState(false);
 
   const refreshSession = useCallback(async () => {
-    const { response, data } = await requestJson('/api/auth/session');
+    const { response, data } = await requestJson('/api/access/session');
     if (!response.ok || data?.ok === false) {
       setUser(null);
       return null;
@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
 
     (async () => {
       try {
-        const { response, data } = await requestJson('/api/auth/session');
+        const { response, data } = await requestJson('/api/access/session');
         if (!active) return;
         if (!response.ok || data?.ok === false) {
           setUser(null);
@@ -64,7 +64,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (username, password, role) => {
     try {
-      const { response, data } = await requestJson('/api/auth/login', {
+      const { response, data } = await requestJson('/api/access/login', {
         method: 'POST',
         body: JSON.stringify({ username, password, role })
       });
@@ -83,7 +83,7 @@ export function AuthProvider({ children }) {
 
   const register = useCallback(async (username, password, role, name) => {
     try {
-      const { response, data } = await requestJson('/api/auth/register', {
+      const { response, data } = await requestJson('/api/access/register', {
         method: 'POST',
         body: JSON.stringify({ username, password, role, name })
       });
@@ -102,7 +102,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', {
+      await fetch('/api/access/logout', {
         method: 'POST',
         cache: 'no-store'
       });

@@ -19,7 +19,7 @@ import {
   filterScheduleGroups
 } from './scheduleConfigViewModel.js';
 
-const API_URL = '/api/admin/schedules';
+const API_URL = '/api/config/admin/schedules';
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {

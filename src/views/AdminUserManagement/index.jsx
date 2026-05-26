@@ -19,7 +19,7 @@ import {
 import { PlusOutlined, ReloadOutlined, UserAddOutlined } from '@ant-design/icons';
 import { ROLE_LABELS, ROLE_OPTIONS } from '../../constants/roles.js';
 
-const API_URL = '/api/admin/users';
+const API_URL = '/api/access/admin/users';
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {

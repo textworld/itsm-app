@@ -53,15 +53,29 @@ export function TicketProvider({ children }) {
       };
     }
 
-    const { response, data } = await requestJson('/api/data');
+    const { response, data } = await requestJson('/api/workflow/tickets');
     if (!response.ok || data?.ok === false) {
       throw new Error(data?.reason || '加载工单数据失败');
     }
 
     setTickets(data.tickets || []);
-    setDefects(data.defects || []);
-    setMessageReads(data.messageReads || {});
-    return data;
+    const defectsResult = await requestJson('/api/workflow/defects');
+    const readsResult = await requestJson('/api/workflow/message-reads');
+    if (!defectsResult.response.ok || defectsResult.data?.ok === false) {
+      throw new Error(defectsResult.data?.reason || '鍔犺浇缂洪櫡鏁版嵁澶辫触');
+    }
+
+    if (!readsResult.response.ok || readsResult.data?.ok === false) {
+      throw new Error(readsResult.data?.reason || '加载工单已读状态失败');
+    }
+
+    setDefects(defectsResult.data.defects || []);
+    setMessageReads(readsResult.data?.messageReads || {});
+    return {
+      tickets: data.tickets || [],
+      defects: defectsResult.data.defects || [],
+      messageReads: readsResult.data?.messageReads || {}
+    };
   }, [user]);
 
   useEffect(() => {
@@ -108,7 +122,8 @@ export function TicketProvider({ children }) {
   }, [authInitialized, refreshData, user]);
 
   const addTicket = useCallback(async (ticket, event = EVENTS.SUBMIT) => {
-    const { response, data } = await requestJson('/api/tickets', {
+    const url = event === EVENTS.CREATE_DRAFT ? '/api/submission/drafts' : '/api/submission/tickets';
+    const { response, data } = await requestJson(url, {
       method: 'POST',
       body: JSON.stringify({ ticket, event })
     });
@@ -132,9 +147,9 @@ export function TicketProvider({ children }) {
 
   const dispatchEvent = useCallback(async (ticketId, event, payload = {}) => {
     try {
-      const { response, data } = await requestJson(`/api/tickets/${ticketId}/dispatch`, {
+      const { response, data } = await requestJson(`/api/workflow/tickets/${ticketId}/commands`, {
         method: 'POST',
-        body: JSON.stringify({ event, payload })
+        body: JSON.stringify({ command: event, payload })
       });
 
       if (!response.ok || data?.ok === false) {
@@ -156,7 +171,7 @@ export function TicketProvider({ children }) {
 
   const updateCustomTags = useCallback(async (ticketId, tags) => {
     try {
-      const { response, data } = await requestJson(`/api/tickets/${ticketId}/custom-tags`, {
+      const { response, data } = await requestJson(`/api/workflow/tickets/${ticketId}/custom-tags`, {
         method: 'POST',
         body: JSON.stringify({ tags })
       });
@@ -174,7 +189,7 @@ export function TicketProvider({ children }) {
   }, []);
 
   const addMessage = useCallback(async (ticketId, message) => {
-    const { response, data } = await requestJson(`/api/tickets/${ticketId}/messages`, {
+    const { response, data } = await requestJson(`/api/workflow/tickets/${ticketId}/messages`, {
       method: 'POST',
       body: JSON.stringify({ message })
     });
@@ -196,7 +211,7 @@ export function TicketProvider({ children }) {
     }));
 
     try {
-      await requestJson('/api/message-reads', {
+      await requestJson('/api/workflow/message-reads', {
         method: 'POST',
         body: JSON.stringify({ ticketId, readAt })
       });
@@ -206,7 +221,7 @@ export function TicketProvider({ children }) {
   }, []);
 
   const addDefect = useCallback(async (defect) => {
-    const { response, data } = await requestJson('/api/defects', {
+    const { response, data } = await requestJson('/api/workflow/defects', {
       method: 'POST',
       body: JSON.stringify({ defect })
     });
@@ -220,7 +235,7 @@ export function TicketProvider({ children }) {
   }, []);
 
   const resetData = useCallback(async () => {
-    const { response, data } = await requestJson('/api/reset', {
+    const { response, data } = await requestJson('/api/workflow/reset', {
       method: 'POST'
     });
 
@@ -232,7 +247,7 @@ export function TicketProvider({ children }) {
   }, [refreshData]);
 
   const exportData = useCallback(async () => {
-    const response = await fetch('/api/export', { cache: 'no-store' });
+    const response = await fetch('/api/workflow/export', { cache: 'no-store' });
     if (!response.ok) {
       throw new Error('导出失败');
     }

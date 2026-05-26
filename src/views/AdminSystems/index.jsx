@@ -20,7 +20,7 @@ import {
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { SYSTEM_CATEGORY_LABELS, SYSTEM_CATEGORY_OPTIONS } from '../../constants/systems.js';
 
-const API_URL = '/api/admin/systems';
+const API_URL = '/api/config/admin/systems';
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {

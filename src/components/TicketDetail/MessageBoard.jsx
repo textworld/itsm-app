@@ -59,7 +59,7 @@ export default function MessageBoard({ ticket, readOnly }) {
 
     (async () => {
       try {
-        const response = await fetch('/api/personal/quick-phrases', { cache: 'no-store' });
+        const response = await fetch('/api/config/personal/quick-phrases', { cache: 'no-store' });
         const data = await response.json();
         if (!active) return;
         if (response.ok && data?.ok !== false) {

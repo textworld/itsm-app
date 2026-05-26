@@ -39,7 +39,7 @@ import {
   isSupportRestPeriodVisible
 } from '../../utils/supportRestTimeSlots.js';
 
-const API_URL = '/api/admin/support-rests';
+const API_URL = '/api/config/admin/support-rests';
 const UPCOMING_RANGE_OPTIONS = [
   { label: '未来 7 天', value: 7 },
   { label: '未来 14 天', value: 14 },

@@ -22,7 +22,7 @@ import { STATUS_LABELS } from '../../constants/ticketStatus.js';
 import { TOOL_TYPE_LABELS } from '../../constants/toolTypes.js';
 import { formatDateTime } from '../../utils/format.js';
 
-const API_URL = '/api/oa-simulator/applications';
+const API_URL = '/api/approval/applications';
 
 const ACTION_OPTIONS = [
   { label: 'ITSM 通过并生成正式工单', value: 'GENERATE_TICKET' },

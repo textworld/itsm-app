@@ -11,7 +11,7 @@ export function useSupportAssignees(role = '') {
 
     (async () => {
       try {
-        const response = await fetch(`/api/support-assignees${query}`, { cache: 'no-store' });
+        const response = await fetch(`/api/config/support-assignees${query}`, { cache: 'no-store' });
         const data = await response.json();
         if (active && response.ok && data?.ok !== false) {
           setAssignees(data.users || []);

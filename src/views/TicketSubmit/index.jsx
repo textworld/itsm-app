@@ -107,7 +107,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
 
     (async () => {
       try {
-        const response = await fetch(`/api/dictionaries/options?type=${encodeURIComponent(selectedClassificationConfig.dictionaryType)}`, { cache: 'no-store' });
+        const response = await fetch(`/api/config/dictionaries/options?type=${encodeURIComponent(selectedClassificationConfig.dictionaryType)}`, { cache: 'no-store' });
         const payload = await response.json();
         if (!active) return;
         if (!response.ok || payload?.ok === false) {
@@ -198,7 +198,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
     setMockGenerating(true);
 
     try {
-      const response = await fetch('/api/ai/mock-ticket-description', {
+      const response = await fetch('/api/submission/mock-description', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticket: mockValues })
@@ -391,7 +391,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
   const loadDataFixSchemes = async () => {
     setDataFixSchemesLoading(true);
     try {
-      const response = await fetch('/api/data-fix-schemes', { cache: 'no-store' });
+      const response = await fetch('/api/config/data-fix-schemes', { cache: 'no-store' });
       const payload = await response.json();
       if (!response.ok || payload?.ok === false) {
         throw new Error(payload?.reason || '加载数据修正方案失败');
@@ -745,7 +745,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
                       className={getFieldErrorClass('permissionApplicationFile')}
                     >
                       <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                        <Typography.Link href="/api/templates/permission-request" download="权限申请模板.xls">
+                        <Typography.Link href="/api/access/templates/permission-request" download="权限申请模板.xls">
                           下载权限申请模板
                         </Typography.Link>
                         <FileUploader

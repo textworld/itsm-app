@@ -22,7 +22,7 @@ import {
 import { DeleteOutlined, PlusOutlined, SaveOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { validateScheduleConfig } from '../../utils/adminConfigValidation.js';
 
-const API_URL = '/api/admin/schedules';
+const API_URL = '/api/config/admin/schedules';
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {

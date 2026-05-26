@@ -18,7 +18,7 @@ import {
 import { EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { formatDateTime } from '../../utils/format.js';
 
-const API_URL = '/api/admin/dictionaries/insurance-types';
+const API_URL = '/api/config/admin/dictionaries/insurance-types';
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {
