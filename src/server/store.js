@@ -2,11 +2,13 @@ import { applyTransition, canTransition, EVENTS } from '../state-machine/ticketS
 import { withDualStatuses } from '../constants/ticketStatus.js';
 import { generateTicketId, shortId } from '../utils/idGenerator.js';
 import { buildCustomTagUpdate } from '../utils/customTicketTags.js';
+import { routeScheduleAssignee } from '../utils/scheduleDispatchRouting.js';
 import { routeRandomTechTransferAssignee } from '../utils/techTransferRouting.js';
 import { TICKET_ACTIONS, canPerformTicketAction } from '../permissions/ticketPermissionMatrix.js';
 import { getDb, reseedDb } from './db.js';
 import {
   findEnabledDictionaryOption,
+  getScheduleConfig,
   getSystemConfig,
   getTicketClassificationDictionaryName
 } from './adminConfigStore.js';
@@ -182,6 +184,10 @@ export function dispatchTicketEvent(ticketId, event, payload, user) {
     if (savedTicket.id !== ticketId) {
       deleteTicketById(ticketId);
     }
+    const autoAssignResult = autoAssignPendingTicket(savedTicket, event);
+    if (autoAssignResult) {
+      return autoAssignResult;
+    }
     return {
       ok: true,
       ticket: savedTicket,
@@ -206,9 +212,14 @@ export function dispatchCreateTicketEvent(event, payload, user) {
 
   try {
     const nextTicket = applyTransition(null, event, nextPayload, user);
+    const savedTicket = upsertTicket(nextTicket);
+    const autoAssignResult = autoAssignPendingTicket(savedTicket, event);
+    if (autoAssignResult) {
+      return autoAssignResult;
+    }
     return {
       ok: true,
-      ticket: upsertTicket(nextTicket)
+      ticket: savedTicket
     };
   } catch (error) {
     return { ok: false, reason: error.message || '状态流转失败' };
@@ -535,6 +546,58 @@ function validateTicketAssignmentTargets(ticket, event, payload = {}, user = nul
     }
   }
   return { ok: true };
+}
+
+function autoAssignPendingTicket(ticket, event) {
+  if (!shouldAutoAssignPendingTicket(ticket, event)) {
+    return null;
+  }
+
+  const route = routeScheduleAssignee(
+    ticket,
+    getScheduleConfig(),
+    listAssignableSupportUsers('L1'),
+    listTickets()
+  );
+  if (!route?.assignee?.id) {
+    return null;
+  }
+
+  const result = dispatchTicketEvent(
+    ticket.id,
+    EVENTS.ACCEPT,
+    {
+      assigneeL1Id: route.assignee.id,
+      assigneeL1Name: route.assignee.name,
+      scheduleDispatch: {
+        source: 'SCHEDULE_CONFIG',
+        ruleType: route.ruleType,
+        groupId: route.groupId,
+        ruleId: route.ruleId,
+        routeKey: route.routeKey,
+        sequenceIndex: route.sequenceIndex,
+        sequenceLength: route.sequenceLength
+      },
+      __timelineRemark: 'Auto assigned by schedule'
+    },
+    route.assignee
+  );
+
+  return result.ok ? result : null;
+}
+
+function shouldAutoAssignPendingTicket(ticket, event) {
+  if (!ticket || ticket.status !== 'PENDING' || ticket.isSubtask) {
+    return false;
+  }
+  if (ticket.assigneeL1Id || ticket.assigneeL2Id) {
+    return false;
+  }
+  return [
+    EVENTS.SUBMIT,
+    EVENTS.OA_ITSM_GENERATE_TICKET,
+    EVENTS.OA_REAPPROVE_GENERATE
+  ].includes(event);
 }
 
 function getTicketAssignmentTargets(ticket, event, payload = {}, user = null) {
