@@ -344,6 +344,33 @@ export function listActiveAnnouncements(now) {
   return getActiveAnnouncements(getAnnouncementConfig().announcements, now);
 }
 
+export function listActiveAnnouncementDtos(now) {
+  return listActiveAnnouncements(now).map(toActiveAnnouncementDto);
+}
+
+function toActiveAnnouncementDto(announcement) {
+  const snapshot = announcement.activeSnapshot || announcement.publishedSnapshot || {};
+  return {
+    id: announcement.id,
+    status: announcement.status,
+    publishedAt: announcement.publishedAt || null,
+    activeSnapshot: {
+      title: snapshot.title || '',
+      affectedSystems: cloneSimpleArray(snapshot.affectedSystems),
+      faultDescriptionHtml: snapshot.faultDescriptionHtml || '',
+      faultDescriptionText: snapshot.faultDescriptionText || '',
+      progressHtml: snapshot.progressHtml || '',
+      progressText: snapshot.progressText || '',
+      estimatedRecoveryAt: snapshot.estimatedRecoveryAt || null,
+      display: { ...(snapshot.display || {}) }
+    }
+  };
+}
+
+function cloneSimpleArray(value) {
+  return Array.isArray(value) ? value.map((item) => ({ ...item })) : [];
+}
+
 export function createAnnouncementConfig(input, user) {
   return persistAnnouncementResult(
     createAnnouncement(getAnnouncementConfig(), input, user, listAnnouncementOptions()),

@@ -5,6 +5,7 @@ import {
 } from '../../../../../src/server/adminConfigStore.js';
 import { requireAdminUser } from '../../../../../src/server/adminAuth.js';
 import { getSessionUserFromRequest } from '../../../../../src/server/session.js';
+import { mutationResponse } from '../routeHelpers.js';
 
 function authorize(request) {
   return requireAdminUser(getSessionUserFromRequest(request));
@@ -39,5 +40,5 @@ export async function PUT(request, { params }) {
   const { id } = await params;
   const input = await request.json();
   const result = updateAnnouncementConfig(id, input, auth.user);
-  return NextResponse.json(result, { status: result.ok ? 200 : 400 });
+  return mutationResponse(result);
 }

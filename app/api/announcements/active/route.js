@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server.js';
-import { listActiveAnnouncements } from '../../../../src/server/adminConfigStore.js';
+import { listActiveAnnouncementDtos } from '../../../../src/server/adminConfigStore.js';
 import { getSessionUserFromRequest } from '../../../../src/server/session.js';
 
 export async function GET(request) {
@@ -10,6 +10,6 @@ export async function GET(request) {
 
   return NextResponse.json({
     ok: true,
-    announcements: listActiveAnnouncements()
+    announcements: listActiveAnnouncementDtos()
   });
 }

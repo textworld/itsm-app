@@ -124,9 +124,38 @@ test('wrong admin cannot approve the selected approver announcement', async () =
   );
   const payload = await response.json();
 
-  assert.equal(response.status, 400);
+  assert.equal(response.status, 403);
   assert.equal(payload.ok, false);
   assert.equal(payload.reason, '仅指定审批人可审批');
+});
+
+test('approve missing announcement returns 404', async () => {
+  const approver = createAdminUser('missing_approve');
+
+  const response = await adminAnnouncementApprovePost(
+    buildRequest({ userId: approver.id, body: { opinion: '同意' } }),
+    routeParams('announcement_missing')
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.reason, '公告不存在');
+});
+
+test('approve action defaults missing body to empty object', async () => {
+  const { id, approver } = await createSubmittedAnnouncement({ title: '无 body 审批' });
+
+  const response = await adminAnnouncementApprovePost(
+    buildRequest({ userId: approver.id, omitJson: true }),
+    routeParams(id)
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.announcement.status, ANNOUNCEMENT_STATUS.PUBLISHED);
+  assert.equal(payload.announcement.approvalRecords[0].opinion, '');
 });
 
 test('published update creates update pending while active endpoint still shows published snapshot', async () => {
@@ -152,6 +181,42 @@ test('published update creates update pending while active endpoint still shows 
 
   const activePayload = await jsonFrom(activeAnnouncementsGet(buildRequest({ userId: 'u_requester_1' })));
   assert.equal(activePayload.announcements[0].activeSnapshot.title, '支付链路异常');
+});
+
+test('active endpoint returns a narrow DTO for update pending announcements', async () => {
+  const { id, approver } = await createPublishedAnnouncement({ title: '对外旧标题' });
+  await adminAnnouncementPut(
+    buildRequest({
+      body: validAnnouncementInput({
+        approverId: approver.id,
+        title: '未审批新标题',
+        progressHtml: '<p>未审批处置进展</p>'
+      })
+    }),
+    routeParams(id)
+  );
+
+  const activePayload = await jsonFrom(activeAnnouncementsGet(buildRequest({ userId: 'u_requester_1' })));
+  const [announcement] = activePayload.announcements;
+  const serialized = JSON.stringify(announcement);
+
+  assert.deepEqual(Object.keys(announcement).sort(), ['activeSnapshot', 'id', 'publishedAt', 'status']);
+  assert.equal(announcement.status, ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL);
+  assert.equal(announcement.activeSnapshot.title, '对外旧标题');
+  assert.equal(announcement.pendingSnapshot, undefined);
+  assert.equal(announcement.publishedSnapshot, undefined);
+  assert.equal(announcement.approvalRecords, undefined);
+  assert.equal(announcement.operationLogs, undefined);
+  assert.equal(announcement.creator, undefined);
+  assert.equal(announcement.approver, undefined);
+  assert.equal(announcement.handlers, undefined);
+  assert.equal(announcement.activeSnapshot.approver, undefined);
+  assert.equal(announcement.activeSnapshot.handlers, undefined);
+  assert.equal(serialized.includes('未审批新标题'), false);
+  assert.equal(serialized.includes('未审批处置进展'), false);
+  assert.equal(serialized.includes('pendingSnapshot'), false);
+  assert.equal(serialized.includes('approvalRecords'), false);
+  assert.equal(serialized.includes('operationLogs'), false);
 });
 
 test('reject update keeps active published content', async () => {
@@ -227,6 +292,19 @@ test('pin toggles active snapshot pinned and is rejected for withdrawn rows', as
   assert.equal(rejectedResponse.status, 400);
   assert.equal(rejectedPayload.ok, false);
   assert.equal(rejectedPayload.reason, '当前状态不可置顶');
+});
+
+test('pin malformed body returns 400 instead of throwing', async () => {
+  const { id } = await createPublishedAnnouncement({ title: '置顶坏请求公告' });
+
+  const response = await adminAnnouncementPinPost(
+    buildRequest({ jsonThrows: true }),
+    routeParams(id)
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(payload, { ok: false, reason: '请求体格式错误' });
 });
 
 test('history filters by status system and publish date through admin GET', async () => {
@@ -323,17 +401,29 @@ function routeParams(id) {
   return { params: Promise.resolve({ id }) };
 }
 
-function buildRequest({ userId = 'u_admin_1', body = {}, url = 'http://localhost/api/test' } = {}) {
-  return {
+function buildRequest({
+  userId = 'u_admin_1',
+  body = {},
+  url = 'http://localhost/api/test',
+  omitJson = false,
+  jsonThrows = false
+} = {}) {
+  const request = {
     url,
     cookies: {
       get(name) {
         if (name !== 'itsm_session_user_id' || !userId) return undefined;
         return { value: userId };
       }
-    },
-    async json() {
-      return body;
     }
   };
+
+  if (!omitJson) {
+    request.json = async () => {
+      if (jsonThrows) throw new Error('Malformed JSON');
+      return body;
+    };
+  }
+
+  return request;
 }
