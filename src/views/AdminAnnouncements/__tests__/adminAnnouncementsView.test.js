@@ -12,6 +12,12 @@ const routeSource = fs.readFileSync(
   'utf8'
 );
 
+function functionBody(name) {
+  const match = source.match(new RegExp(`function ${name}\\([^)]*\\) \\{([\\s\\S]*?)\\n\\}`));
+  assert.ok(match, `Expected function ${name} to exist`);
+  return match[1];
+}
+
 test('announcement admin page is administrator-only', () => {
   assert.match(routeSource, /getLoginRedirectHref\('\/announcements'\)/);
   assert.match(routeSource, /user\.role !== ROLES\.ADMIN/);
@@ -72,6 +78,7 @@ test('announcement admin table exposes required columns and actions', () => {
 
 test('announcement admin view uses rich text, status labels, date range, and action endpoints', () => {
   assert.match(source, /RichTextEditor/);
+  assert.match(source, /richTextHasContent/);
   assert.match(source, /ANNOUNCEMENT_STATUS_LABELS/);
   assert.match(source, /RangePicker/);
   assert.match(source, /\/submit/);
@@ -83,11 +90,47 @@ test('announcement admin view uses rich text, status labels, date range, and act
   assert.match(source, /method: 'PUT'/);
 });
 
+test('announcement admin view loads current user session for approver-only actions', () => {
+  assert.match(source, /\/api\/auth\/session/);
+  assert.match(source, /currentUser/);
+  assert.match(source, /setCurrentUser\(data\.user \|\| null\)/);
+
+  const canApproveBody = functionBody('canApprove');
+  assert.match(canApproveBody, /currentUser/);
+  assert.match(canApproveBody, /announcement\.pendingSnapshot\?\.approver\?\.id \|\| announcement\.approver\?\.id/);
+  assert.match(canApproveBody, /String\(approverId\) === String\(currentUser\?\.id\)/);
+});
+
+test('announcement edit action follows editable statuses supported by service', () => {
+  const canEditBody = functionBody('canEdit');
+  assert.match(canEditBody, /ANNOUNCEMENT_STATUS\.DRAFT/);
+  assert.match(canEditBody, /ANNOUNCEMENT_STATUS\.REJECTED/);
+  assert.match(canEditBody, /ANNOUNCEMENT_STATUS\.PUBLISHED/);
+  assert.doesNotMatch(canEditBody, /ANNOUNCEMENT_STATUS\.UPDATE_PENDING_APPROVAL/);
+});
+
 test('announcement detail drawer renders rich text sections and audit records', () => {
   assert.match(source, /<RichTextCard title="故障描述" html=\{currentSnapshot\.faultDescriptionHtml\} \/>/);
   assert.match(source, /<RichTextCard title="当前处置进度" html=\{currentSnapshot\.progressHtml\} \/>/);
   assert.match(source, /<RecordsCard title="审批记录" records=\{announcement\.approvalRecords\} \/>/);
   assert.match(source, /<RecordsCard title="操作日志" records=\{announcement\.operationLogs\} \/>/);
+  assert.match(source, /handledAt/);
+  assert.match(source, /createdAt/);
+  assert.match(source, /operator/);
+});
+
+test('announcement drawer shows save and submit errors near the editor', () => {
+  assert.match(source, /drawerErrors/);
+  assert.match(source, /setDrawerErrors/);
+  assert.match(source, /drawerErrors\.length > 0 && <Alert/);
+  assert.match(source, /formatValidationMessages/);
+});
+
+test('announcement rich text fields validate actual editor content', () => {
+  assert.match(source, /import \{ richTextHasContent \} from '..\/..\/utils\/richText\.js'/);
+  assert.match(source, /requiredRichTextRule\('请输入故障描述'\)/);
+  assert.match(source, /requiredRichTextRule\('请输入当前处置进度'\)/);
+  assert.match(source, /richTextHasContent\(value\)/);
 });
 
 test('announcement pin toggle is only enabled for published statuses', () => {

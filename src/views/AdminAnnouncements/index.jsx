@@ -40,8 +40,10 @@ import {
   ANNOUNCEMENT_STATUS_LABELS
 } from '../../utils/announcements.js';
 import { formatDateTime } from '../../utils/format.js';
+import { richTextHasContent } from '../../utils/richText.js';
 
 const API_URL = '/api/admin/announcements';
+const SESSION_URL = '/api/auth/session';
 const { RangePicker } = DatePicker;
 const ACTION_PATHS = {
   submit: '/submit',
@@ -82,9 +84,11 @@ export default function AdminAnnouncementsPage() {
   const [systems, setSystems] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
   const [supportUsers, setSupportUsers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [drawerErrors, setDrawerErrors] = useState([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -138,12 +142,26 @@ export default function AdminAnnouncementsPage() {
     }
   };
 
+  const loadCurrentUser = async () => {
+    try {
+      const { response, data } = await requestJson(SESSION_URL);
+      if (response.ok && data?.ok !== false) {
+        setCurrentUser(data.user || null);
+      }
+    } catch (sessionError) {
+      console.error(sessionError);
+      setCurrentUser(null);
+    }
+  };
+
   useEffect(() => {
     loadAnnouncements();
+    loadCurrentUser();
   }, []);
 
   const openCreateDrawer = () => {
     setEditingAnnouncement(null);
+    setDrawerErrors([]);
     form.setFieldsValue({
       title: '',
       affectedSystemCodes: [],
@@ -164,6 +182,7 @@ export default function AdminAnnouncementsPage() {
   const openEditDrawer = (announcement) => {
     const snapshot = getEditSnapshot(announcement);
     setEditingAnnouncement(announcement);
+    setDrawerErrors([]);
     form.setFieldsValue({
       title: snapshot.title || announcement.title || '',
       affectedSystemCodes: (snapshot.affectedSystems || announcement.affectedSystems || [])
@@ -188,6 +207,7 @@ export default function AdminAnnouncementsPage() {
     const isEdit = Boolean(editingAnnouncement?.id);
     setSaving(true);
     setError('');
+    setDrawerErrors([]);
     try {
       const { response, data } = isEdit
         ? await requestJson(`${API_URL}/${editingAnnouncement.id}`, {
@@ -199,14 +219,19 @@ export default function AdminAnnouncementsPage() {
           body: JSON.stringify(payload)
         });
       if (!response.ok || data?.ok === false) {
-        throw new Error(formatValidationMessage(data, submit ? '提交审批失败' : '保存草稿失败'));
+        const messages = formatValidationMessages(data, submit ? '提交审批失败' : '保存草稿失败');
+        setDrawerErrors(messages);
+        throw new Error(messages.join('；'));
       }
       message.success(submit ? '已提交审批' : '草稿已保存');
+      setDrawerErrors([]);
       setEditorOpen(false);
       await loadAnnouncements();
     } catch (saveError) {
       console.error(saveError);
-      setError(saveError.message || (submit ? '提交审批失败' : '保存草稿失败'));
+      const messageText = saveError.message || (submit ? '提交审批失败' : '保存草稿失败');
+      setError(messageText);
+      setDrawerErrors((previous) => previous.length ? previous : [messageText]);
     } finally {
       setSaving(false);
     }
@@ -373,7 +398,7 @@ export default function AdminAnnouncementsPage() {
               </Button>
             </Popconfirm>
           )}
-          {canApprove(record) && (
+          {canApprove(record, currentUser) && (
             <Button
               size="small"
               type="primary"
@@ -383,7 +408,7 @@ export default function AdminAnnouncementsPage() {
               审批通过
             </Button>
           )}
-          {canApprove(record) && (
+          {canApprove(record, currentUser) && (
             <Button
               size="small"
               danger
@@ -489,6 +514,19 @@ export default function AdminAnnouncementsPage() {
           </Space>
         )}
       >
+        {drawerErrors.length > 0 && <Alert
+          type="error"
+          showIcon
+          message="保存失败"
+          description={(
+            <Space direction="vertical" size={0}>
+              {drawerErrors.map((item) => (
+                <span key={item}>{item}</span>
+              ))}
+            </Space>
+          )}
+          style={{ marginBottom: 16 }}
+        />}
         <Form form={form} layout="vertical">
           <Form.Item name="title" label="公告标题" rules={[{ required: true, message: '请输入公告标题' }]}>
             <Input maxLength={80} showCount allowClear />
@@ -503,14 +541,14 @@ export default function AdminAnnouncementsPage() {
           <Form.Item
             name="faultDescriptionDoc"
             label="故障描述"
-            rules={[{ required: true, message: '请输入故障描述' }]}
+            rules={[requiredRichTextRule('请输入故障描述')]}
           >
             <RichTextEditor placeholder="请输入故障描述" />
           </Form.Item>
           <Form.Item
             name="progressDoc"
             label="当前处置进度"
-            rules={[{ required: true, message: '请输入当前处置进度' }]}
+            rules={[requiredRichTextRule('请输入当前处置进度')]}
           >
             <RichTextEditor placeholder="请输入当前处置进度" />
           </Form.Item>
@@ -647,16 +685,16 @@ function RecordsCard({ title, records = [] }) {
     <Card title={title}>
       <Table
         size="small"
-        rowKey={(record, index) => `${record.action || record.status || 'record'}_${record.at || index}`}
+        rowKey={(record, index) => `${record.action || record.status || 'record'}_${record.handledAt || record.createdAt || record.at || index}`}
         pagination={false}
         dataSource={records}
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={`暂无${title}`} /> }}
         columns={[
           {
             title: '时间',
-            dataIndex: 'at',
+            dataIndex: 'handledAt',
             width: 180,
-            render: (value, record) => formatDateTime(value || record.createdAt)
+            render: (value, record) => formatDateTime(value || record.createdAt || record.at)
           },
           {
             title: '操作',
@@ -666,9 +704,9 @@ function RecordsCard({ title, records = [] }) {
           },
           {
             title: '处理人',
-            dataIndex: 'actor',
+            dataIndex: 'operator',
             width: 140,
-            render: (actor) => actor?.name || '-'
+            render: (operator, record) => operator?.name || record.actor?.name || '-'
           },
           {
             title: '说明',
@@ -754,8 +792,7 @@ function canEdit(announcement) {
   return [
     ANNOUNCEMENT_STATUS.DRAFT,
     ANNOUNCEMENT_STATUS.REJECTED,
-    ANNOUNCEMENT_STATUS.PUBLISHED,
-    ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL
+    ANNOUNCEMENT_STATUS.PUBLISHED
   ].includes(announcement.status);
 }
 
@@ -766,11 +803,12 @@ function canSubmit(announcement) {
   ].includes(announcement.status);
 }
 
-function canApprove(announcement) {
-  return [
+function canApprove(announcement, currentUser) {
+  const approverId = announcement.pendingSnapshot?.approver?.id || announcement.approver?.id;
+  return Boolean(currentUser?.id && approverId) && [
     ANNOUNCEMENT_STATUS.PENDING_APPROVAL,
     ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL
-  ].includes(announcement.status);
+  ].includes(announcement.status) && String(approverId) === String(currentUser?.id);
 }
 
 function canWithdraw(announcement) {
@@ -788,8 +826,22 @@ function canTogglePinned(announcement) {
 }
 
 function formatValidationMessage(data, fallback) {
+  return formatValidationMessages(data, fallback).join('；');
+}
+
+function formatValidationMessages(data, fallback) {
   if (Array.isArray(data?.errors) && data.errors.length) {
-    return data.errors.map((item) => item.message).join('；');
+    return data.errors.map((item) => item.message);
   }
-  return data?.reason || fallback;
+  return [data?.reason || fallback];
+}
+
+function requiredRichTextRule(message) {
+  return {
+    validator: (_rule, value) => (
+      richTextHasContent(value)
+        ? Promise.resolve()
+        : Promise.reject(new Error(message))
+    )
+  };
 }
