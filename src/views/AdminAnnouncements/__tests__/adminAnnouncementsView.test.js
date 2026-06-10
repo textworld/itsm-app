@@ -18,9 +18,13 @@ function functionBody(name) {
   return match[1];
 }
 
-test('announcement admin page is administrator-only', () => {
+test('announcement management page allows admin and support handler roles', () => {
   assert.match(routeSource, /getLoginRedirectHref\('\/announcements'\)/);
-  assert.match(routeSource, /user\.role !== ROLES\.ADMIN/);
+  assert.match(routeSource, /ANNOUNCEMENT_MANAGER_ROLES/);
+  assert.match(routeSource, /ROLES\.ADMIN/);
+  assert.match(routeSource, /ROLES\.L1/);
+  assert.match(routeSource, /ROLES\.L2/);
+  assert.match(routeSource, /!ANNOUNCEMENT_MANAGER_ROLES\.includes\(user\.role\)/);
   assert.match(routeSource, /<AdminAnnouncementsPage \/>/);
 });
 
@@ -134,8 +138,9 @@ test('announcement rich text fields validate actual editor content', () => {
 });
 
 test('announcement pin toggle is only enabled for published statuses', () => {
-  assert.match(source, /function canTogglePinned\(announcement\)/);
+  assert.match(source, /function canTogglePinned\(announcement, currentUser\)/);
+  assert.match(source, /currentUser\?\.role !== ROLES\.ADMIN/);
   assert.match(source, /ANNOUNCEMENT_STATUS\.PUBLISHED/);
   assert.match(source, /ANNOUNCEMENT_STATUS\.UPDATE_PENDING_APPROVAL/);
-  assert.match(source, /disabled=\{saving \|\| !canTogglePinned\(record\)\}/);
+  assert.match(source, /disabled=\{saving \|\| !canTogglePinned\(record, currentUser\)\}/);
 });

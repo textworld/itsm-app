@@ -88,6 +88,11 @@ export default function AppLayout({ children }) {
         icon: <ProfileOutlined />,
         label: <Link href="/personal/quick-phrases">个人配置</Link>
       });
+      base.push({
+        key: '/announcements',
+        icon: <NotificationOutlined />,
+        label: <Link href="/announcements">公告管理</Link>
+      });
     }
     if (user?.role === ROLES.ADMIN) {
       base.push({

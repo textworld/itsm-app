@@ -93,6 +93,26 @@ test('normalizeAnnouncementInput resolves systems, handlers, approver and rich t
   assert.equal(result.value.progressText, '已切换备用链路');
 });
 
+test('normalizeAnnouncementInput sanitizes rich text html before persistence', () => {
+  const normalized = normalizeAnnouncementInput(
+    {
+      ...validInput,
+      faultDescriptionHtml: '<p onclick="alert(1)">支付失败率升高</p><script>alert(2)</script><img src="x" onerror="alert(3)">',
+      progressHtml: '<p>处理中</p><a href="javascript:alert(4)" target="_blank">恶意链接</a><a href="https://example.com">正常链接</a>'
+    },
+    { systems, adminUsers, supportUsers }
+  );
+
+  const html = `${normalized.faultDescriptionHtml}${normalized.progressHtml}`;
+  assert.doesNotMatch(html, /<script/i);
+  assert.doesNotMatch(html, /onclick/i);
+  assert.doesNotMatch(html, /onerror/i);
+  assert.doesNotMatch(html, /javascript:/i);
+  assert.match(html, /支付失败率升高/);
+  assert.match(html, /处理中/);
+  assert.match(html, /正常链接/);
+});
+
 test('normalizeAnnouncementInput deduplicates affected system codes after normalization', () => {
   const normalized = normalizeAnnouncementInput(
     { ...validInput, affectedSystemCodes: ['erp_core', 'ERP_CORE'] },

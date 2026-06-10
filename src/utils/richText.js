@@ -43,6 +43,53 @@ export const RICH_TEXT_EXTENSIONS = [
   RichTextImage
 ];
 
+const DANGEROUS_RICH_TEXT_TAGS = [
+  'script',
+  'style',
+  'iframe',
+  'object',
+  'embed',
+  'meta',
+  'link',
+  'base',
+  'form',
+  'input',
+  'button',
+  'textarea',
+  'select',
+  'option',
+  'svg',
+  'math'
+];
+
+const SAFE_RICH_TEXT_TAGS = new Set([
+  'p',
+  'br',
+  'strong',
+  'b',
+  'em',
+  'i',
+  'u',
+  's',
+  'strike',
+  'blockquote',
+  'ul',
+  'ol',
+  'li',
+  'a',
+  'img',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'pre',
+  'code',
+  'hr',
+  'span'
+]);
+
 export function createEmptyRichTextDoc() {
   return {
     type: 'doc',
@@ -80,16 +127,17 @@ export function richTextDocToHtml(doc) {
     return '';
   }
 
-  return generateHTML(doc, RICH_TEXT_EXTENSIONS);
+  return sanitizeRichTextHtml(generateHTML(doc, RICH_TEXT_EXTENSIONS));
 }
 
 export function richTextHtmlToDoc(html) {
-  if (!String(html || '').trim()) {
+  const sanitized = sanitizeRichTextHtml(html);
+  if (!sanitized.trim()) {
     return createEmptyRichTextDoc();
   }
 
   try {
-    return generateJSON(html, RICH_TEXT_EXTENSIONS);
+    return generateJSON(sanitized, RICH_TEXT_EXTENSIONS);
   } catch (error) {
     console.error(error);
     return createEmptyRichTextDoc();
@@ -130,7 +178,7 @@ export function richTextValueToHtml(value) {
     return richTextDocToHtml(value);
   }
 
-  return String(value || '');
+  return sanitizeRichTextHtml(value);
 }
 
 export function richTextHasContent(value) {
@@ -138,12 +186,13 @@ export function richTextHasContent(value) {
     return richTextDocHasContent(value);
   }
 
+  const sanitized = sanitizeRichTextHtml(value);
   if (typeof document === 'undefined') {
-    return Boolean(stripHtmlTags(value) || containsImageTag(value));
+    return Boolean(stripHtmlTags(sanitized) || containsImageTag(sanitized));
   }
 
   const wrapper = document.createElement('div');
-  wrapper.innerHTML = value || '';
+  wrapper.innerHTML = sanitized;
   return Boolean(wrapper.textContent.trim() || wrapper.querySelector('img'));
 }
 
@@ -152,12 +201,13 @@ export function richTextToPlainText(value) {
     return richTextDocToPlainText(value);
   }
 
+  const sanitized = sanitizeRichTextHtml(value);
   if (typeof document === 'undefined') {
-    return stripHtmlTags(value);
+    return stripHtmlTags(sanitized);
   }
 
   const wrapper = document.createElement('div');
-  wrapper.innerHTML = value || '';
+  wrapper.innerHTML = sanitized;
   return wrapper.textContent.trim();
 }
 
@@ -204,6 +254,74 @@ function stripHtmlTags(html) {
 
 function containsImageTag(html) {
   return /<img\b/i.test(String(html || ''));
+}
+
+function sanitizeRichTextHtml(html) {
+  let sanitized = String(html || '');
+  if (!sanitized) return '';
+
+  const dangerousTags = DANGEROUS_RICH_TEXT_TAGS.join('|');
+  sanitized = sanitized
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(new RegExp(`<\\s*(${dangerousTags})\\b[^>]*>[\\s\\S]*?<\\s*\\/\\s*\\1\\s*>`, 'gi'), '')
+    .replace(new RegExp(`<\\s*\\/?\\s*(${dangerousTags})\\b[^>]*\\/?>`, 'gi'), '')
+    .replace(/\s+on[\w:-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s+srcdoc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s+(href|src|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi, sanitizeUrlAttribute)
+    .replace(/\s+style\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi, sanitizeStyleAttribute)
+    .replace(/<\/?([a-z][\w:-]*)(\s[^>]*)?>/gi, sanitizeTag);
+
+  return sanitized;
+}
+
+function sanitizeTag(match, tagName) {
+  return SAFE_RICH_TEXT_TAGS.has(String(tagName || '').toLowerCase()) ? match : '';
+}
+
+function sanitizeUrlAttribute(match, attrName, doubleQuoted, singleQuoted, unquoted) {
+  const value = doubleQuoted ?? singleQuoted ?? unquoted ?? '';
+  return isSafeRichTextUrl(value, attrName) ? match : '';
+}
+
+function sanitizeStyleAttribute(match, doubleQuoted, singleQuoted, unquoted) {
+  const value = decodeHtmlEntities(doubleQuoted ?? singleQuoted ?? unquoted ?? '');
+  if (/(?:expression|javascript\s*:|vbscript\s*:|@import|-moz-binding|behavior\s*:)/i.test(value)) {
+    return '';
+  }
+
+  return match;
+}
+
+function isSafeRichTextUrl(value, attrName) {
+  const decoded = decodeHtmlEntities(value).replace(/[\u0000-\u001F\u007F\s]+/g, '');
+  if (!decoded || decoded.startsWith('#') || decoded.startsWith('/') || decoded.startsWith('./') || decoded.startsWith('../')) {
+    return true;
+  }
+
+  const lower = decoded.toLowerCase();
+  if (attrName.toLowerCase() === 'src' && lower.startsWith('data:image/')) {
+    return true;
+  }
+
+  return /^(https?:|mailto:|tel:)/i.test(lower);
+}
+
+function decodeHtmlEntities(value) {
+  return String(value || '')
+    .replace(/&#(\d+);?/g, (_match, code) => decodeCodePoint(Number.parseInt(code, 10)))
+    .replace(/&#x([0-9a-f]+);?/gi, (_match, code) => decodeCodePoint(Number.parseInt(code, 16)))
+    .replace(/&colon;?/gi, ':')
+    .replace(/&NewLine;?/gi, '\n')
+    .replace(/&Tab;?/gi, '\t')
+    .replace(/&amp;?/gi, '&');
+}
+
+function decodeCodePoint(value) {
+  if (!Number.isFinite(value) || value < 0 || value > 0x10FFFF) {
+    return '';
+  }
+
+  return String.fromCodePoint(value);
 }
 
 function normalizeImageWidthPercent(value) {

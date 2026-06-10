@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server.js';
 import { submitAnnouncementConfig } from '../../../../../../src/server/adminConfigStore.js';
-import { requireAdminUser } from '../../../../../../src/server/adminAuth.js';
+import { requireAnnouncementManagerUser } from '../../../../../../src/server/adminAuth.js';
 import { getSessionUserFromRequest } from '../../../../../../src/server/session.js';
 import { mutationResponse } from '../../routeHelpers.js';
 
 function authorize(request) {
-  return requireAdminUser(getSessionUserFromRequest(request));
+  return requireAnnouncementManagerUser(getSessionUserFromRequest(request));
 }
 
 function authResponse(auth) {

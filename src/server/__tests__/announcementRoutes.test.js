@@ -11,6 +11,7 @@ import {
 } from '../../../app/api/admin/announcements/[id]/route.js';
 import { POST as adminAnnouncementApprovePost } from '../../../app/api/admin/announcements/[id]/approve/route.js';
 import { POST as adminAnnouncementRejectPost } from '../../../app/api/admin/announcements/[id]/reject/route.js';
+import { POST as adminAnnouncementSubmitPost } from '../../../app/api/admin/announcements/[id]/submit/route.js';
 import { POST as adminAnnouncementWithdrawPost } from '../../../app/api/admin/announcements/[id]/withdraw/route.js';
 import { POST as adminAnnouncementPinPost } from '../../../app/api/admin/announcements/[id]/pin/route.js';
 import { GET as activeAnnouncementsGet } from '../../../app/api/announcements/active/route.js';
@@ -25,14 +26,17 @@ test.beforeEach(() => {
   userCounter += 1;
 });
 
-test('admin announcement GET rejects unauthenticated/non-admin and returns selector options', async () => {
+test('announcement management GET rejects unauthenticated and allows admin or support managers', async () => {
   const unauthenticated = await adminAnnouncementsGet(buildRequest({ userId: null }));
   assert.equal(unauthenticated.status, 401);
   assert.equal((await unauthenticated.json()).reason, '未登录');
 
-  const forbidden = await adminAnnouncementsGet(buildRequest({ userId: 'u_l1_1' }));
-  assert.equal(forbidden.status, 403);
-  assert.equal((await forbidden.json()).reason, '无管理员权限');
+  const supportResponse = await adminAnnouncementsGet(buildRequest({ userId: 'u_l1_1' }));
+  const supportPayload = await supportResponse.json();
+
+  assert.equal(supportResponse.status, 200);
+  assert.equal(supportPayload.ok, true);
+  assert.ok(supportPayload.supportUsers.some((user) => user.id === 'u_l1_1' && user.role === 'L1'));
 
   const approver = createAdminUser('announcement_get');
   const response = await adminAnnouncementsGet(buildRequest());
@@ -48,6 +52,86 @@ test('admin announcement GET rejects unauthenticated/non-admin and returns selec
   assert.ok(payload.supportUsers.some((user) => user.id === 'u_l1_1' && user.role === 'L1'));
   assert.ok(payload.supportUsers.some((user) => user.id === 'u_l2_1' && user.role === 'L2'));
   assert.ok(payload.supportUsers.every((user) => ['L1', 'L2'].includes(user.role) && user.password === undefined));
+});
+
+test('support handler can create and submit assigned announcements while non-assigned support is rejected by service', async () => {
+  const approver = createAdminUser('support_submit');
+  const createResponse = await adminAnnouncementsPost(buildRequest({
+    userId: 'u_l1_1',
+    body: validAnnouncementInput({
+      approverId: approver.id,
+      title: '一线负责人创建公告',
+      handlerIds: ['u_l1_1'],
+      submit: true
+    })
+  }));
+  const createPayload = await createResponse.json();
+
+  assert.equal(createResponse.status, 200);
+  assert.equal(createPayload.ok, true);
+  assert.equal(createPayload.announcement.status, ANNOUNCEMENT_STATUS.PENDING_APPROVAL);
+  assert.equal(createPayload.announcement.creator.id, 'u_l1_1');
+
+  const rejectedResponse = await adminAnnouncementsPost(buildRequest({
+    userId: 'u_l1_1',
+    body: validAnnouncementInput({
+      approverId: approver.id,
+      title: '非负责人创建公告',
+      handlerIds: ['u_l2_1'],
+      submit: true
+    })
+  }));
+  const rejectedPayload = await rejectedResponse.json();
+
+  assert.equal(rejectedResponse.status, 403);
+  assert.equal(rejectedPayload.reason, '无权创建公告');
+});
+
+test('support handler can update and submit own rejected announcement', async () => {
+  const approver = createAdminUser('support_resubmit');
+  const createResponse = await adminAnnouncementsPost(buildRequest({
+    userId: 'u_l1_1',
+    body: validAnnouncementInput({
+      approverId: approver.id,
+      title: '一线负责人重提公告',
+      handlerIds: ['u_l1_1'],
+      submit: true
+    })
+  }));
+  const createPayload = await createResponse.json();
+  assert.equal(createResponse.status, 200);
+
+  const rejectResponse = await adminAnnouncementRejectPost(
+    buildRequest({ userId: approver.id, body: { opinion: '补充影响说明' } }),
+    routeParams(createPayload.announcement.id)
+  );
+  assert.equal(rejectResponse.status, 200);
+
+  const updateResponse = await adminAnnouncementPut(
+    buildRequest({
+      userId: 'u_l1_1',
+      body: validAnnouncementInput({
+        approverId: approver.id,
+        title: '一线负责人重提公告-已补充',
+        handlerIds: ['u_l1_1']
+      })
+    }),
+    routeParams(createPayload.announcement.id)
+  );
+  const updatePayload = await updateResponse.json();
+
+  assert.equal(updateResponse.status, 200);
+  assert.equal(updatePayload.announcement.status, ANNOUNCEMENT_STATUS.DRAFT);
+  assert.equal(updatePayload.announcement.pendingSnapshot.title, '一线负责人重提公告-已补充');
+
+  const submitResponse = await adminAnnouncementSubmitPost(
+    buildRequest({ userId: 'u_l1_1' }),
+    routeParams(createPayload.announcement.id)
+  );
+  const submitPayload = await submitResponse.json();
+
+  assert.equal(submitResponse.status, 200);
+  assert.equal(submitPayload.announcement.status, ANNOUNCEMENT_STATUS.PENDING_APPROVAL);
 });
 
 test('POST create+submit validates required fields and persists a pending announcement', async () => {

@@ -5,7 +5,7 @@ import {
   listAnnouncementOptions,
   listFilteredAnnouncements
 } from '../../../../src/server/adminConfigStore.js';
-import { requireAdminUser } from '../../../../src/server/adminAuth.js';
+import { requireAnnouncementManagerUser } from '../../../../src/server/adminAuth.js';
 import { getSessionUserFromRequest } from '../../../../src/server/session.js';
 import {
   malformedJsonResponse,
@@ -14,7 +14,7 @@ import {
 } from './routeHelpers.js';
 
 function authorize(request) {
-  return requireAdminUser(getSessionUserFromRequest(request));
+  return requireAnnouncementManagerUser(getSessionUserFromRequest(request));
 }
 
 function authResponse(auth) {

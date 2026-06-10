@@ -41,6 +41,7 @@ import {
 } from '../../utils/announcements.js';
 import { formatDateTime } from '../../utils/format.js';
 import { richTextHasContent } from '../../utils/richText.js';
+import { ROLES } from '../../constants/roles.js';
 
 const API_URL = '/api/admin/announcements';
 const SESSION_URL = '/api/auth/session';
@@ -364,7 +365,7 @@ export default function AdminAnnouncementsPage() {
           <Switch
             size="small"
             checked={pinned}
-            disabled={saving || !canTogglePinned(record)}
+            disabled={saving || !canTogglePinned(record, currentUser)}
             onChange={(checked) => callAction(record, ACTION_PATHS.pin, { pinned: checked }, checked ? '已置顶' : '已取消置顶')}
           />
         );
@@ -818,7 +819,11 @@ function canWithdraw(announcement) {
   ].includes(announcement.status);
 }
 
-function canTogglePinned(announcement) {
+function canTogglePinned(announcement, currentUser) {
+  if (currentUser?.role !== ROLES.ADMIN) {
+    return false;
+  }
+
   return [
     ANNOUNCEMENT_STATUS.PUBLISHED,
     ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL

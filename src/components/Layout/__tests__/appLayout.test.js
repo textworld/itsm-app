@@ -49,6 +49,14 @@ test('support roles have a personal quick phrases configuration entry', () => {
   assert.match(appLayoutSource, /常用话术/);
 });
 
+test('support roles have an announcement management entry in the top navigation', () => {
+  assert.match(appLayoutSource, /NotificationOutlined/);
+  assert.match(appLayoutSource, /user\?\.role === ROLES\.L1 \|\| user\?\.role === ROLES\.L2/);
+  assert.match(appLayoutSource, /href="\/announcements"/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/announcements'\)/);
+  assert.match(appLayoutSource, /公告管理/);
+});
+
 test('administrator entries are grouped under a second-level admin menu', () => {
   assert.match(appLayoutSource, /user\?\.role === ROLES\.ADMIN/);
   assert.match(appLayoutSource, /key: 'admin-management'/);
