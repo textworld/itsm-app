@@ -17,7 +17,19 @@ const SUBMITTABLE_STATUSES = new Set([
   ANNOUNCEMENT_STATUS.REJECTED
 ]);
 
+const EDITABLE_STATUSES = new Set([
+  ANNOUNCEMENT_STATUS.DRAFT,
+  ANNOUNCEMENT_STATUS.REJECTED,
+  ANNOUNCEMENT_STATUS.PUBLISHED,
+  ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL
+]);
+
 const WITHDRAWABLE_STATUSES = new Set([
+  ANNOUNCEMENT_STATUS.PUBLISHED,
+  ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL
+]);
+
+const PINNABLE_STATUSES = new Set([
   ANNOUNCEMENT_STATUS.PUBLISHED,
   ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL
 ]);
@@ -60,7 +72,7 @@ export function createAnnouncement(config = {}, input = {}, user, context = {}, 
 export function updateAnnouncement(config = {}, announcementId, input = {}, user, context = {}, options = {}) {
   const current = findAnnouncement(config, announcementId);
   if (!current) return failure('公告不存在', { config });
-  if (current.status === ANNOUNCEMENT_STATUS.WITHDRAWN) return failure('已撤回公告不可编辑', { config, announcement: current });
+  if (!EDITABLE_STATUSES.has(current.status)) return failure('当前状态不可编辑', { config, announcement: current });
   if (!canEdit(user, current)) return failure('无权编辑公告', { config, announcement: current });
 
   const validation = validateAnnouncementInput(input, context);
@@ -70,6 +82,9 @@ export function updateAnnouncement(config = {}, announcementId, input = {}, user
   const snapshot = buildAnnouncementSnapshot(validation.value);
   const isPublishedUpdate = current.status === ANNOUNCEMENT_STATUS.PUBLISHED
     || current.status === ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL;
+  if (isPublishedUpdate && !current.publishedSnapshot) return failure('公告无已发布内容', { config, announcement: current });
+
+  const summarySnapshot = isPublishedUpdate ? current.publishedSnapshot : snapshot;
   const submit = input.submit === true;
   const nextStatus = isPublishedUpdate
     ? ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL
@@ -85,10 +100,10 @@ export function updateAnnouncement(config = {}, announcementId, input = {}, user
   const updated = {
     ...cloneAnnouncement(current),
     status: nextStatus,
-    title: snapshot.title,
-    affectedSystems: cloneArray(snapshot.affectedSystems),
-    handlers: cloneArray(snapshot.handlers),
-    approver: cloneObject(snapshot.approver),
+    title: summarySnapshot.title,
+    affectedSystems: cloneArray(summarySnapshot.affectedSystems),
+    handlers: cloneArray(summarySnapshot.handlers),
+    approver: cloneObject(summarySnapshot.approver),
     updatedAt: timestamp,
     submittedAt: nextStatus === ANNOUNCEMENT_STATUS.PENDING_APPROVAL ? timestamp : current.submittedAt || null,
     pendingSnapshot: snapshot,
@@ -155,10 +170,13 @@ export function rejectAnnouncement(config = {}, announcementId, user, opinion = 
   if (!current) return failure('公告不存在', { config });
   if (!PENDING_STATUSES.has(current.status)) return failure('当前状态不可驳回', { config, announcement: current });
   if (!canApprove(user, current)) return failure('仅指定审批人可审批', { config, announcement: current });
+  if (!current.pendingSnapshot) return failure('公告无待审批内容', { config, announcement: current });
 
   const timestamp = resolveNow(options);
   const isPublishedUpdate = current.status === ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL;
   const activeSnapshot = isPublishedUpdate ? current.publishedSnapshot : null;
+  if (isPublishedUpdate && !activeSnapshot) return failure('公告无已发布内容', { config, announcement: current });
+
   const approvalRecord = buildApprovalRecord('REJECT', user, opinion, timestamp);
   const updated = {
     ...cloneAnnouncement(current),
@@ -207,6 +225,7 @@ export function toggleAnnouncementPinned(config = {}, announcementId, user, pinn
   const current = findAnnouncement(config, announcementId);
   if (!current) return failure('公告不存在', { config });
   if (!isAdmin(user)) return failure('仅管理员可置顶公告', { config, announcement: current });
+  if (!PINNABLE_STATUSES.has(current.status)) return failure('当前状态不可置顶', { config, announcement: current });
   if (!current.publishedSnapshot) return failure('公告未发布不可置顶', { config, announcement: current });
 
   const timestamp = resolveNow(options);

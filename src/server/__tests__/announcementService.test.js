@@ -16,10 +16,19 @@ const now = '2026-06-10T15:00:00.000Z';
 const admin = { id: 'u_admin_1', name: '系统管理员', role: 'ADMIN' };
 const otherAdmin = { id: 'u_admin_2', name: '审批管理员', role: 'ADMIN' };
 const l1 = { id: 'u_l1_1', name: '李一线', role: 'L1' };
+const l2 = { id: 'u_l2_1', name: '王二线', role: 'L2' };
 const context = {
   systems: [{ value: 'ERP_CORE', label: 'ERP 核心系统' }],
   adminUsers: [admin, otherAdmin],
   supportUsers: [l1]
+};
+const extendedContext = {
+  systems: [
+    { value: 'ERP_CORE', label: 'ERP 核心系统' },
+    { value: 'CRM', label: '客户中心' }
+  ],
+  adminUsers: [admin, otherAdmin],
+  supportUsers: [l1, l2]
 };
 const input = {
   title: '支付网关异常',
@@ -75,6 +84,23 @@ test('rejectAnnouncement returns to rejected and keeps opinion', () => {
   assert.equal(rejected.announcement.approvalRecords[0].opinion, '补充影响范围');
 });
 
+test('updateAnnouncement refuses pending approval edits and keeps submitted state', () => {
+  const created = createAnnouncement({ announcements: [] }, input, admin, context, { now });
+  const submitted = submitAnnouncement(created.config, created.announcement.id, admin, { now });
+  const updated = updateAnnouncement(
+    submitted.config,
+    created.announcement.id,
+    { ...input, title: '支付网关异常更新', submit: false },
+    admin,
+    context,
+    { now: '2026-06-10T15:08:00.000Z' }
+  );
+
+  assert.equal(updated.ok, false);
+  assert.equal(updated.announcement.status, ANNOUNCEMENT_STATUS.PENDING_APPROVAL);
+  assert.equal(submitted.config.announcements[0].status, ANNOUNCEMENT_STATUS.PENDING_APPROVAL);
+});
+
 test('published update creates update pending approval while current published snapshot remains visible', () => {
   const created = createAnnouncement({ announcements: [] }, input, admin, context, { now });
   const submitted = submitAnnouncement(created.config, created.announcement.id, admin, { now });
@@ -92,6 +118,37 @@ test('published update creates update pending approval while current published s
   assert.equal(updated.announcement.status, ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL);
   assert.equal(updated.announcement.publishedSnapshot.title, '支付网关异常');
   assert.equal(updated.announcement.pendingSnapshot.title, '支付网关异常更新');
+});
+
+test('published update does not leak proposed values into active top-level summary', () => {
+  const created = createAnnouncement({ announcements: [] }, input, admin, extendedContext, { now });
+  const submitted = submitAnnouncement(created.config, created.announcement.id, admin, { now });
+  const approved = approveAnnouncement(submitted.config, created.announcement.id, otherAdmin, '同意', { now });
+  const updated = updateAnnouncement(
+    approved.config,
+    created.announcement.id,
+    {
+      ...input,
+      title: '支付网关异常更新',
+      affectedSystemCodes: ['CRM'],
+      handlerIds: ['u_l2_1'],
+      approverId: 'u_admin_1'
+    },
+    admin,
+    extendedContext,
+    { now: '2026-06-10T15:30:00.000Z' }
+  );
+
+  assert.equal(updated.ok, true);
+  assert.equal(updated.announcement.status, ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL);
+  assert.equal(updated.announcement.pendingSnapshot.title, '支付网关异常更新');
+  assert.equal(updated.announcement.pendingSnapshot.affectedSystems[0].code, 'CRM');
+  assert.equal(updated.announcement.pendingSnapshot.handlers[0].id, 'u_l2_1');
+  assert.equal(updated.announcement.pendingSnapshot.approver.id, 'u_admin_1');
+  assert.equal(updated.announcement.title, '支付网关异常');
+  assert.deepEqual(updated.announcement.affectedSystems, updated.announcement.publishedSnapshot.affectedSystems);
+  assert.deepEqual(updated.announcement.handlers, updated.announcement.publishedSnapshot.handlers);
+  assert.deepEqual(updated.announcement.approver, updated.announcement.publishedSnapshot.approver);
 });
 
 test('rejected published update restores active top-level fields from published snapshot', () => {
@@ -124,6 +181,32 @@ test('rejected published update restores active top-level fields from published 
   assert.deepEqual(rejected.announcement.approver, rejected.announcement.publishedSnapshot.approver);
 });
 
+test('rejectAnnouncement refuses pending rows without pending snapshot', () => {
+  const created = createAnnouncement({ announcements: [] }, input, admin, context, { now });
+  const malformed = {
+    ...created.announcement,
+    status: ANNOUNCEMENT_STATUS.PENDING_APPROVAL,
+    pendingSnapshot: null
+  };
+  const rejected = rejectAnnouncement({ announcements: [malformed] }, malformed.id, otherAdmin, '缺少内容', { now });
+
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.announcement.status, ANNOUNCEMENT_STATUS.PENDING_APPROVAL);
+});
+
+test('rejectAnnouncement refuses update approval rows without published snapshot', () => {
+  const created = createAnnouncement({ announcements: [] }, input, admin, context, { now });
+  const malformed = {
+    ...created.announcement,
+    status: ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL,
+    publishedSnapshot: null
+  };
+  const rejected = rejectAnnouncement({ announcements: [malformed] }, malformed.id, otherAdmin, '缺少已发布版本', { now });
+
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.announcement.status, ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL);
+});
+
 test('withdraw and pin toggle record operation logs', () => {
   const created = createAnnouncement({ announcements: [] }, input, admin, context, { now });
   const submitted = submitAnnouncement(created.config, created.announcement.id, admin, { now });
@@ -135,4 +218,20 @@ test('withdraw and pin toggle record operation logs', () => {
   assert.equal(withdrawn.announcement.status, ANNOUNCEMENT_STATUS.WITHDRAWN);
   assert.equal(withdrawn.announcement.withdrawnAt, '2026-06-10T15:40:00.000Z');
   assert.ok(withdrawn.announcement.operationLogs.some((log) => log.action === 'WITHDRAW'));
+});
+
+test('withdraw and pin require admin, and withdrawn announcements cannot be pinned', () => {
+  const created = createAnnouncement({ announcements: [] }, input, admin, context, { now });
+  const submitted = submitAnnouncement(created.config, created.announcement.id, admin, { now });
+  const approved = approveAnnouncement(submitted.config, created.announcement.id, otherAdmin, '同意', { now });
+  const nonAdminWithdrawn = withdrawAnnouncement(approved.config, created.announcement.id, l1, '越权撤回', { now });
+  const nonAdminPinned = toggleAnnouncementPinned(approved.config, created.announcement.id, l1, true, { now });
+  const withdrawn = withdrawAnnouncement(approved.config, created.announcement.id, admin, '故障恢复', { now });
+  const pinnedAfterWithdraw = toggleAnnouncementPinned(withdrawn.config, created.announcement.id, admin, true, { now });
+
+  assert.equal(nonAdminWithdrawn.ok, false);
+  assert.equal(nonAdminPinned.ok, false);
+  assert.equal(withdrawn.ok, true);
+  assert.equal(pinnedAfterWithdraw.ok, false);
+  assert.equal(pinnedAfterWithdraw.announcement.status, ANNOUNCEMENT_STATUS.WITHDRAWN);
 });
