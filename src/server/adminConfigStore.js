@@ -22,6 +22,20 @@ import {
   buildPersonalQuickPhrasesConfigKey,
   validateQuickPhraseConfig
 } from '../utils/quickPhrases.js';
+import {
+  ANNOUNCEMENT_CONFIG_KEY,
+  filterAnnouncements,
+  getActiveAnnouncements
+} from '../utils/announcements.js';
+import {
+  approveAnnouncement,
+  createAnnouncement,
+  rejectAnnouncement,
+  submitAnnouncement,
+  toggleAnnouncementPinned,
+  updateAnnouncement,
+  withdrawAnnouncement
+} from './announcementService.js';
 import { getDb } from './db.js';
 
 function parseRow(row) {
@@ -34,6 +48,16 @@ function nowIso() {
 
 function actorFromUser(user) {
   return user ? { id: user.id, name: user.name } : null;
+}
+
+function sanitizeConfigUser(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    name: user.name,
+    role: user.role,
+    department: user.department
+  };
 }
 
 function upsertDictionaryItem(item) {
@@ -172,13 +196,27 @@ export function listL1Users() {
     .all()
     .map(parseRow)
     .filter((user) => user?.role === ROLES.L1)
-    .map((user) => ({
-      id: user.id,
-      username: user.username,
-      name: user.name,
-      role: user.role,
-      department: user.department
-    }));
+    .map(sanitizeConfigUser);
+}
+
+export function listAdminUsers() {
+  const db = getDb();
+  return db
+    .prepare('SELECT data FROM users ORDER BY username ASC')
+    .all()
+    .map(parseRow)
+    .filter((user) => user?.role === ROLES.ADMIN)
+    .map(sanitizeConfigUser);
+}
+
+export function listAnnouncementHandlerUsers() {
+  const db = getDb();
+  return db
+    .prepare('SELECT data FROM users ORDER BY username ASC')
+    .all()
+    .map(parseRow)
+    .filter((user) => user?.role === ROLES.L1 || user?.role === ROLES.L2)
+    .map(sanitizeConfigUser);
 }
 
 export function getScheduleConfig() {
@@ -278,6 +316,114 @@ export function saveSystemConfig(input, user) {
   });
 
   return { ok: true, config };
+}
+
+export function getAnnouncementConfig() {
+  const db = getDb();
+  const row = db.prepare('SELECT data FROM app_configs WHERE key = ?').get(ANNOUNCEMENT_CONFIG_KEY);
+  return parseRow(row) || {
+    announcements: [],
+    updatedAt: null,
+    updatedBy: null
+  };
+}
+
+export function listAnnouncementOptions() {
+  return {
+    systems: getSystemConfig({ visibleOnly: true }).systems,
+    adminUsers: listAdminUsers(),
+    supportUsers: listAnnouncementHandlerUsers()
+  };
+}
+
+export function listFilteredAnnouncements(filters = {}) {
+  return filterAnnouncements(getAnnouncementConfig().announcements, filters);
+}
+
+export function listActiveAnnouncements(now) {
+  return getActiveAnnouncements(getAnnouncementConfig().announcements, now);
+}
+
+export function createAnnouncementConfig(input, user) {
+  return persistAnnouncementResult(
+    createAnnouncement(getAnnouncementConfig(), input, user, listAnnouncementOptions()),
+    user
+  );
+}
+
+export function updateAnnouncementConfig(id, input, user) {
+  return persistAnnouncementResult(
+    updateAnnouncement(getAnnouncementConfig(), id, input, user, listAnnouncementOptions()),
+    user
+  );
+}
+
+export function submitAnnouncementConfig(id, user) {
+  return persistAnnouncementResult(
+    submitAnnouncement(getAnnouncementConfig(), id, user),
+    user
+  );
+}
+
+export function approveAnnouncementConfig(id, user, opinion = '') {
+  return persistAnnouncementResult(
+    approveAnnouncement(getAnnouncementConfig(), id, user, opinion),
+    user
+  );
+}
+
+export function rejectAnnouncementConfig(id, user, opinion = '') {
+  return persistAnnouncementResult(
+    rejectAnnouncement(getAnnouncementConfig(), id, user, opinion),
+    user
+  );
+}
+
+export function withdrawAnnouncementConfig(id, user, reason = '') {
+  return persistAnnouncementResult(
+    withdrawAnnouncement(getAnnouncementConfig(), id, user, reason),
+    user
+  );
+}
+
+export function toggleAnnouncementPinnedConfig(id, user, pinned) {
+  return persistAnnouncementResult(
+    toggleAnnouncementPinned(getAnnouncementConfig(), id, user, pinned),
+    user
+  );
+}
+
+function persistAnnouncementResult(result, user) {
+  if (!result.ok) return result;
+
+  const config = persistAnnouncementConfig(result.config, user);
+  const announcement = config.announcements.find((item) => item.id === result.announcement?.id)
+    || result.announcement;
+
+  return { ...result, config, announcement };
+}
+
+function persistAnnouncementConfig(input, user) {
+  const config = {
+    announcements: Array.isArray(input?.announcements) ? input.announcements : [],
+    updatedAt: nowIso(),
+    updatedBy: actorFromUser(user)
+  };
+
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO app_configs (key, updated_at, data)
+    VALUES (@key, @updated_at, @data)
+    ON CONFLICT(key) DO UPDATE SET
+      updated_at = excluded.updated_at,
+      data = excluded.data
+  `).run({
+    key: ANNOUNCEMENT_CONFIG_KEY,
+    updated_at: config.updatedAt,
+    data: JSON.stringify(config)
+  });
+
+  return config;
 }
 
 export function getSupportRestConfig() {
