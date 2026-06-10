@@ -81,6 +81,35 @@ test('normalizeAnnouncementInput resolves systems, handlers, approver and rich t
   assert.equal(result.value.progressText, '已切换备用链路');
 });
 
+test('normalizeAnnouncementInput deduplicates affected system codes after normalization', () => {
+  const normalized = normalizeAnnouncementInput(
+    { ...validInput, affectedSystemCodes: ['erp_core', 'ERP_CORE'] },
+    { systems, adminUsers, supportUsers }
+  );
+
+  assert.deepEqual(normalized.affectedSystems, [{ code: 'ERP_CORE', name: 'ERP 核心系统' }]);
+});
+
+test('validateAnnouncementInput rejects non-numeric display values', () => {
+  const result = validateAnnouncementInput(
+    {
+      ...validInput,
+      display: {
+        ...validInput.display,
+        scrollSpeed: 'abc',
+        durationSeconds: 'def'
+      }
+    },
+    { systems, adminUsers, supportUsers }
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors.map((item) => item.message), [
+    '滚动速度必须大于 0',
+    '展示时长必须大于 0'
+  ]);
+});
+
 test('buildAnnouncementSnapshot returns the displayable content subset', () => {
   const normalized = normalizeAnnouncementInput(validInput, { systems, adminUsers, supportUsers });
   const snapshot = buildAnnouncementSnapshot(normalized);
@@ -89,6 +118,25 @@ test('buildAnnouncementSnapshot returns the displayable content subset', () => {
   assert.equal(snapshot.affectedSystems[0].code, 'ERP_CORE');
   assert.equal(snapshot.display.pinned, true);
   assert.equal(snapshot.approver.id, 'u_admin_1');
+});
+
+test('buildAnnouncementSnapshot is isolated from later normalized value mutation', () => {
+  const normalized = normalizeAnnouncementInput(validInput, { systems, adminUsers, supportUsers });
+  const snapshot = buildAnnouncementSnapshot(normalized);
+
+  normalized.affectedSystems[0].name = '已变更系统';
+  normalized.affectedSystems.push({ code: 'CRM', name: '客户中心' });
+  normalized.handlers[0].name = '已变更负责人';
+  normalized.handlers.push({ id: 'u_l2_1', name: '王二线', role: 'L2' });
+  normalized.approver.name = '已变更审批人';
+  normalized.display.pinned = false;
+  normalized.display.scrollSpeed = 10;
+
+  assert.deepEqual(snapshot.affectedSystems, [{ code: 'ERP_CORE', name: 'ERP 核心系统' }]);
+  assert.deepEqual(snapshot.handlers, [{ id: 'u_l1_1', name: '李一线', role: 'L1' }]);
+  assert.deepEqual(snapshot.approver, { id: 'u_admin_1', name: '系统管理员', role: 'ADMIN' });
+  assert.equal(snapshot.display.pinned, true);
+  assert.equal(snapshot.display.scrollSpeed, 40);
 });
 
 test('getActiveAnnouncements filters hidden rows and sorts pinned first then latest published', () => {
@@ -136,6 +184,71 @@ test('getActiveAnnouncements filters hidden rows and sorts pinned first then lat
   );
 
   assert.deepEqual(active.map((item) => item.id), ['pinned', 'old']);
+});
+
+test('filterAnnouncements searches snapshot body text and falls back through snapshot systems', () => {
+  const rows = [
+    {
+      id: 'item-body',
+      title: '中性标题',
+      status: ANNOUNCEMENT_STATUS.PUBLISHED,
+      affectedSystems: [{ code: 'ERP_CORE', name: 'ERP 核心系统' }],
+      faultDescriptionText: '行内故障描述命中',
+      progressText: '行内处置进度',
+      publishedAt: '2026-06-10T10:00:00.000Z'
+    },
+    {
+      id: 'published-snapshot-body',
+      title: '中性标题',
+      status: ANNOUNCEMENT_STATUS.PUBLISHED,
+      affectedSystems: [],
+      publishedSnapshot: {
+        title: '发布快照标题',
+        affectedSystems: [{ code: 'CRM', name: '客户中心' }],
+        faultDescriptionText: '发布快照故障描述命中',
+        progressText: '发布快照处置进度'
+      },
+      publishedAt: '2026-06-10T11:00:00.000Z'
+    },
+    {
+      id: 'pending-snapshot-body',
+      title: '中性标题',
+      status: ANNOUNCEMENT_STATUS.REJECTED,
+      affectedSystems: [],
+      publishedSnapshot: {
+        title: '已发布快照标题',
+        affectedSystems: []
+      },
+      pendingSnapshot: {
+        title: '待审快照标题',
+        affectedSystems: [{ code: 'ERP_CORE', name: 'ERP 核心系统' }],
+        faultDescriptionText: '待审快照故障描述',
+        progressText: '待审快照进度命中'
+      },
+      publishedAt: null
+    }
+  ];
+
+  assert.deepEqual(
+    filterAnnouncements(rows, { keyword: '行内故障' }).map((item) => item.id),
+    ['item-body']
+  );
+  assert.deepEqual(
+    filterAnnouncements(rows, { keyword: '发布快照故障' }).map((item) => item.id),
+    ['published-snapshot-body']
+  );
+  assert.deepEqual(
+    filterAnnouncements(rows, { keyword: '待审快照进度' }).map((item) => item.id),
+    ['pending-snapshot-body']
+  );
+  assert.deepEqual(
+    filterAnnouncements(rows, { systemCode: 'CRM' }).map((item) => item.id),
+    ['published-snapshot-body']
+  );
+  assert.deepEqual(
+    filterAnnouncements(rows, { systemCode: 'ERP_CORE' }).map((item) => item.id),
+    ['item-body', 'pending-snapshot-body']
+  );
 });
 
 test('filterAnnouncements searches keyword, status, system and publish date range', () => {

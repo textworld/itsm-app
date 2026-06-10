@@ -29,7 +29,11 @@ export function normalizeAnnouncementInput(input = {}, context = {}) {
   }));
   const adminById = new Map((context.adminUsers || []).map((user) => [String(user.id), user]));
   const supportById = new Map((context.supportUsers || []).map((user) => [String(user.id), user]));
-  const affectedSystemCodes = uniqueStrings(input.affectedSystemCodes || input.systemCodes).map(normalizeCode);
+  const affectedSystemCodes = [
+    ...new Set(uniqueStrings(input.affectedSystemCodes || input.systemCodes)
+      .map(normalizeCode)
+      .filter(Boolean))
+  ];
   const handlerIds = uniqueStrings(input.handlerIds);
   const approverId = String(input.approverId || input.approver?.id || '').trim();
   const faultDescriptionHtml = richTextValueToHtml(input.faultDescriptionDoc || input.faultDescriptionHtml || input.faultDescription);
@@ -80,8 +84,8 @@ export function validateAnnouncementInput(input = {}, context = {}) {
   if (!value.estimatedRecoveryAt) errors.push({ path: ['estimatedRecoveryAt'], message: '请选择预计恢复时间' });
   if (!value.approver || value.approver.role !== 'ADMIN') errors.push({ path: ['approverId'], message: '审批人必须是管理员' });
   if (requestedHandlerIds.some((id) => !supportIds.has(id))) errors.push({ path: ['handlerIds'], message: '故障处置负责人必须是一线或二线支持' });
-  if (Number(input.display?.scrollSpeed) <= 0) errors.push({ path: ['display', 'scrollSpeed'], message: '滚动速度必须大于 0' });
-  if (Number(input.display?.durationSeconds) <= 0) errors.push({ path: ['display', 'durationSeconds'], message: '展示时长必须大于 0' });
+  if (isInvalidPositiveNumber(input.display?.scrollSpeed)) errors.push({ path: ['display', 'scrollSpeed'], message: '滚动速度必须大于 0' });
+  if (isInvalidPositiveNumber(input.display?.durationSeconds)) errors.push({ path: ['display', 'durationSeconds'], message: '展示时长必须大于 0' });
 
   return { ok: errors.length === 0, errors, value };
 }
@@ -89,14 +93,14 @@ export function validateAnnouncementInput(input = {}, context = {}) {
 export function buildAnnouncementSnapshot(value = {}) {
   return {
     title: value.title,
-    affectedSystems: value.affectedSystems || [],
+    affectedSystems: cloneObjectArray(value.affectedSystems),
     faultDescriptionHtml: value.faultDescriptionHtml || '',
     faultDescriptionText: value.faultDescriptionText || '',
     progressHtml: value.progressHtml || '',
     progressText: value.progressText || '',
     estimatedRecoveryAt: value.estimatedRecoveryAt || null,
-    handlers: value.handlers || [],
-    approver: value.approver || null,
+    handlers: cloneObjectArray(value.handlers),
+    approver: value.approver ? { ...value.approver } : null,
     display: {
       scrollSpeed: value.display?.scrollSpeed || 40,
       durationSeconds: value.display?.durationSeconds || 1800,
@@ -120,10 +124,18 @@ export function filterAnnouncements(announcements = [], filters = {}) {
       item.publishedSnapshot?.title,
       item.pendingSnapshot?.title,
       item.faultDescriptionText,
-      item.progressText
+      item.progressText,
+      item.publishedSnapshot?.faultDescriptionText,
+      item.publishedSnapshot?.progressText,
+      item.pendingSnapshot?.faultDescriptionText,
+      item.pendingSnapshot?.progressText
     ].filter(Boolean).join(' '));
     const publishedTime = toTimestamp(item.publishedAt);
-    const systems = item.affectedSystems || item.publishedSnapshot?.affectedSystems || item.pendingSnapshot?.affectedSystems || [];
+    const systems = firstNonEmptyArray(
+      item.affectedSystems,
+      item.publishedSnapshot?.affectedSystems,
+      item.pendingSnapshot?.affectedSystems
+    );
 
     if (keyword && !searchText.includes(keyword)) return false;
     if (status && item.status !== status) return false;
@@ -184,6 +196,20 @@ function normalizeIsoTime(value) {
 function normalizePositiveNumber(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function isInvalidPositiveNumber(value) {
+  if (value === undefined) return false;
+  const number = Number(value);
+  return !Number.isFinite(number) || number <= 0;
+}
+
+function cloneObjectArray(value) {
+  return Array.isArray(value) ? value.map((item) => ({ ...item })) : [];
+}
+
+function firstNonEmptyArray(...values) {
+  return values.find((value) => Array.isArray(value) && value.length > 0) || [];
 }
 
 function toTimestamp(value) {
