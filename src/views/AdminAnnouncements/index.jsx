@@ -339,7 +339,7 @@ export default function AdminAnnouncementsPage() {
           <Switch
             size="small"
             checked={pinned}
-            disabled={saving}
+            disabled={saving || !canTogglePinned(record)}
             onChange={(checked) => callAction(record, ACTION_PATHS.pin, { pinned: checked }, checked ? '已置顶' : '已取消置顶')}
           />
         );
@@ -774,6 +774,13 @@ function canApprove(announcement) {
 }
 
 function canWithdraw(announcement) {
+  return [
+    ANNOUNCEMENT_STATUS.PUBLISHED,
+    ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL
+  ].includes(announcement.status);
+}
+
+function canTogglePinned(announcement) {
   return [
     ANNOUNCEMENT_STATUS.PUBLISHED,
     ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL
