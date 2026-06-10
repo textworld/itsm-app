@@ -92,25 +92,44 @@ test('buildAnnouncementSnapshot returns the displayable content subset', () => {
 });
 
 test('getActiveAnnouncements filters hidden rows and sorts pinned first then latest published', () => {
+  const displayableSnapshot = buildAnnouncementSnapshot(normalizeAnnouncementInput(validInput, { systems, adminUsers, supportUsers }));
   const active = getActiveAnnouncements(
     [
       {
         id: 'old',
         status: ANNOUNCEMENT_STATUS.PUBLISHED,
         publishedAt: '2026-06-10T10:00:00.000Z',
-        publishedSnapshot: { ...buildAnnouncementSnapshot(normalizeAnnouncementInput(validInput, { systems, adminUsers, supportUsers })), display: { pinned: false, visibleFrom: null, visibleUntil: null } }
+        publishedSnapshot: { ...displayableSnapshot, display: { pinned: false, visibleFrom: null, visibleUntil: null } }
       },
       {
         id: 'pinned',
         status: ANNOUNCEMENT_STATUS.PUBLISHED,
         publishedAt: '2026-06-10T09:00:00.000Z',
-        publishedSnapshot: { ...buildAnnouncementSnapshot(normalizeAnnouncementInput(validInput, { systems, adminUsers, supportUsers })), display: { pinned: true, visibleFrom: null, visibleUntil: null } }
+        publishedSnapshot: { ...displayableSnapshot, display: { pinned: true, visibleFrom: null, visibleUntil: null } }
+      },
+      {
+        id: 'missing-snapshot',
+        status: ANNOUNCEMENT_STATUS.PUBLISHED,
+        publishedAt: '2026-06-10T11:00:00.000Z',
+        publishedSnapshot: null
+      },
+      {
+        id: 'future-visible',
+        status: ANNOUNCEMENT_STATUS.PUBLISHED,
+        publishedAt: '2026-06-10T11:00:00.000Z',
+        publishedSnapshot: { ...displayableSnapshot, display: { pinned: false, visibleFrom: '2026-06-10T13:00:00.000Z', visibleUntil: null } }
+      },
+      {
+        id: 'expired',
+        status: ANNOUNCEMENT_STATUS.PUBLISHED,
+        publishedAt: '2026-06-10T11:00:00.000Z',
+        publishedSnapshot: { ...displayableSnapshot, display: { pinned: false, visibleFrom: null, visibleUntil: '2026-06-10T11:59:59.999Z' } }
       },
       {
         id: 'withdrawn',
         status: ANNOUNCEMENT_STATUS.WITHDRAWN,
         publishedAt: '2026-06-10T12:00:00.000Z',
-        publishedSnapshot: buildAnnouncementSnapshot(normalizeAnnouncementInput(validInput, { systems, adminUsers, supportUsers }))
+        publishedSnapshot: displayableSnapshot
       }
     ],
     '2026-06-10T12:00:00.000Z'
@@ -137,6 +156,25 @@ test('filterAnnouncements searches keyword, status, system and publish date rang
     }
   ];
 
+  assert.deepEqual(
+    filterAnnouncements(rows, { keyword: '支付' }).map((item) => item.id),
+    ['a1']
+  );
+  assert.deepEqual(
+    filterAnnouncements(rows, { status: ANNOUNCEMENT_STATUS.PUBLISHED }).map((item) => item.id),
+    ['a1']
+  );
+  assert.deepEqual(
+    filterAnnouncements(rows, { systemCode: 'CRM' }).map((item) => item.id),
+    ['a2']
+  );
+  assert.deepEqual(
+    filterAnnouncements(rows, {
+      publishedFrom: '2026-06-10T00:00:00.000Z',
+      publishedTo: '2026-06-10T23:59:59.999Z'
+    }).map((item) => item.id),
+    ['a1']
+  );
   assert.deepEqual(
     filterAnnouncements(rows, {
       keyword: '支付',
