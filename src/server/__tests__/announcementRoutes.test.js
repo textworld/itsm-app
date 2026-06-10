@@ -93,6 +93,17 @@ test('POST create+submit validates required fields and persists a pending announ
   assert.equal(detailPayload.announcement.status, ANNOUNCEMENT_STATUS.PENDING_APPROVAL);
 });
 
+test('POST create returns 400 for malformed JSON body', async () => {
+  const response = await adminAnnouncementsPost(buildRealRequest({
+    body: '{',
+    headers: { 'content-type': 'application/json' }
+  }));
+  const payload = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(payload, { ok: false, reason: '请求体格式错误' });
+});
+
 test('selected approver can approve and active endpoint returns the published announcement', async () => {
   const { id, approver } = await createSubmittedAnnouncement({ title: '核心支付故障' });
 
@@ -148,6 +159,24 @@ test('approve action defaults missing body to empty object', async () => {
 
   const response = await adminAnnouncementApprovePost(
     buildRequest({ userId: approver.id, omitJson: true }),
+    routeParams(id)
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.announcement.status, ANNOUNCEMENT_STATUS.PUBLISHED);
+  assert.equal(payload.announcement.approvalRecords[0].opinion, '');
+});
+
+test('approve action treats a real empty Request body as optional', async () => {
+  const { id, approver } = await createSubmittedAnnouncement({ title: '真实空 body 审批' });
+
+  const response = await adminAnnouncementApprovePost(
+    buildRealRequest({
+      userId: approver.id,
+      url: `http://localhost/api/admin/announcements/${id}/approve`
+    }),
     routeParams(id)
   );
   const payload = await response.json();
@@ -425,5 +454,26 @@ function buildRequest({
     };
   }
 
+  return request;
+}
+
+function buildRealRequest({
+  userId = 'u_admin_1',
+  url = 'http://localhost/api/test',
+  method = 'POST',
+  body,
+  headers
+} = {}) {
+  const init = { method, headers };
+  if (body !== undefined) init.body = body;
+  const request = new Request(url, init);
+  Object.defineProperty(request, 'cookies', {
+    value: {
+      get(name) {
+        if (name !== 'itsm_session_user_id' || !userId) return undefined;
+        return { value: userId };
+      }
+    }
+  });
   return request;
 }

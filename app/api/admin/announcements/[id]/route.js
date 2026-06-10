@@ -5,7 +5,11 @@ import {
 } from '../../../../../src/server/adminConfigStore.js';
 import { requireAdminUser } from '../../../../../src/server/adminAuth.js';
 import { getSessionUserFromRequest } from '../../../../../src/server/session.js';
-import { mutationResponse } from '../routeHelpers.js';
+import {
+  malformedJsonResponse,
+  mutationResponse,
+  readRequiredJson
+} from '../routeHelpers.js';
 
 function authorize(request) {
   return requireAdminUser(getSessionUserFromRequest(request));
@@ -38,7 +42,9 @@ export async function PUT(request, { params }) {
   if (!auth.ok) return authResponse(auth);
 
   const { id } = await params;
-  const input = await request.json();
+  const body = await readRequiredJson(request);
+  if (!body.ok) return malformedJsonResponse(body.reason);
+  const input = body.value;
   const result = updateAnnouncementConfig(id, input, auth.user);
   return mutationResponse(result);
 }

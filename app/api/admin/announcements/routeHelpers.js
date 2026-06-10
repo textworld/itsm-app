@@ -34,6 +34,25 @@ export async function readOptionalJson(request) {
       return { ok: false, reason: '请求体格式错误' };
     }
     return { ok: true, value };
+  } catch (error) {
+    if (isEmptyBodyJsonError(error)) {
+      return { ok: true, value: {} };
+    }
+    return { ok: false, reason: '请求体格式错误' };
+  }
+}
+
+export async function readRequiredJson(request) {
+  if (typeof request.json !== 'function') {
+    return { ok: false, reason: '请求体格式错误' };
+  }
+
+  try {
+    const value = await request.json();
+    if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+      return { ok: false, reason: '请求体格式错误' };
+    }
+    return { ok: true, value };
   } catch {
     return { ok: false, reason: '请求体格式错误' };
   }
@@ -41,4 +60,9 @@ export async function readOptionalJson(request) {
 
 export function malformedJsonResponse(reason = '请求体格式错误') {
   return NextResponse.json({ ok: false, reason }, { status: 400 });
+}
+
+function isEmptyBodyJsonError(error) {
+  return error instanceof SyntaxError
+    && String(error.message || '').includes('Unexpected end');
 }
