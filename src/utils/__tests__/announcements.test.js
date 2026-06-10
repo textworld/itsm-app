@@ -70,6 +70,18 @@ test('validateAnnouncementInput rejects required fields and invalid role selecti
   ]);
 });
 
+test('validateAnnouncementInput requires at least one fault handler', () => {
+  const result = validateAnnouncementInput(
+    { ...validInput, handlerIds: [] },
+    { systems, adminUsers, supportUsers }
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors.map((item) => item.message), [
+    '请选择故障处置负责人'
+  ]);
+});
+
 test('normalizeAnnouncementInput resolves systems, handlers, approver and rich text plain text', () => {
   const result = validateAnnouncementInput(validInput, { systems, adminUsers, supportUsers });
 

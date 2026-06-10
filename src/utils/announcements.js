@@ -83,7 +83,11 @@ export function validateAnnouncementInput(input = {}, context = {}) {
   if (!richTextHasContent(value.progressHtml)) errors.push({ path: ['progressHtml'], message: '请输入当前处置进度' });
   if (!value.estimatedRecoveryAt) errors.push({ path: ['estimatedRecoveryAt'], message: '请选择预计恢复时间' });
   if (!value.approver || value.approver.role !== 'ADMIN') errors.push({ path: ['approverId'], message: '审批人必须是管理员' });
-  if (requestedHandlerIds.some((id) => !supportIds.has(id))) errors.push({ path: ['handlerIds'], message: '故障处置负责人必须是一线或二线支持' });
+  if (!requestedHandlerIds.length) {
+    errors.push({ path: ['handlerIds'], message: '请选择故障处置负责人' });
+  } else if (requestedHandlerIds.some((id) => !supportIds.has(id))) {
+    errors.push({ path: ['handlerIds'], message: '故障处置负责人必须是一线或二线支持' });
+  }
   if (isInvalidPositiveNumber(input.display?.scrollSpeed)) errors.push({ path: ['display', 'scrollSpeed'], message: '滚动速度必须大于 0' });
   if (isInvalidPositiveNumber(input.display?.durationSeconds)) errors.push({ path: ['display', 'durationSeconds'], message: '展示时长必须大于 0' });
 
