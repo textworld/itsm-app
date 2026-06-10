@@ -28,13 +28,15 @@ import {
   SettingOutlined,
   ProfileOutlined,
   FileTextOutlined,
-  FileProtectOutlined
+  FileProtectOutlined,
+  NotificationOutlined
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTickets } from '../../context/TicketContext.jsx';
 import { ROLES, ROLE_LABELS } from '../../constants/roles.js';
+import AnnouncementBanner from './AnnouncementBanner.jsx';
 
 const { Header, Content } = Layout;
 
@@ -124,6 +126,11 @@ export default function AppLayout({ children }) {
             label: <Link href="/data-fix-schemes">数据修正方案</Link>
           },
           {
+            key: '/announcements',
+            icon: <NotificationOutlined />,
+            label: <Link href="/announcements">公告管理</Link>
+          },
+          {
             key: '/oa-simulator',
             icon: <FileProtectOutlined />,
             label: <Link href="/oa-simulator">OA 模拟审批台</Link>
@@ -149,6 +156,7 @@ export default function AppLayout({ children }) {
     if (pathname.startsWith('/schedules')) return '/schedules';
     if (pathname.startsWith('/support-rests')) return '/support-rests';
     if (pathname.startsWith('/data-fix-schemes')) return '/data-fix-schemes';
+    if (pathname.startsWith('/announcements')) return '/announcements';
     if (pathname.startsWith('/oa-simulator')) return '/oa-simulator';
     if (pathname.startsWith('/tickets')) return '/tickets';
     if (pathname.startsWith('/state-machine')) return '/state-machine';
@@ -229,6 +237,7 @@ export default function AppLayout({ children }) {
           />
         </div>
       </Header>
+      <AnnouncementBanner />
       <Content className="app-shell-content">
         <div className="app-shell-content-inner">
           {!isTicketDetailPage && (
@@ -265,6 +274,8 @@ function pageTitle(key) {
       return '休息时间配置';
     case '/data-fix-schemes':
       return '数据修正方案';
+    case '/announcements':
+      return '公告管理';
     case '/oa-simulator':
       return 'OA 模拟审批台';
     case '/tickets':

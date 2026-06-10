@@ -76,3 +76,13 @@ test('administrator entries are grouped under a second-level admin menu', () => 
   assert.match(appLayoutSource, /数据修正方案/);
   assert.match(appLayoutSource, /OA 模拟审批台/);
 });
+
+test('administrator menu includes announcement management and layout mounts announcement banner', () => {
+  assert.match(appLayoutSource, /NotificationOutlined/);
+  assert.match(appLayoutSource, /AnnouncementBanner/);
+  assert.match(appLayoutSource, /<AnnouncementBanner \/>/);
+  assert.match(appLayoutSource, /href="\/announcements"/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/announcements'\)/);
+  assert.match(appLayoutSource, /公告管理/);
+  assert.match(globalCssSource, /\.announcement-banner/);
+});

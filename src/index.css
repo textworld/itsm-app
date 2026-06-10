@@ -158,6 +158,70 @@ body {
   color: #1f1f1f;
 }
 
+.announcement-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 20px;
+  border-bottom: 1px solid #f3d37a;
+  background: #fff7d6;
+  color: #6f4b00;
+}
+
+.announcement-banner-icon {
+  flex: 0 0 auto;
+  color: #d48806;
+}
+
+.announcement-banner-viewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.announcement-banner-track {
+  display: inline-block;
+  min-width: 100%;
+  animation-name: announcement-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.announcement-banner-pin.ant-tag {
+  flex: 0 0 auto;
+  margin-inline-end: 0;
+  border-color: #d48806;
+  background: #fffbe6;
+  color: #ad6800;
+}
+
+.announcement-banner .ant-btn-link {
+  flex: 0 0 auto;
+  color: #8a5a00;
+}
+
+.announcement-banner-detail {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.announcement-banner-detail:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+@keyframes announcement-scroll {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
 @media (max-width: 992px) {
   .app-shell-header-main {
     align-items: flex-start;
@@ -178,6 +242,10 @@ body {
   .app-shell-nav .ant-menu-horizontal > .ant-menu-item,
   .app-shell-nav .ant-menu-horizontal > .ant-menu-submenu {
     flex: none;
+  }
+
+  .announcement-banner {
+    padding: 6px 12px;
   }
 }
 
