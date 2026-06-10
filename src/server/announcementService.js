@@ -158,10 +158,17 @@ export function rejectAnnouncement(config = {}, announcementId, user, opinion = 
 
   const timestamp = resolveNow(options);
   const isPublishedUpdate = current.status === ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL;
+  const activeSnapshot = isPublishedUpdate ? current.publishedSnapshot : null;
   const approvalRecord = buildApprovalRecord('REJECT', user, opinion, timestamp);
   const updated = {
     ...cloneAnnouncement(current),
     status: isPublishedUpdate ? ANNOUNCEMENT_STATUS.PUBLISHED : ANNOUNCEMENT_STATUS.REJECTED,
+    ...(activeSnapshot ? {
+      title: activeSnapshot.title,
+      affectedSystems: cloneArray(activeSnapshot.affectedSystems),
+      handlers: cloneArray(activeSnapshot.handlers),
+      approver: cloneObject(activeSnapshot.approver)
+    } : {}),
     updatedAt: timestamp,
     pendingSnapshot: isPublishedUpdate ? null : cloneSnapshot(current.pendingSnapshot),
     approvalRecords: [...(current.approvalRecords || []).map(cloneObject), approvalRecord],

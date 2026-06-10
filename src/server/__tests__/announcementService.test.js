@@ -94,6 +94,36 @@ test('published update creates update pending approval while current published s
   assert.equal(updated.announcement.pendingSnapshot.title, '支付网关异常更新');
 });
 
+test('rejected published update restores active top-level fields from published snapshot', () => {
+  const created = createAnnouncement({ announcements: [] }, input, admin, context, { now });
+  const submitted = submitAnnouncement(created.config, created.announcement.id, admin, { now });
+  const approved = approveAnnouncement(submitted.config, created.announcement.id, otherAdmin, '同意', { now });
+  const updated = updateAnnouncement(
+    approved.config,
+    created.announcement.id,
+    {
+      ...input,
+      title: '支付网关异常更新',
+      affectedSystemCodes: ['ERP_CORE'],
+      handlerIds: ['u_l1_1'],
+      approverId: 'u_admin_2'
+    },
+    admin,
+    context,
+    { now: '2026-06-10T15:30:00.000Z' }
+  );
+  const rejected = rejectAnnouncement(updated.config, created.announcement.id, otherAdmin, '暂不更新', { now: '2026-06-10T15:35:00.000Z' });
+
+  assert.equal(rejected.ok, true);
+  assert.equal(rejected.announcement.status, ANNOUNCEMENT_STATUS.PUBLISHED);
+  assert.equal(rejected.announcement.pendingSnapshot, null);
+  assert.equal(rejected.announcement.publishedSnapshot.title, '支付网关异常');
+  assert.equal(rejected.announcement.title, '支付网关异常');
+  assert.deepEqual(rejected.announcement.affectedSystems, rejected.announcement.publishedSnapshot.affectedSystems);
+  assert.deepEqual(rejected.announcement.handlers, rejected.announcement.publishedSnapshot.handlers);
+  assert.deepEqual(rejected.announcement.approver, rejected.announcement.publishedSnapshot.approver);
+});
+
 test('withdraw and pin toggle record operation logs', () => {
   const created = createAnnouncement({ announcements: [] }, input, admin, context, { now });
   const submitted = submitAnnouncement(created.config, created.announcement.id, admin, { now });
