@@ -20,8 +20,7 @@ const SUBMITTABLE_STATUSES = new Set([
 const EDITABLE_STATUSES = new Set([
   ANNOUNCEMENT_STATUS.DRAFT,
   ANNOUNCEMENT_STATUS.REJECTED,
-  ANNOUNCEMENT_STATUS.PUBLISHED,
-  ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL
+  ANNOUNCEMENT_STATUS.PUBLISHED
 ]);
 
 const WITHDRAWABLE_STATUSES = new Set([
@@ -141,9 +140,18 @@ export function approveAnnouncement(config = {}, announcementId, user, opinion =
   if (!PENDING_STATUSES.has(current.status)) return failure('当前状态不可审批', { config, announcement: current });
   if (!canApprove(user, current)) return failure('仅指定审批人可审批', { config, announcement: current });
   if (!current.pendingSnapshot) return failure('公告无待审批内容', { config, announcement: current });
+  const isPublishedUpdate = current.status === ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL;
+  if (isPublishedUpdate && !current.publishedSnapshot) return failure('公告无已发布内容', { config, announcement: current });
 
   const timestamp = resolveNow(options);
   const approvalRecord = buildApprovalRecord('APPROVE', user, opinion, timestamp);
+  const publishedSnapshot = cloneSnapshot(current.pendingSnapshot);
+  if (isPublishedUpdate) {
+    publishedSnapshot.display = {
+      ...(publishedSnapshot.display || {}),
+      pinned: current.publishedSnapshot.display?.pinned === true
+    };
+  }
   const updated = {
     ...cloneAnnouncement(current),
     status: ANNOUNCEMENT_STATUS.PUBLISHED,
@@ -154,7 +162,7 @@ export function approveAnnouncement(config = {}, announcementId, user, opinion =
     updatedAt: timestamp,
     publishedAt: timestamp,
     pendingSnapshot: null,
-    publishedSnapshot: cloneSnapshot(current.pendingSnapshot),
+    publishedSnapshot,
     approvalRecords: [...(current.approvalRecords || []).map(cloneObject), approvalRecord],
     operationLogs: [
       ...(current.operationLogs || []).map(cloneObject),
