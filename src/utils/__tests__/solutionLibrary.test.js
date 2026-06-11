@@ -84,6 +84,40 @@ test('validateSolutionInput rejects missing code title description and detail', 
   ]);
 });
 
+test('validateSolutionInput deduplicates arrays after normalization', () => {
+  const result = validateSolutionInput(
+    {
+      ...validInput,
+      systemCodes: ['crm', 'CRM', ' erp_core ', 'ERP_CORE'],
+      ticketTypes: ['incident', 'INCIDENT', ' request ', 'REQUEST']
+    },
+    context
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.systemCodes, ['CRM', 'ERP_CORE']);
+  assert.deepEqual(result.value.ticketTypes, ['INCIDENT', 'REQUEST']);
+});
+
+test('validateSolutionInput rejects unknown classifications when supplied context lists are empty', () => {
+  const result = validateSolutionInput(
+    {
+      ...validInput,
+      insuranceTypeIds: ['ins_unknown'],
+      systemCodes: ['unknown_system'],
+      problemTypeIds: ['problem_unknown']
+    },
+    { systems: [], insuranceTypes: [], problemTypes: [] }
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors.map((item) => item.message), [
+    '业务系统不存在',
+    '适用险种不存在',
+    '问题类型不存在'
+  ]);
+});
+
 test('canReferenceSolution allows company-wide L1 and L2 only when enabled', () => {
   const solution = {
     enabled: true,
@@ -166,7 +200,11 @@ test('buildSolutionSnapshot preserves versioned display content', () => {
       referencePermission: SOLUTION_REFERENCE_PERMISSION.ASSIGNED_GROUPS,
       groupRoles: ['L2']
     },
-    stats: { referenceCount: 2, lastReferencedAt: '2026-06-10T10:00:00.000Z' }
+    stats: {
+      referenceCount: 2,
+      lastReferencedAt: '2026-06-10T10:00:00.000Z',
+      byChannel: { MESSAGE_REPLY: 2 }
+    }
   };
 
   const snapshot = buildSolutionSnapshot(solution);
@@ -174,6 +212,7 @@ test('buildSolutionSnapshot preserves versioned display content', () => {
   solution.insuranceTypeIds.push('ins_auto');
   solution.permissions.teamRoles.push('L2');
   solution.stats.referenceCount = 99;
+  solution.stats.byChannel.MESSAGE_REPLY = 99;
 
   assert.deepEqual(snapshot, {
     id: 'solution_1',
@@ -197,7 +236,11 @@ test('buildSolutionSnapshot preserves versioned display content', () => {
       referencePermission: SOLUTION_REFERENCE_PERMISSION.ASSIGNED_GROUPS,
       groupRoles: ['L2']
     },
-    stats: { referenceCount: 2, lastReferencedAt: '2026-06-10T10:00:00.000Z' }
+    stats: {
+      referenceCount: 2,
+      lastReferencedAt: '2026-06-10T10:00:00.000Z',
+      byChannel: { MESSAGE_REPLY: 2 }
+    }
   });
 });
 

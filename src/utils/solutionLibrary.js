@@ -47,8 +47,8 @@ export function normalizeSolutionInput(input = {}, context = {}) {
     enabled: normalizeEnabled(input.enabled),
     insuranceTypeIds: uniqueStrings(input.insuranceTypeIds),
     relatedInternalSchemeIds: uniqueStrings(input.relatedInternalSchemeIds),
-    ticketTypes: uniqueStrings(input.ticketTypes).map((value) => value.toUpperCase()),
-    systemCodes: uniqueStrings(input.systemCodes).map(normalizeSystemCode).filter(Boolean),
+    ticketTypes: uniqueNormalizedStrings(input.ticketTypes, (value) => value.toUpperCase()),
+    systemCodes: uniqueNormalizedStrings(input.systemCodes, normalizeSystemCode),
     problemTypeIds: uniqueStrings(input.problemTypeIds),
     permissions: {
       editPermission,
@@ -69,17 +69,17 @@ export function validateSolutionInput(input = {}, context = {}) {
   if (!richTextHasContent(value.detailHtml)) errors.push({ path: ['detailHtml'], message: '请输入详细说明' });
 
   const knownSystemCodes = new Set((context.systems || []).map((system) => normalizeSystemCode(system.code || system.value)).filter(Boolean));
-  if (knownSystemCodes.size > 0 && value.systemCodes.some((code) => !knownSystemCodes.has(code))) {
+  if (Array.isArray(context.systems) && value.systemCodes.some((code) => !knownSystemCodes.has(code))) {
     errors.push({ path: ['systemCodes'], message: '业务系统不存在' });
   }
 
   const knownInsuranceTypeIds = new Set((context.insuranceTypes || []).map((item) => String(item.id || '').trim()).filter(Boolean));
-  if (knownInsuranceTypeIds.size > 0 && value.insuranceTypeIds.some((id) => !knownInsuranceTypeIds.has(id))) {
+  if (Array.isArray(context.insuranceTypes) && value.insuranceTypeIds.some((id) => !knownInsuranceTypeIds.has(id))) {
     errors.push({ path: ['insuranceTypeIds'], message: '适用险种不存在' });
   }
 
   const knownProblemTypeIds = new Set((context.problemTypes || []).map((item) => String(item.id || '').trim()).filter(Boolean));
-  if (knownProblemTypeIds.size > 0 && value.problemTypeIds.some((id) => !knownProblemTypeIds.has(id))) {
+  if (Array.isArray(context.problemTypes) && value.problemTypeIds.some((id) => !knownProblemTypeIds.has(id))) {
     errors.push({ path: ['problemTypeIds'], message: '问题类型不存在' });
   }
 
@@ -111,7 +111,7 @@ export function buildSolutionSnapshot(solution = {}) {
       problemTypeIds: uniqueStrings(solution.problemTypeIds || solution.classification?.problemTypeIds)
     },
     permissions: clonePermissions(solution.permissions || solution),
-    stats: { ...(solution.stats || {}) }
+    stats: deepCloneObject(solution.stats || {})
   };
 }
 
@@ -229,6 +229,10 @@ function uniqueStrings(values = []) {
   return [...new Set((Array.isArray(values) ? values : []).map((value) => String(value || '').trim()).filter(Boolean))];
 }
 
+function uniqueNormalizedStrings(values = [], normalize) {
+  return [...new Set(uniqueStrings(values).map(normalize).filter(Boolean))];
+}
+
 function normalizeSupportRoles(values = []) {
   return uniqueStrings(values).filter((role) => SUPPORT_ROLES.has(role));
 }
@@ -312,4 +316,9 @@ function resolveSystemValue(value, systems = []) {
     return normalizedCode === code || normalized === name;
   });
   return match ? normalizeSystemCode(match.code || match.value) : normalizedCode;
+}
+
+function deepCloneObject(value) {
+  if (!value || typeof value !== 'object') return {};
+  return JSON.parse(JSON.stringify(value));
 }
