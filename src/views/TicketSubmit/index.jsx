@@ -437,6 +437,8 @@ export function TicketSubmitForm({ draftTicket = null }) {
         selectedSchemeId: scheme.id,
         selectedSchemeTitle: scheme.title,
         selectedSchemeDescription: scheme.description,
+        selectedSchemeVersionNo: scheme.versionNo,
+        selectedSolutionCode: scheme.solutionCode,
         requesterSolution: scheme.description
       }
     });
@@ -786,6 +788,11 @@ export function TicketSubmitForm({ draftTicket = null }) {
                         </Space>
                         {getFieldValue(['dataFixSolution', 'selectedSchemeTitle']) && (
                           <Card size="small" title={getFieldValue(['dataFixSolution', 'selectedSchemeTitle'])}>
+                            {getFieldValue(['dataFixSolution', 'selectedSchemeVersionNo']) && (
+                              <Typography.Text type="secondary">
+                                方案版本 v{getFieldValue(['dataFixSolution', 'selectedSchemeVersionNo'])}
+                              </Typography.Text>
+                            )}
                             <Typography.Paragraph style={{ marginBottom: 0 }}>
                               {getFieldValue(['dataFixSolution', 'selectedSchemeDescription']) || '-'}
                             </Typography.Paragraph>
@@ -1000,7 +1007,11 @@ function buildDataFixSolution(values = {}) {
     relatedTicketId: String(solution.relatedTicketId || values.relatedTicketId || '').trim(),
     selectedSchemeId: String(solution.selectedSchemeId || '').trim(),
     selectedSchemeTitle: String(solution.selectedSchemeTitle || '').trim(),
-    selectedSchemeDescription: String(solution.selectedSchemeDescription || '').trim()
+    selectedSchemeDescription: String(solution.selectedSchemeDescription || '').trim(),
+    selectedSchemeVersionNo: Number.isInteger(solution.selectedSchemeVersionNo)
+      ? solution.selectedSchemeVersionNo
+      : Number(solution.selectedSchemeVersionNo || 0) || null,
+    selectedSolutionCode: String(solution.selectedSolutionCode || '').trim()
   };
 }
 

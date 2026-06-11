@@ -126,9 +126,9 @@ export default function AppLayout({ children }) {
             label: <Link href="/support-rests">休息时间配置</Link>
           },
           {
-            key: '/data-fix-schemes',
+            key: '/solutions',
             icon: <FileTextOutlined />,
-            label: <Link href="/data-fix-schemes">数据修正方案</Link>
+            label: <Link href="/solutions">标准解决方案库</Link>
           },
           {
             key: '/announcements',
@@ -160,7 +160,7 @@ export default function AppLayout({ children }) {
     if (pathname.startsWith('/systems')) return '/systems';
     if (pathname.startsWith('/schedules')) return '/schedules';
     if (pathname.startsWith('/support-rests')) return '/support-rests';
-    if (pathname.startsWith('/data-fix-schemes')) return '/data-fix-schemes';
+    if (pathname.startsWith('/solutions')) return '/solutions';
     if (pathname.startsWith('/announcements')) return '/announcements';
     if (pathname.startsWith('/oa-simulator')) return '/oa-simulator';
     if (pathname.startsWith('/tickets')) return '/tickets';
@@ -277,8 +277,8 @@ function pageTitle(key) {
       return '排班配置';
     case '/support-rests':
       return '休息时间配置';
-    case '/data-fix-schemes':
-      return '数据修正方案';
+    case '/solutions':
+      return '标准解决方案库';
     case '/announcements':
       return '公告管理';
     case '/oa-simulator':

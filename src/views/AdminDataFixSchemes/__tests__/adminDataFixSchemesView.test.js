@@ -12,21 +12,15 @@ const routeSource = fs.readFileSync(
   'utf8'
 );
 
-test('data fix scheme admin view manages schemes through admin API', () => {
-  assert.match(source, /\/api\/admin\/data-fix-schemes/);
-  assert.match(source, /数据修正方案/);
-  assert.match(source, /方案标题/);
-  assert.match(source, /方案描述/);
-  assert.match(source, /method: 'PUT'/);
-  assert.match(source, /openCreateModal/);
-  assert.match(source, /openEditModal/);
-  assert.match(source, /removeScheme/);
-  assert.match(source, /Table/);
-  assert.match(source, /Modal/);
+test('data fix scheme admin view is replaced by solution library view', () => {
+  assert.match(source, /AdminSolutions/);
+  assert.doesNotMatch(source, /\/api\/admin\/data-fix-schemes/);
+  assert.doesNotMatch(source, /数据修正方案已保存/);
 });
 
-test('data fix scheme admin page is administrator-only', () => {
+test('data fix scheme admin page redirects administrators to solution library', () => {
   assert.match(routeSource, /getLoginRedirectHref\('\/data-fix-schemes'\)/);
   assert.match(routeSource, /user\.role !== ROLES\.ADMIN/);
-  assert.match(routeSource, /<AdminDataFixSchemesPage \/>/);
+  assert.match(routeSource, /redirect\('\/solutions'\)/);
+  assert.doesNotMatch(routeSource, /<AdminDataFixSchemesPage \/>/);
 });
