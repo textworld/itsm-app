@@ -209,6 +209,38 @@ function createDatabase() {
       updated_at TEXT NOT NULL,
       data TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS solutions (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      enabled INTEGER NOT NULL,
+      version_no INTEGER NOT NULL,
+      updated_at TEXT NOT NULL,
+      data TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS solution_versions (
+      id TEXT PRIMARY KEY,
+      solution_id TEXT NOT NULL,
+      version_no INTEGER NOT NULL,
+      change_type TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      data TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS solution_references (
+      id TEXT PRIMARY KEY,
+      solution_id TEXT NOT NULL,
+      ticket_id TEXT NOT NULL,
+      version_no INTEGER NOT NULL,
+      quoted_at TEXT NOT NULL,
+      data TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_solution_versions_solution_id ON solution_versions(solution_id, version_no DESC);
+    CREATE INDEX IF NOT EXISTS idx_solution_references_solution_id ON solution_references(solution_id, quoted_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_solution_references_ticket_id ON solution_references(ticket_id, quoted_at DESC);
   `);
 
   seedDatabase(db);
@@ -472,6 +504,17 @@ class JsonFallbackStatement {
     if (this.sql.includes('select data from app_configs where key = ?')) {
       return this.db.tables.app_configs.find((row) => row.key === args[0]) || undefined;
     }
+    if (this.sql.includes('select data from solutions where id = ?')) {
+      return this.db.tables.solutions.find((row) => row.id === args[0]) || undefined;
+    }
+    if (this.sql.includes('select data from solutions where code = ?')) {
+      return this.db.tables.solutions.find((row) => row.code === args[0]) || undefined;
+    }
+    if (this.sql.includes('select data from solution_versions where solution_id = ? and version_no = ?')) {
+      return this.db.tables.solution_versions.find(
+        (row) => row.solution_id === args[0] && row.version_no === args[1]
+      ) || undefined;
+    }
     if (this.sql.includes('from uploads') && this.sql.includes('where id = ?')) {
       return this.db.tables.uploads.find((row) => row.id === args[0]) || undefined;
     }
@@ -492,6 +535,24 @@ class JsonFallbackStatement {
       return this.db.tables.dictionary_items
         .filter((row) => row.type === args[0])
         .sort(compareUpdatedRows);
+    }
+    if (this.sql.includes('select data from solutions order by updated_at desc')) {
+      return [...this.db.tables.solutions].sort(compareUpdatedRows);
+    }
+    if (this.sql.includes('select data from solution_versions where solution_id = ? order by version_no desc')) {
+      return this.db.tables.solution_versions
+        .filter((row) => row.solution_id === args[0])
+        .sort(compareVersionRows);
+    }
+    if (this.sql.includes('select data from solution_references where solution_id = ? order by quoted_at desc')) {
+      return this.db.tables.solution_references
+        .filter((row) => row.solution_id === args[0])
+        .sort(compareQuotedRows);
+    }
+    if (this.sql.includes('select data from solution_references where ticket_id = ? order by quoted_at desc')) {
+      return this.db.tables.solution_references
+        .filter((row) => row.ticket_id === args[0])
+        .sort(compareQuotedRows);
     }
     if (this.sql.includes('select ticket_id, read_at from message_reads where user_id = ?')) {
       return this.db.tables.message_reads
@@ -540,6 +601,26 @@ class JsonFallbackStatement {
     }
     if (this.sql.startsWith('delete from app_configs')) {
       this.db.tables.app_configs = [];
+      this.db.persist();
+      return { changes: 1 };
+    }
+    if (this.sql.startsWith('delete from solutions where id = ?')) {
+      this.db.tables.solutions = this.db.tables.solutions.filter((row) => row.id !== params);
+      this.db.persist();
+      return { changes: 1 };
+    }
+    if (this.sql.startsWith('delete from solutions')) {
+      this.db.tables.solutions = [];
+      this.db.persist();
+      return { changes: 1 };
+    }
+    if (this.sql.startsWith('delete from solution_versions')) {
+      this.db.tables.solution_versions = [];
+      this.db.persist();
+      return { changes: 1 };
+    }
+    if (this.sql.startsWith('delete from solution_references')) {
+      this.db.tables.solution_references = [];
       this.db.persist();
       return { changes: 1 };
     }
@@ -622,6 +703,43 @@ class JsonFallbackStatement {
       this.db.persist();
       return { changes: 1 };
     }
+    if (this.sql.includes('insert into solutions')) {
+      upsertById(this.db.tables.solutions, {
+        id: params.id,
+        code: params.code,
+        title: params.title,
+        enabled: params.enabled,
+        version_no: params.version_no,
+        updated_at: params.updated_at,
+        data: params.data
+      });
+      this.db.persist();
+      return { changes: 1 };
+    }
+    if (this.sql.includes('insert into solution_versions')) {
+      upsertById(this.db.tables.solution_versions, {
+        id: params.id,
+        solution_id: params.solution_id,
+        version_no: params.version_no,
+        change_type: params.change_type,
+        created_at: params.created_at,
+        data: params.data
+      });
+      this.db.persist();
+      return { changes: 1 };
+    }
+    if (this.sql.includes('insert into solution_references')) {
+      upsertById(this.db.tables.solution_references, {
+        id: params.id,
+        solution_id: params.solution_id,
+        ticket_id: params.ticket_id,
+        version_no: params.version_no,
+        quoted_at: params.quoted_at,
+        data: params.data
+      });
+      this.db.persist();
+      return { changes: 1 };
+    }
     if (this.sql.includes('insert into uploads')) {
       upsertById(this.db.tables.uploads, {
         id: params.id,
@@ -648,7 +766,10 @@ function createEmptyTables() {
     message_reads: [],
     uploads: [],
     dictionary_items: [],
-    app_configs: []
+    app_configs: [],
+    solutions: [],
+    solution_versions: [],
+    solution_references: []
   };
 }
 
@@ -679,5 +800,19 @@ function compareUpdatedRows(left, right) {
     new Date(right.updated_at || right.created_at || 0).getTime() -
     new Date(left.updated_at || left.created_at || 0).getTime();
   if (updatedDiff !== 0) return updatedDiff;
+  return String(right.id || '').localeCompare(String(left.id || ''));
+}
+
+function compareVersionRows(left, right) {
+  const versionDiff = Number(right.version_no || 0) - Number(left.version_no || 0);
+  if (versionDiff !== 0) return versionDiff;
+  return String(right.id || '').localeCompare(String(left.id || ''));
+}
+
+function compareQuotedRows(left, right) {
+  const quotedDiff =
+    new Date(right.quoted_at || 0).getTime() -
+    new Date(left.quoted_at || 0).getTime();
+  if (quotedDiff !== 0) return quotedDiff;
   return String(right.id || '').localeCompare(String(left.id || ''));
 }
