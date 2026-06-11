@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server.js';
-import {
-  listDataFixSchemeCompatibleSolutions,
-  saveDataFixSchemeCompatibleConfig
-} from '../../../../src/server/solutionLibraryStore.js';
+import { createSolution, listSolutions } from '../../../../src/server/solutionLibraryStore.js';
 import { requireAdminUser } from '../../../../src/server/adminAuth.js';
 import { getSessionUserFromRequest } from '../../../../src/server/session.js';
 
@@ -20,19 +17,16 @@ export async function GET(request) {
 
   return NextResponse.json({
     ok: true,
-    deprecated: true,
-    config: {
-      schemes: listDataFixSchemeCompatibleSolutions(auth.user).schemes,
-      replacement: '/api/admin/solutions'
-    }
+    solutions: listSolutions(),
+    replacementFor: 'data-fix-schemes'
   });
 }
 
-export async function PUT(request) {
+export async function POST(request) {
   const auth = authorize(request);
   if (!auth.ok) return authResponse(auth);
 
   const input = await request.json();
-  const result = saveDataFixSchemeCompatibleConfig(input, auth.user);
+  const result = createSolution(input, auth.user);
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
 }

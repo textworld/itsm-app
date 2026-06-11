@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server.js';
-import { getDataFixSchemeConfig } from '../../../src/server/adminConfigStore.js';
+import { listDataFixSchemeCompatibleSolutions } from '../../../src/server/solutionLibraryStore.js';
 import { getSessionUserFromRequest } from '../../../src/server/session.js';
 
 export async function GET(request) {
@@ -8,8 +8,5 @@ export async function GET(request) {
     return NextResponse.json({ ok: false, reason: '未登录' }, { status: 401 });
   }
 
-  return NextResponse.json({
-    ok: true,
-    schemes: getDataFixSchemeConfig().schemes || []
-  });
+  return NextResponse.json(listDataFixSchemeCompatibleSolutions(user));
 }

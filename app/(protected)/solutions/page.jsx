@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import AdminSolutionsPage from '../../../src/views/AdminSolutions/index.jsx';
 import { ROLES } from '../../../src/constants/roles.js';
 import { getLoginRedirectHref } from '../../../src/server/protectedRoute.js';
 import { getSessionUserFromRequest } from '../../../src/server/session.js';
@@ -7,14 +8,14 @@ import { getSessionUserFromRequest } from '../../../src/server/session.js';
 export default async function Page() {
   const user = getSessionUserFromRequest({ cookies: await cookies() });
   if (!user) {
-    redirect(getLoginRedirectHref('/data-fix-schemes'));
+    redirect(getLoginRedirectHref('/solutions'));
   }
 
   if (user.role !== ROLES.ADMIN) {
     return <NoAdminPermission />;
   }
 
-  redirect('/solutions');
+  return <AdminSolutionsPage />;
 }
 
 function NoAdminPermission() {

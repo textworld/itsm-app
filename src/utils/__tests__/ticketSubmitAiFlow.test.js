@@ -35,7 +35,7 @@ test('审批类工单提交时关闭 AI 流程并直接进入 OA 分支', () => 
 });
 
 test('生产系统数据修正提交页通过弹窗单选配置方案并写入提交 payload', () => {
-  assert.match(submitPageSource, /\/api\/data-fix-schemes/);
+  assert.match(submitPageSource, /\/api\/config\/data-fix-schemes/);
   assert.match(submitPageSource, /选择数据修正方案/);
   assert.match(submitPageSource, /dataFixSchemeModalOpen/);
   assert.match(submitPageSource, /dataFixSchemeTitleKeyword/);
@@ -43,6 +43,9 @@ test('生产系统数据修正提交页通过弹窗单选配置方案并写入�
   assert.match(submitPageSource, /selectedSchemeId/);
   assert.match(submitPageSource, /selectedSchemeTitle/);
   assert.match(submitPageSource, /selectedSchemeDescription/);
+  assert.match(submitPageSource, /selectedSchemeVersionNo/);
+  assert.match(submitPageSource, /selectedSolutionCode/);
+  assert.match(submitPageSource, /方案版本 v/);
   assert.match(submitPageSource, /requesterSolution: String\(solution\.requesterSolution \|\| solution\.selectedSchemeDescription/);
 });
 
@@ -76,7 +79,7 @@ test('data extract submit form blocks structured extraction tickets', () => {
 test('permission submit form requires an Excel application file and exposes template download', () => {
   assert.match(submitPageSource, /permissionFileList/);
   assert.match(submitPageSource, /权限申请文件/);
-  assert.match(submitPageSource, /\/api\/templates\/permission-request/);
+  assert.match(submitPageSource, /\/api\/access\/templates\/permission-request/);
   assert.match(submitPageSource, /acceptedTypes=\{EXCEL_ATTACHMENT_TYPES\}/);
   assert.match(submitPageSource, /validator=\{isExcelAttachment\}/);
   assert.match(submitPageSource, /请上传 Excel 格式的权限申请文件/);
