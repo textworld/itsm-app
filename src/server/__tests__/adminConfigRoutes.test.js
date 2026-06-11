@@ -194,7 +194,7 @@ test('admin data fix scheme routes require admin users', async () => {
   assert.equal((await forbidden.json()).reason, '无管理员权限');
 });
 
-test('data fix scheme routes save admin config and expose schemes to logged-in requesters', async () => {
+test('data fix scheme routes write through solution library and expose compatible schemes to logged-in requesters', async () => {
   const putResponse = await adminDataFixSchemesPut(buildRequest({
     body: {
       schemes: [
@@ -210,21 +210,28 @@ test('data fix scheme routes save admin config and expose schemes to logged-in r
 
   assert.equal(putResponse.status, 200);
   assert.equal(putPayload.ok, true);
+  assert.equal(putPayload.deprecated, true);
   assert.equal(putPayload.config.schemes[0].title, '客户资料同步');
+  assert.equal(Boolean(putPayload.config.schemes[0].solutionCode), true);
+  assert.equal(Number.isInteger(putPayload.config.schemes[0].versionNo), true);
 
   const getResponse = await adminDataFixSchemesGet(buildRequest());
   const getPayload = await getResponse.json();
 
   assert.equal(getResponse.status, 200);
   assert.equal(getPayload.ok, true);
-  assert.equal(getPayload.config.schemes[0].description, '修复客户资料同步异常');
+  assert.equal(getPayload.deprecated, true);
+  assert.ok(getPayload.config.schemes.some((scheme) => scheme.description === '修复客户资料同步异常'));
+  assert.equal(getPayload.config.replacement, '/api/admin/solutions');
 
   const publicResponse = await dataFixSchemesGet(buildRequest({ userId: 'u_requester_1' }));
   const publicPayload = await publicResponse.json();
 
   assert.equal(publicResponse.status, 200);
   assert.equal(publicPayload.ok, true);
-  assert.deepEqual(publicPayload.schemes, getPayload.config.schemes);
+  assert.equal(publicPayload.deprecated, true);
+  assert.ok(publicPayload.schemes.some((scheme) => scheme.title === '客户资料同步'));
+  assert.ok(publicPayload.schemes.every((scheme) => scheme.solutionCode && Number.isInteger(scheme.versionNo)));
 
   const unauthenticated = await dataFixSchemesGet(buildRequest({ userId: null }));
   assert.equal(unauthenticated.status, 401);

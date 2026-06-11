@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server.js';
 import {
-  getDataFixSchemeConfig,
-  saveDataFixSchemeConfig
-} from '../../../../src/server/adminConfigStore.js';
+  listDataFixSchemeCompatibleSolutions,
+  saveDataFixSchemeCompatibleConfig
+} from '../../../../src/server/solutionLibraryStore.js';
 import { requireAdminUser } from '../../../../src/server/adminAuth.js';
 import { getSessionUserFromRequest } from '../../../../src/server/session.js';
 
@@ -20,7 +20,11 @@ export async function GET(request) {
 
   return NextResponse.json({
     ok: true,
-    config: getDataFixSchemeConfig()
+    deprecated: true,
+    config: {
+      schemes: listDataFixSchemeCompatibleSolutions(auth.user).schemes,
+      replacement: '/api/admin/solutions'
+    }
   });
 }
 
@@ -29,6 +33,6 @@ export async function PUT(request) {
   if (!auth.ok) return authResponse(auth);
 
   const input = await request.json();
-  const result = saveDataFixSchemeConfig(input, auth.user);
+  const result = saveDataFixSchemeCompatibleConfig(input, auth.user);
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
 }
