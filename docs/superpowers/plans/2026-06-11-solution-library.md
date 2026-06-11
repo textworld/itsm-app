@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build phase-one global standard solution library with independent SQLite storage, admin management, versioning, permission-filtered ticket references, Excel import/export, and citation audit records that preserve solution version snapshots.
+**Goal:** Build phase-one global standard solution library that replaces the original data-fix scheme management entry, while keeping compatible old API paths and preserving solution version snapshots in all references.
 
-**Architecture:** Add a new solution-library domain beside the existing announcement and admin-config domains. Keep pure validation/filter/import/export helpers in `src/utils/solutionLibrary.js`, persistence and cross-domain ticket citation in `src/server/solutionLibraryStore.js`, and expose focused Next route handlers under `/api/admin/solutions`, `/api/solutions/referenceable`, and `/api/workflow/tickets/[id]/solution-references`. Frontend work adds an admin page and a ticket-message reference flow without directly mutating ticket status fields.
+**Architecture:** Add a new solution-library domain that takes over the current data-fix scheme admin route, menu entry, and public scheme data source. Keep pure validation/filter/import/export helpers in `src/utils/solutionLibrary.js`, persistence and cross-domain ticket citation in `src/server/solutionLibraryStore.js`, and expose focused Next route handlers under `/api/admin/solutions`, `/api/solutions/referenceable`, and `/api/workflow/tickets/[id]/solution-references`; old `data-fix-schemes` routes become compatibility aliases backed by solution records. Frontend work replaces the old data-fix scheme admin page with the solution library and adds ticket-message reference flow without directly mutating ticket status fields.
 
 **Tech Stack:** Next.js App Router route handlers, React client components, Ant Design, Node test runner, JSON-rich SQLite rows via `better-sqlite3` with existing JSON fallback store, existing rich text helpers, existing ticket message storage.
 
@@ -19,7 +19,7 @@ Create:
 - `src/utils/__tests__/solutionLibrary.test.js`  
   Unit tests for validation, permissions, filtering, version snapshots, import/export mapping.
 - `src/server/solutionLibraryStore.js`  
-  Persistence, version writes, reference writes, stats updates, admin option loading, import/export service functions.
+  Persistence, version writes, reference writes, stats updates, data-fix scheme migration/compatibility adapters, admin option loading, import/export service functions.
 - `src/server/__tests__/solutionLibraryStore.test.js`  
   Store/service tests for CRUD, versions, rollback, references, stats, deletion history.
 - `src/server/__tests__/solutionLibraryRoutes.test.js`  
@@ -45,8 +45,17 @@ Modify:
 
 - `src/server/db.js`  
   Add SQLite tables and JSON fallback tables for `solutions`, `solution_versions`, `solution_references`; update fallback `prepare().get/all/run` handlers.
+- `src/server/adminConfigStore.js`  
+  Keep legacy data-fix scheme config functions as adapters or deprecated compatibility helpers backed by solution-library data.
 - `src/server/store.js`  
   Add a small helper if needed to append multiple messages to a ticket atomically, or let `solutionLibraryStore.js` read/upsert through existing public functions without status mutation.
+- `app/(protected)/data-fix-schemes/page.jsx`  
+  Redirect to `/solutions` or render `AdminSolutionsPage`, so the old admin URL no longer exposes a separate configuration surface.
+- `app/api/data-fix-schemes/route.js`
+- `app/api/config/data-fix-schemes/route.js`
+- `app/api/admin/data-fix-schemes/route.js`
+- `app/api/config/admin/data-fix-schemes/route.js`  
+  Convert old API paths to solution-library-backed compatibility routes.
 - `src/context/TicketContext.jsx`  
   Add `referenceSolution(ticketId, solutionId)` client action wrapping the new workflow API.
 - `src/components/TicketDetail/MessageBoard.jsx`  
@@ -57,6 +66,9 @@ Modify:
 - `src/components/TicketDetail/__tests__/actionAreaUi.test.js` or create `solutionReferenceUi.test.js` if clearer.
 - `src/components/Layout/AppLayout.jsx`
 - `src/components/Layout/__tests__/appLayout.test.js`
+- `src/views/TicketSubmit/index.jsx`  
+  Keep the current data-fix submission state-machine flow, but load selectable schemes from the solution-library compatibility data and store selected solution version metadata.
+- `src/utils/__tests__/ticketSubmitAiFlow.test.js`
 
 Do not modify ticket status, requesterStatus, supportStatus, or processingSubStatus directly. Any ticket business status change must continue to go through `src/state-machine/ticketStateMachine.js`; this feature only appends ticket messages/logs.
 
@@ -325,7 +337,7 @@ git commit -m "feat: add solution library utilities"
 
 ---
 
-### Task 3: Solution Store CRUD, Versions, Rollback, And References
+### Task 3: Solution Store CRUD, Versions, Rollback, References, And Data-Fix Migration
 
 **Files:**
 - Create: `src/server/solutionLibraryStore.js`
@@ -343,6 +355,8 @@ Extend `solutionLibraryStore.test.js` to import service functions and test:
 - Reference writes `solution_references` with `versionNo` and `snapshot`, increments stats.
 - Referencing v2 then editing to v3 leaves reference snapshot at v2.
 - Delete removes current row but leaves versions and references.
+- Legacy data-fix config rows migrate to solution records once and do not duplicate on repeated calls.
+- Compatibility listing returns enabled solution records in old `{ id, title, description }` shape plus `solutionCode` and `versionNo`.
 
 Representative assertion:
 
@@ -409,6 +423,9 @@ Export:
 - `bulkSetSolutionEnabled(ids, enabled, user)`
 - `rollbackSolution(id, versionNo, user)`
 - `referenceSolution({ solutionId, ticketId, channel }, user)`
+- `migrateDataFixSchemesToSolutions(user)`
+- `listDataFixSchemeCompatibleSolutions(user)`
+- `saveDataFixSchemeCompatibleConfig(input, user)`
 
 Reference behavior:
 
@@ -418,6 +435,14 @@ Reference behavior:
 - Create `messageItem` with `solutionReference` metadata and rich content derived from the snapshot.
 - Create `systemLogMessage` starting with `【系统】`.
 - Return both messages and the `reference` object. Ticket persistence will be done in the workflow route so request auth and ticket existence stay close to route handling.
+
+Data-fix replacement behavior:
+
+- Read existing `DATA_FIX_SCHEME_CONFIG` through the current config store only as migration input.
+- Create migrated solution codes with a stable prefix such as `DF-${legacyId}` or `DF-${normalizedTitle}`.
+- Do not create duplicates if a migrated code already exists.
+- Legacy public list returns enabled solutions converted to the old fields used by `TicketSubmit`.
+- Legacy admin save converts submitted rows to solution create/update operations and returns `{ ok: true, deprecated: true, config: { schemes } }`.
 
 - [ ] **Step 5: Run service tests**
 
@@ -432,8 +457,8 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add src/server/solutionLibraryStore.js src/server/__tests__/solutionLibraryStore.test.js
-git commit -m "feat: add solution library store"
+git add src/server/solutionLibraryStore.js src/server/__tests__/solutionLibraryStore.test.js src/server/adminConfigStore.js
+git commit -m "feat: add solution library store and data fix migration"
 ```
 
 ---
@@ -444,8 +469,13 @@ git commit -m "feat: add solution library store"
 - Create route files under `app/api/admin/solutions/**`
 - Create: `app/api/solutions/referenceable/route.js`
 - Create: `app/api/workflow/tickets/[id]/solution-references/route.js`
+- Modify: `app/api/data-fix-schemes/route.js`
+- Modify: `app/api/config/data-fix-schemes/route.js`
+- Modify: `app/api/admin/data-fix-schemes/route.js`
+- Modify: `app/api/config/admin/data-fix-schemes/route.js`
 - Modify: `src/server/store.js` only if an append-multiple helper is needed
 - Test: `src/server/__tests__/solutionLibraryRoutes.test.js`
+- Test: `src/server/__tests__/adminConfigRoutes.test.js`
 
 - [ ] **Step 1: Write failing route tests**
 
@@ -460,6 +490,8 @@ Create route tests that import route handlers directly, following `announcementR
 - Rollback route creates new version.
 - Referenceable route allows `L1`/`L2` and filters unauthorized solutions.
 - Workflow ticket reference route appends visible message and system log, and response includes `reference.versionNo`.
+- Legacy `GET /api/data-fix-schemes` and `GET /api/config/data-fix-schemes` return solution-backed compatible schemes.
+- Legacy admin `GET/PUT /api/admin/data-fix-schemes` returns `deprecated: true` and persists through solution-library adapters.
 
 - [ ] **Step 2: Run route tests to verify failure**
 
@@ -522,21 +554,30 @@ export function addMessagesToTicket(ticketId, messages = []) {
 }
 ```
 
-- [ ] **Step 6: Run route tests**
+- [ ] **Step 6: Convert old data-fix routes to aliases**
+
+Use the compatibility store functions:
+
+- Public old GET routes call `listDataFixSchemeCompatibleSolutions(user)`.
+- Admin old GET routes require admin and call the same list with admin context.
+- Admin old PUT routes require admin and call `saveDataFixSchemeCompatibleConfig(input, user)`.
+- Config-prefixed old routes continue to re-export the converted admin/public routes.
+
+- [ ] **Step 7: Run route tests**
 
 Run:
 
 ```powershell
-node --test src/server/__tests__/solutionLibraryRoutes.test.js
+node --test src/server/__tests__/solutionLibraryRoutes.test.js src/server/__tests__/adminConfigRoutes.test.js
 ```
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```powershell
-git add app/api/admin/solutions app/api/solutions app/api/workflow/tickets/[id]/solution-references src/server/store.js src/server/__tests__/solutionLibraryRoutes.test.js
-git commit -m "feat: expose solution library APIs"
+git add app/api/admin/solutions app/api/solutions app/api/workflow/tickets/[id]/solution-references app/api/data-fix-schemes app/api/config app/api/admin/data-fix-schemes src/server/store.js src/server/__tests__/solutionLibraryRoutes.test.js src/server/__tests__/adminConfigRoutes.test.js
+git commit -m "feat: expose solution library APIs and legacy aliases"
 ```
 
 ---
@@ -646,12 +687,15 @@ git commit -m "feat: add solution library import export"
 
 ---
 
-### Task 6: Admin Page, Route, And Navigation
+### Task 6: Admin Page, Route, And Navigation Replacement
 
 **Files:**
 - Create: `src/views/AdminSolutions/index.jsx`
 - Create: `src/views/AdminSolutions/__tests__/adminSolutionsView.test.js`
 - Create: `app/(protected)/solutions/page.jsx`
+- Modify: `app/(protected)/data-fix-schemes/page.jsx`
+- Modify or remove: `src/views/AdminDataFixSchemes/index.jsx`
+- Modify: `src/views/AdminDataFixSchemes/__tests__/adminDataFixSchemesView.test.js`
 - Modify: `src/components/Layout/AppLayout.jsx`
 - Modify: `src/components/Layout/__tests__/appLayout.test.js`
 
@@ -667,6 +711,8 @@ git commit -m "feat: add solution library import export"
 - Uses `Upload` or explicit import button.
 
 `appLayout.test.js` should assert admin menu includes `/solutions`.
+
+Update old data-fix scheme UI tests to assert the old protected page no longer renders `AdminDataFixSchemesPage`; it should redirect to `/solutions` or reuse `AdminSolutionsPage`.
 
 - [ ] **Step 2: Run tests to verify failure**
 
@@ -710,7 +756,11 @@ Use Ant Design patterns from `AdminAnnouncements` and `AdminDataFixSchemes`:
 
 Keep UI utilitarian and dense; no marketing content.
 
-- [ ] **Step 5: Add navigation**
+- [ ] **Step 5: Replace old protected page**
+
+Change `app/(protected)/data-fix-schemes/page.jsx` to redirect admin users to `/solutions` after login checks, or directly render `AdminSolutionsPage` if preserving old URL is preferred. Do not keep an editable `AdminDataFixSchemesPage` as a separate management surface.
+
+- [ ] **Step 6: Add navigation**
 
 In `AppLayout.jsx`, add admin menu item:
 
@@ -722,22 +772,23 @@ In `AppLayout.jsx`, add admin menu item:
 ```
 
 Update selected-key helper to recognize `/solutions`.
+Remove the old `/data-fix-schemes` menu item and replace page-title mapping with `标准解决方案库`.
 
-- [ ] **Step 6: Run frontend static tests**
+- [ ] **Step 7: Run frontend static tests**
 
 Run:
 
 ```powershell
-node --test src/views/AdminSolutions/__tests__/adminSolutionsView.test.js src/components/Layout/__tests__/appLayout.test.js
+node --test src/views/AdminSolutions/__tests__/adminSolutionsView.test.js src/views/AdminDataFixSchemes/__tests__/adminDataFixSchemesView.test.js src/components/Layout/__tests__/appLayout.test.js
 ```
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```powershell
-git add src/views/AdminSolutions app/(protected)/solutions/page.jsx src/components/Layout/AppLayout.jsx src/components/Layout/__tests__/appLayout.test.js
-git commit -m "feat: add solution library admin UI"
+git add src/views/AdminSolutions src/views/AdminDataFixSchemes app/(protected)/solutions/page.jsx app/(protected)/data-fix-schemes/page.jsx src/components/Layout/AppLayout.jsx src/components/Layout/__tests__/appLayout.test.js
+git commit -m "feat: replace data fix schemes admin with solution library"
 ```
 
 ---
@@ -847,6 +898,67 @@ git commit -m "feat: support ticket solution references"
 
 ---
 
+### Task 7.5: Ticket Submit Data-Fix Selector Uses Solution Library
+
+**Files:**
+- Modify: `src/views/TicketSubmit/index.jsx`
+- Modify: `src/utils/__tests__/ticketSubmitAiFlow.test.js`
+
+- [ ] **Step 1: Write failing submit-page static tests**
+
+Update assertions so the data-fix selector still supports the existing state-machine flow but loads selectable entries from solution-backed data:
+
+- Match `/api/config/data-fix-schemes` or `/api/solutions/referenceable` depending on the chosen adapter path.
+- Match version metadata fields such as `selectedSchemeVersionNo`.
+- Keep `EVENTS.SUBMIT_DATA_FIX_SCHEME_REVIEW` and `dataFixSolution`.
+- Keep the convert-to-consult fallback.
+
+- [ ] **Step 2: Run tests to verify failure**
+
+Run:
+
+```powershell
+node --test src/utils/__tests__/ticketSubmitAiFlow.test.js
+```
+
+Expected: FAIL until the submit page stores solution version metadata.
+
+- [ ] **Step 3: Store solution metadata in dataFixSolution**
+
+When a user selects a scheme, persist:
+
+```js
+dataFixSolution: {
+  ...currentSolution,
+  selectedSchemeId: scheme.id,
+  selectedSchemeTitle: scheme.title,
+  selectedSchemeDescription: scheme.description,
+  selectedSchemeVersionNo: scheme.versionNo,
+  selectedSolutionCode: scheme.solutionCode
+}
+```
+
+Keep `selectedSchemeId` for compatibility with existing state-machine checks.
+
+- [ ] **Step 4: Run submit-page tests**
+
+Run:
+
+```powershell
+node --test src/utils/__tests__/ticketSubmitAiFlow.test.js
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```powershell
+git add src/views/TicketSubmit/index.jsx src/utils/__tests__/ticketSubmitAiFlow.test.js
+git commit -m "feat: use solution library for data fix selector"
+```
+
+---
+
 ### Task 8: End-To-End Route Regression For Versioned References
 
 **Files:**
@@ -906,7 +1018,7 @@ Expected: all pass.
 Run:
 
 ```powershell
-node --test src/components/TicketDetail/__tests__/messageComposer.test.js src/components/TicketDetail/__tests__/actionAreaUi.test.js src/components/Layout/__tests__/appLayout.test.js src/server/__tests__/workflowContextRoutes.test.js src/server/__tests__/adminConfigRoutes.test.js
+node --test src/components/TicketDetail/__tests__/messageComposer.test.js src/components/TicketDetail/__tests__/actionAreaUi.test.js src/components/Layout/__tests__/appLayout.test.js src/server/__tests__/workflowContextRoutes.test.js src/server/__tests__/adminConfigRoutes.test.js src/utils/__tests__/ticketSubmitAiFlow.test.js
 ```
 
 Expected: all pass.

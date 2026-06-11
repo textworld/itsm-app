@@ -2,7 +2,7 @@
 
 ## 背景
 
-当前系统已有“数据修正方案”配置，但它只服务于特定提单场景，无法承载全局标准化解决方案库需要的权限、版本、引用追踪和统计能力。本期采用独立 SQLite 表设计，不复用 `data-fix-schemes` 配置，避免语义混淆，并为后续检索和统计扩展留出空间。
+当前系统已有“数据修正方案”配置，但它只服务于特定提单场景，无法承载全局标准化解决方案库需要的权限、版本、引用追踪和统计能力。本期采用独立 SQLite 表设计，由方案库接管原“数据修正方案”的后台入口、公开查询接口和提单选择数据源，旧 `data-fix-schemes` 路径仅作为兼容别名保留。
 
 一期目标是完成可用闭环：管理员维护方案，处理人在工单留言中引用方案，系统保留引用时的方案版本与快照，后台可追踪版本、回滚、统计和批量导入导出。
 
@@ -47,7 +47,7 @@
 - `description`：方案描述。
 - `detailHtml`、`detailText`：详细说明富文本和纯文本。
 - `insuranceTypeIds`：适用险种 ID 列表，来自 `INSURANCE_TYPE` 词典。
-- `relatedInternalSchemeIds`：关联内部方案 ID 列表，初期可引用现有数据修正方案或方案库内其他方案。
+- `relatedInternalSchemeIds`：关联内部方案 ID 列表，引用方案库内其他方案。
 - `ticketTypes`：工单类型标签。
 - `systemCodes`：业务系统编码，来自系统配置。
 - `problemTypeIds`：问题类型 ID 列表，优先使用系统分类词典选项。
@@ -142,11 +142,16 @@
 - `GET /api/solutions/referenceable`：按当前用户、工单上下文返回可引用方案。
 - `POST /api/workflow/tickets/[id]/solution-references`：引用方案，创建引用记录并写入工单消息。
 
+兼容接口：
+
+- `GET /api/data-fix-schemes` 和 `GET /api/config/data-fix-schemes`：改为读取已启用、允许引用的方案库记录，并转换为旧提单页需要的 `{ id, title, description }` 形态，额外保留 `solutionId`、`solutionCode`、`versionNo` 便于后续追溯。
+- `GET /api/admin/data-fix-schemes`、`PUT /api/admin/data-fix-schemes`、`GET /api/config/admin/data-fix-schemes`、`PUT /api/config/admin/data-fix-schemes`：不再维护独立配置。后台访问应返回方案库配置摘要或引导到方案库接口；写入请求转换为方案库创建/更新，避免生成第二套数据源。
+
 `POST /api/workflow/tickets/[id]/solution-references` 不直接修改工单状态字段，只通过现有消息写入机制追加留言和系统日志，遵守工单状态机约束。
 
 ## 后台页面
 
-新增页面 `src/views/AdminSolutions`，路由为 `/solutions`，菜单文案为“标准解决方案库”。
+新增页面 `src/views/AdminSolutions`，路由为 `/solutions`，菜单文案为“标准解决方案库”。原 `/data-fix-schemes` 后台页面不再展示独立配置，访问时重定向到 `/solutions` 或直接复用 `AdminSolutions`，导航菜单只保留“标准解决方案库”。
 
 列表能力：
 
@@ -177,7 +182,7 @@
 
 ## 工单引用交互
 
-在工单详情留言区给 `L1`、`L2` 处理人提供“引用方案”按钮。
+在工单详情留言区给 `L1`、`L2` 处理人提供“引用方案”按钮。原提单页“选择数据修正方案”改为从方案库读取启用方案，并在提交时继续写入现有 `dataFixSolution` 字段，以兼容当前数据修正审核状态机。
 
 流程：
 
@@ -266,10 +271,11 @@ Excel 模板列：
 
 前端静态测试：
 
-- 菜单入口。
+- 菜单入口：原“数据修正方案”替换为“标准解决方案库”。
 - 后台页面字段、筛选、批量操作、导入导出入口。
 - 详情抽屉、版本列表、回滚入口。
 - 工单留言区“引用方案”入口和引用标签。
+- 提单页“选择数据修正方案”从方案库兼容接口获取数据，并保留所选方案的版本号。
 
 集成验证：
 
@@ -279,7 +285,9 @@ Excel 模板列：
 
 ## 兼容性与迁移
 
-- 现有“数据修正方案”保留，不作为本期方案库底层存储。
-- 可在方案编辑中把现有数据修正方案作为“关联内部方案”下拉来源之一。
-- SQLite native 不可用时，JSON fallback 需要同步支持 `solutions`、`solution_versions`、`solution_references`。
-- 本期不迁移已有数据修正方案到方案库，避免自动迁移造成语义误判。
+- 现有“数据修正方案”后台能力由方案库替换，不再维护独立配置页面和独立配置数据源。
+- 初始化或首次访问方案库时，将当前 `DATA_FIX_SCHEME_CONFIG` 中的方案按 `DF-` 编码迁移为方案库记录；已存在同编码方案不重复创建。
+- 旧公开读取接口保留为兼容别名，返回方案库中的启用方案，保证提单页和旧测试入口不立即中断。
+- 旧后台写接口保留兼容，但写入会转换为方案库创建/更新；响应中标注 `deprecated: true`，提示使用 `/api/admin/solutions`。
+- 提单页继续使用既有 `dataFixSolution` 字段和 `SUBMIT_DATA_FIX_SCHEME_REVIEW` 状态机事件，但所选数据来自方案库，且保存所选方案版本号。
+- SQLite native 不可用时，JSON fallback 需要同步支持 `solutions`、`solution_versions`、`solution_references` 以及迁移后的方案库种子数据。
