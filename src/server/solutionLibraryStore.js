@@ -10,6 +10,7 @@ import {
   validateSolutionInput
 } from '../utils/solutionLibrary.js';
 import { getDb } from './db.js';
+import { getTicketById } from './store.js';
 
 function parseRow(row) {
   return row ? JSON.parse(row.data) : null;
@@ -123,6 +124,30 @@ function listSolutionReferences(solutionId) {
     .prepare('SELECT data FROM solution_references WHERE solution_id = ? ORDER BY quoted_at DESC')
     .all(solutionId)
     .map(parseRow);
+}
+
+export function listSolutionReferencesPage(solutionId, options = {}) {
+  const solution = getSolutionById(solutionId);
+  if (!solution) return { ok: false, reason: '方案不存在' };
+
+  const keyword = String(options.keyword || '').trim().toLocaleLowerCase();
+  const page = Math.max(1, Number(options.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(options.pageSize) || 10));
+  const enriched = listSolutionReferences(solutionId).map(enrichSolutionReference);
+  const filtered = keyword
+    ? enriched.filter((reference) => buildReferenceSearchText(reference).includes(keyword))
+    : enriched;
+  const start = (page - 1) * pageSize;
+
+  return {
+    ok: true,
+    references: filtered.slice(start, start + pageSize),
+    pagination: {
+      page,
+      pageSize,
+      total: filtered.length
+    }
+  };
 }
 
 function getSolutionVersion(solutionId, versionNo) {
@@ -272,6 +297,7 @@ export function rollbackSolution(id, versionNo, user) {
     ticketTypes: snapshot.classification?.ticketTypes || [],
     systemCodes: snapshot.classification?.systemCodes || [],
     problemTypeIds: snapshot.classification?.problemTypeIds || [],
+    thirdPartyDataFixScheme: snapshot.thirdPartyDataFixScheme || null,
     permissions: snapshot.permissions || current.permissions,
     versionNo: current.versionNo + 1,
     updatedAt: now,
@@ -442,6 +468,51 @@ function buildReferenceMessageContent(snapshot) {
     snapshot.description ? `方案描述：${snapshot.description}` : '',
     snapshot.detailText ? `详细说明：${snapshot.detailText}` : ''
   ].filter(Boolean).join('\n');
+}
+
+function enrichSolutionReference(reference) {
+  const ticket = getTicketById(reference.ticketId);
+  return {
+    ...reference,
+    ticket: ticket
+      ? {
+          id: ticket.id,
+          title: ticket.title || '',
+          status: ticket.status || '',
+          requesterName: ticket.requesterName || '',
+          requesterId: ticket.requesterId || '',
+          toolType: ticket.toolType || '',
+          systemCode: ticket.systemCode || ''
+        }
+      : {
+          id: reference.ticketId,
+          title: '',
+          status: '',
+          requesterName: '',
+          requesterId: '',
+          toolType: '',
+          systemCode: ''
+        }
+  };
+}
+
+function buildReferenceSearchText(reference) {
+  return [
+    reference.id,
+    reference.ticketId,
+    reference.solutionCode,
+    reference.solutionTitle,
+    reference.versionNo ? `v${reference.versionNo}` : '',
+    reference.operator?.name,
+    reference.operator?.id,
+    reference.ticket?.id,
+    reference.ticket?.title,
+    reference.ticket?.requesterName,
+    reference.ticket?.requesterId,
+    reference.ticket?.status,
+    reference.ticket?.toolType,
+    reference.ticket?.systemCode
+  ].filter(Boolean).join(' ').toLocaleLowerCase();
 }
 
 function buildDataFixSolutionCode(scheme = {}) {
