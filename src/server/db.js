@@ -281,6 +281,9 @@ function seedDatabase(db, { force = false } = {}) {
       db.prepare('DELETE FROM defects').run();
       db.prepare('DELETE FROM message_reads').run();
       db.prepare('DELETE FROM uploads').run();
+      db.prepare('DELETE FROM solutions').run();
+      db.prepare('DELETE FROM solution_versions').run();
+      db.prepare('DELETE FROM solution_references').run();
 
       const insertUser = db.prepare(`
         INSERT INTO users (id, username, password, data)
