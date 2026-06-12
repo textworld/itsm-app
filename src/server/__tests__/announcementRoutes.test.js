@@ -145,7 +145,6 @@ test('POST create+submit validates required fields and persists a pending announ
     '请选择故障影响系统',
     '请输入故障描述',
     '请输入当前处置进度',
-    '请选择预计恢复时间',
     '审批人必须是管理员',
     '请选择故障处置负责人'
   ]);
@@ -175,6 +174,24 @@ test('POST create+submit validates required fields and persists a pending announ
 
   assert.equal(detailResponse.status, 200);
   assert.equal(detailPayload.announcement.status, ANNOUNCEMENT_STATUS.PENDING_APPROVAL);
+});
+
+test('POST create+submit accepts missing estimated recovery time', async () => {
+  const approver = createAdminUser('optional_recovery');
+  const body = validAnnouncementInput({
+    approverId: approver.id,
+    title: '预计恢复时间待定',
+    submit: true
+  });
+  delete body.estimatedRecoveryAt;
+
+  const response = await adminAnnouncementsPost(buildRequest({ body }));
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.announcement.status, ANNOUNCEMENT_STATUS.PENDING_APPROVAL);
+  assert.equal(payload.announcement.pendingSnapshot.estimatedRecoveryAt, null);
 });
 
 test('POST create returns 400 for malformed JSON body', async () => {
@@ -294,6 +311,58 @@ test('published update creates update pending while active endpoint still shows 
 
   const activePayload = await jsonFrom(activeAnnouncementsGet(buildRequest({ userId: 'u_requester_1' })));
   assert.equal(activePayload.announcements[0].activeSnapshot.title, '支付链路异常');
+});
+
+test('published update approval uses the pending snapshot approver instead of the old published approver', async () => {
+  const oldApprover = createAdminUser('old_update_approver');
+  const newApprover = createAdminUser('new_update_approver');
+  const createResponse = await adminAnnouncementsPost(buildRequest({
+    body: validAnnouncementInput({
+      approverId: oldApprover.id,
+      title: '审批人变更公告',
+      submit: true
+    })
+  }));
+  const createPayload = await createResponse.json();
+  assert.equal(createResponse.status, 200);
+
+  const firstApproveResponse = await adminAnnouncementApprovePost(
+    buildRequest({ userId: oldApprover.id, body: { opinion: '首次发布' } }),
+    routeParams(createPayload.announcement.id)
+  );
+  assert.equal(firstApproveResponse.status, 200);
+
+  const updateResponse = await adminAnnouncementPut(
+    buildRequest({
+      body: validAnnouncementInput({
+        approverId: newApprover.id,
+        title: '审批人变更公告更新'
+      })
+    }),
+    routeParams(createPayload.announcement.id)
+  );
+  const updatePayload = await updateResponse.json();
+  assert.equal(updateResponse.status, 200);
+  assert.equal(updatePayload.announcement.status, ANNOUNCEMENT_STATUS.UPDATE_PENDING_APPROVAL);
+  assert.equal(updatePayload.announcement.approver.id, oldApprover.id);
+  assert.equal(updatePayload.announcement.pendingSnapshot.approver.id, newApprover.id);
+
+  const oldApproverResponse = await adminAnnouncementApprovePost(
+    buildRequest({ userId: oldApprover.id, body: { opinion: '旧审批人审批' } }),
+    routeParams(createPayload.announcement.id)
+  );
+  const oldApproverPayload = await oldApproverResponse.json();
+  assert.equal(oldApproverResponse.status, 403);
+  assert.equal(oldApproverPayload.reason, '仅指定审批人可审批');
+
+  const newApproverResponse = await adminAnnouncementApprovePost(
+    buildRequest({ userId: newApprover.id, body: { opinion: '新审批人审批' } }),
+    routeParams(createPayload.announcement.id)
+  );
+  const newApproverPayload = await newApproverResponse.json();
+  assert.equal(newApproverResponse.status, 200);
+  assert.equal(newApproverPayload.announcement.status, ANNOUNCEMENT_STATUS.PUBLISHED);
+  assert.equal(newApproverPayload.announcement.approver.id, newApprover.id);
 });
 
 test('active endpoint returns a narrow DTO for update pending announcements', async () => {

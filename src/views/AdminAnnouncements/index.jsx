@@ -14,7 +14,6 @@ import {
   Form,
   Input,
   InputNumber,
-  Modal,
   Popconfirm,
   Select,
   Space,
@@ -78,7 +77,7 @@ async function requestJson(url, options = {}) {
 }
 
 export default function AdminAnnouncementsPage() {
-  const { message } = AntdApp.useApp();
+  const { message, modal } = AntdApp.useApp();
   const [form] = Form.useForm();
   const [filterForm] = Form.useForm();
   const [announcements, setAnnouncements] = useState([]);
@@ -282,7 +281,7 @@ export default function AdminAnnouncementsPage() {
 
   const promptAction = (announcement, action, title, fieldName, successText) => {
     let value = '';
-    Modal.confirm({
+    modal.confirm({
       title,
       content: (
         <Input.TextArea
@@ -556,7 +555,6 @@ export default function AdminAnnouncementsPage() {
           <Form.Item
             name="estimatedRecoveryAt"
             label="预计恢复时间"
-            rules={[{ required: true, message: '请选择预计恢复时间' }]}
           >
             <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
@@ -751,17 +749,18 @@ function buildPayload(values, submit) {
 }
 
 function getListSnapshot(announcement = {}) {
+  const pending = announcement.pendingSnapshot || {};
   const published = announcement.publishedSnapshot || {};
   return {
     ...published,
-    title: announcement.title || published.title || announcement.pendingSnapshot?.title,
-    affectedSystems: firstArray(announcement.affectedSystems, published.affectedSystems, announcement.pendingSnapshot?.affectedSystems),
-    handlers: firstArray(announcement.handlers, published.handlers, announcement.pendingSnapshot?.handlers),
-    approver: announcement.approver || published.approver || announcement.pendingSnapshot?.approver,
-    estimatedRecoveryAt: announcement.estimatedRecoveryAt || published.estimatedRecoveryAt || announcement.pendingSnapshot?.estimatedRecoveryAt,
-    faultDescriptionHtml: announcement.faultDescriptionHtml || published.faultDescriptionHtml || announcement.pendingSnapshot?.faultDescriptionHtml,
-    progressHtml: announcement.progressHtml || published.progressHtml || announcement.pendingSnapshot?.progressHtml,
-    display: announcement.display || published.display || announcement.pendingSnapshot?.display || {}
+    title: pending.title || announcement.title || published.title,
+    affectedSystems: firstArray(pending.affectedSystems, announcement.affectedSystems, published.affectedSystems),
+    handlers: firstArray(pending.handlers, announcement.handlers, published.handlers),
+    approver: pending.approver || announcement.approver || published.approver,
+    estimatedRecoveryAt: pending.estimatedRecoveryAt || announcement.estimatedRecoveryAt || published.estimatedRecoveryAt,
+    faultDescriptionHtml: pending.faultDescriptionHtml || announcement.faultDescriptionHtml || published.faultDescriptionHtml,
+    progressHtml: pending.progressHtml || announcement.progressHtml || published.progressHtml,
+    display: announcement.display || published.display || pending.display || {}
   };
 }
 

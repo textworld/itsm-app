@@ -105,6 +105,22 @@ test('announcement admin view loads current user session for approver-only actio
   assert.match(canApproveBody, /String\(approverId\) === String\(currentUser\?\.id\)/);
 });
 
+test('announcement approval prompts use Ant Design App modal context', () => {
+  assert.match(source, /const \{ message, modal \} = AntdApp\.useApp\(\)/);
+  assert.match(source, /modal\.confirm\(\{/);
+  assert.doesNotMatch(source, /Modal\.confirm/);
+});
+
+test('announcement list snapshot prioritizes pending approval content for approval-facing fields', () => {
+  const getListSnapshotBody = functionBody('getListSnapshot');
+  assert.match(getListSnapshotBody, /const pending = announcement\.pendingSnapshot \|\| \{\}/);
+  assert.match(getListSnapshotBody, /const published = announcement\.publishedSnapshot \|\| \{\}/);
+  assert.match(getListSnapshotBody, /approver: pending\.approver \|\| announcement\.approver \|\| published\.approver/);
+  assert.match(getListSnapshotBody, /estimatedRecoveryAt: pending\.estimatedRecoveryAt \|\| announcement\.estimatedRecoveryAt \|\| published\.estimatedRecoveryAt/);
+  assert.match(getListSnapshotBody, /faultDescriptionHtml: pending\.faultDescriptionHtml \|\| announcement\.faultDescriptionHtml \|\| published\.faultDescriptionHtml/);
+  assert.match(getListSnapshotBody, /progressHtml: pending\.progressHtml \|\| announcement\.progressHtml \|\| published\.progressHtml/);
+});
+
 test('announcement edit action follows editable statuses supported by service', () => {
   const canEditBody = functionBody('canEdit');
   assert.match(canEditBody, /ANNOUNCEMENT_STATUS\.DRAFT/);
@@ -135,6 +151,16 @@ test('announcement rich text fields validate actual editor content', () => {
   assert.match(source, /requiredRichTextRule\('请输入故障描述'\)/);
   assert.match(source, /requiredRichTextRule\('请输入当前处置进度'\)/);
   assert.match(source, /richTextHasContent\(value\)/);
+});
+
+test('announcement estimated recovery time field is optional in the editor', () => {
+  const estimatedRecoveryFormItem = source.match(
+    /<Form\.Item\s+name="estimatedRecoveryAt"[\s\S]*?<\/Form\.Item>/
+  );
+
+  assert.ok(estimatedRecoveryFormItem, 'Expected estimated recovery time form item to exist');
+  assert.doesNotMatch(estimatedRecoveryFormItem[0], /required:\s*true/);
+  assert.doesNotMatch(estimatedRecoveryFormItem[0], /请选择预计恢复时间/);
 });
 
 test('announcement pin toggle is only enabled for published statuses', () => {

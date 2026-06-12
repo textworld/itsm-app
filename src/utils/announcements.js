@@ -81,7 +81,6 @@ export function validateAnnouncementInput(input = {}, context = {}) {
   if (!value.affectedSystems.length) errors.push({ path: ['affectedSystemCodes'], message: '请选择故障影响系统' });
   if (!richTextHasContent(value.faultDescriptionHtml)) errors.push({ path: ['faultDescriptionHtml'], message: '请输入故障描述' });
   if (!richTextHasContent(value.progressHtml)) errors.push({ path: ['progressHtml'], message: '请输入当前处置进度' });
-  if (!value.estimatedRecoveryAt) errors.push({ path: ['estimatedRecoveryAt'], message: '请选择预计恢复时间' });
   if (!value.approver || value.approver.role !== 'ADMIN') errors.push({ path: ['approverId'], message: '审批人必须是管理员' });
   if (!requestedHandlerIds.length) {
     errors.push({ path: ['handlerIds'], message: '请选择故障处置负责人' });

@@ -62,12 +62,21 @@ test('validateAnnouncementInput rejects required fields and invalid role selecti
     '请选择故障影响系统',
     '请输入故障描述',
     '请输入当前处置进度',
-    '请选择预计恢复时间',
     '审批人必须是管理员',
     '故障处置负责人必须是一线或二线支持',
     '滚动速度必须大于 0',
     '展示时长必须大于 0'
   ]);
+});
+
+test('validateAnnouncementInput allows empty estimated recovery time', () => {
+  const result = validateAnnouncementInput(
+    { ...validInput, estimatedRecoveryAt: '' },
+    { systems, adminUsers, supportUsers }
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.estimatedRecoveryAt, null);
 });
 
 test('validateAnnouncementInput requires at least one fault handler', () => {
