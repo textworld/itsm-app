@@ -37,6 +37,13 @@ const validInput = {
   problemTypeIds: ['module_policy'],
   ticketTypes: ['INCIDENT'],
   relatedInternalSchemeIds: ['scheme_001'],
+  thirdPartyDataFixScheme: {
+    id: 'tp_dfs_policy_refresh',
+    code: 'TP-DFS-001',
+    title: '第三方保单缓存刷新',
+    sourceSystem: '第三方数据平台',
+    description: '同步保单状态并刷新缓存'
+  },
   editPermission: SOLUTION_EDIT_PERMISSION.ASSIGNED_TEAMS,
   teamRoles: ['L1', 'L2'],
   referencePermission: SOLUTION_REFERENCE_PERMISSION.ASSIGNED_GROUPS,
@@ -55,6 +62,13 @@ test('validateSolutionInput normalizes core fields and rich text', () => {
   assert.deepEqual(result.value.insuranceTypeIds, ['ins_life']);
   assert.deepEqual(result.value.systemCodes, ['ERP_CORE']);
   assert.deepEqual(result.value.problemTypeIds, ['module_policy']);
+  assert.deepEqual(result.value.thirdPartyDataFixScheme, {
+    id: 'tp_dfs_policy_refresh',
+    code: 'TP-DFS-001',
+    title: '第三方保单缓存刷新',
+    sourceSystem: '第三方数据平台',
+    description: '同步保单状态并刷新缓存'
+  });
   assert.equal(result.value.enabled, true);
   assert.deepEqual(result.value.permissions, {
     editPermission: SOLUTION_EDIT_PERMISSION.ASSIGNED_TEAMS,
@@ -62,6 +76,16 @@ test('validateSolutionInput normalizes core fields and rich text', () => {
     referencePermission: SOLUTION_REFERENCE_PERMISSION.ASSIGNED_GROUPS,
     groupRoles: ['L2']
   });
+});
+
+test('validateSolutionInput accepts empty third-party data-fix association', () => {
+  const result = validateSolutionInput({
+    ...validInput,
+    thirdPartyDataFixScheme: ''
+  }, context);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.thirdPartyDataFixScheme, null);
 });
 
 test('validateSolutionInput rejects missing code title description and detail', () => {
@@ -194,6 +218,13 @@ test('buildSolutionSnapshot preserves versioned display content', () => {
     ticketTypes: ['INCIDENT'],
     systemCodes: ['ERP_CORE'],
     problemTypeIds: ['module_policy'],
+    thirdPartyDataFixScheme: {
+      id: 'tp_dfs_policy_refresh',
+      code: 'TP-DFS-001',
+      title: '第三方保单缓存刷新',
+      sourceSystem: '第三方数据平台',
+      description: '同步保单状态并刷新缓存'
+    },
     permissions: {
       editPermission: SOLUTION_EDIT_PERMISSION.ASSIGNED_TEAMS,
       teamRoles: ['L1'],
@@ -211,6 +242,7 @@ test('buildSolutionSnapshot preserves versioned display content', () => {
 
   solution.insuranceTypeIds.push('ins_auto');
   solution.permissions.teamRoles.push('L2');
+  solution.thirdPartyDataFixScheme.title = '已改名第三方方案';
   solution.stats.referenceCount = 99;
   solution.stats.byChannel.MESSAGE_REPLY = 99;
 
@@ -229,6 +261,13 @@ test('buildSolutionSnapshot preserves versioned display content', () => {
       ticketTypes: ['INCIDENT'],
       systemCodes: ['ERP_CORE'],
       problemTypeIds: ['module_policy']
+    },
+    thirdPartyDataFixScheme: {
+      id: 'tp_dfs_policy_refresh',
+      code: 'TP-DFS-001',
+      title: '第三方保单缓存刷新',
+      sourceSystem: '第三方数据平台',
+      description: '同步保单状态并刷新缓存'
     },
     permissions: {
       editPermission: SOLUTION_EDIT_PERMISSION.ASSIGNED_TEAMS,
@@ -256,6 +295,7 @@ test('mapSolutionToExportRow and parseSolutionImportRow round-trip display value
     启用状态: '启用',
     适用险种: '寿险',
     关联内部方案: 'scheme_001',
+    关联第三方数据修正方案: 'TP-DFS-001 第三方保单缓存刷新',
     工单类型: 'INCIDENT',
     业务系统: 'ERP 核心系统',
     问题类型: '保单模块',
@@ -283,6 +323,13 @@ test('mapSolutionToExportRow and parseSolutionImportRow round-trip display value
     enabled: true,
     insuranceTypeIds: ['ins_life', 'ins_auto'],
     relatedInternalSchemeIds: ['scheme_001'],
+    thirdPartyDataFixScheme: {
+      id: '',
+      code: 'TP-DFS-001',
+      title: '第三方保单缓存刷新',
+      sourceSystem: '',
+      description: ''
+    },
     ticketTypes: ['INCIDENT'],
     systemCodes: ['ERP_CORE', 'CRM'],
     problemTypeIds: ['module_policy', 'module_claim'],

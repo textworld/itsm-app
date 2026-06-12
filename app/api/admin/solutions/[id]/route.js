@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server.js';
-import { deleteSolution, updateSolution } from '../../../../../src/server/solutionLibraryStore.js';
+import { deleteSolution, getSolutionDetail, updateSolution } from '../../../../../src/server/solutionLibraryStore.js';
 import { requireAdminUser } from '../../../../../src/server/adminAuth.js';
 import { getSessionUserFromRequest } from '../../../../../src/server/session.js';
 
@@ -19,6 +19,15 @@ export async function PUT(request, context) {
   const input = await request.json();
   const result = updateSolution(id, input, auth.user);
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
+}
+
+export async function GET(request, context) {
+  const auth = authorize(request);
+  if (!auth.ok) return authResponse(auth);
+
+  const { id } = await context.params;
+  const result = getSolutionDetail(id);
+  return NextResponse.json(result, { status: result.ok ? 200 : 404 });
 }
 
 export async function DELETE(request, context) {

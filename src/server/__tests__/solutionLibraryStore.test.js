@@ -8,6 +8,7 @@ import {
   deleteSolution,
   getSolutionDetail,
   listDataFixSchemeCompatibleSolutions,
+  listSolutionReferencesPage,
   listSolutions,
   migrateDataFixSchemesToSolutions,
   referenceSolution,
@@ -15,6 +16,7 @@ import {
   setSolutionEnabled,
   updateSolution
 } from '../solutionLibraryStore.js';
+import { listTickets } from '../store.js';
 
 test.beforeEach(() => {
   reseedDb();
@@ -29,6 +31,13 @@ function buildSolutionInput(overrides = {}) {
     title: '保单状态修正',
     description: '处理保单状态异常',
     detailHtml: '<p>核对保单状态后刷新缓存</p>',
+    thirdPartyDataFixScheme: {
+      id: 'tp_dfs_policy_refresh',
+      code: 'TP-DFS-001',
+      title: '第三方保单缓存刷新',
+      sourceSystem: '第三方数据平台',
+      description: '同步保单状态并刷新缓存'
+    },
     insuranceTypeIds: ['ins_life'],
     systemCodes: ['ERP_CORE'],
     problemTypeIds: ['module_policy'],
@@ -86,13 +95,22 @@ test('solution store creates, updates, toggles, rolls back and preserves version
   const created = createSolution(buildSolutionInput(), admin);
   assert.equal(created.ok, true);
   assert.equal(created.solution.versionNo, 1);
+  assert.equal(created.solution.thirdPartyDataFixScheme.code, 'TP-DFS-001');
 
   const updated = updateSolution(created.solution.id, buildSolutionInput({
     title: '保单状态修正 v2',
-    detailHtml: '<p>第二版处理步骤</p>'
+    detailHtml: '<p>第二版处理步骤</p>',
+    thirdPartyDataFixScheme: {
+      id: 'tp_dfs_claim_repush',
+      code: 'TP-DFS-002',
+      title: '第三方理赔重推',
+      sourceSystem: '第三方数据平台',
+      description: '重新推送理赔处理结果'
+    }
   }), admin);
   assert.equal(updated.ok, true);
   assert.equal(updated.solution.versionNo, 2);
+  assert.equal(updated.solution.thirdPartyDataFixScheme.code, 'TP-DFS-002');
 
   const disabled = setSolutionEnabled(created.solution.id, false, admin);
   assert.equal(disabled.ok, true);
@@ -107,6 +125,7 @@ test('solution store creates, updates, toggles, rolls back and preserves version
   const rolledBack = rollbackSolution(created.solution.id, 1, admin);
   assert.equal(rolledBack.ok, true);
   assert.equal(rolledBack.solution.title, '保单状态修正');
+  assert.equal(rolledBack.solution.thirdPartyDataFixScheme.code, 'TP-DFS-001');
   assert.equal(rolledBack.solution.versionNo, 5);
 
   const detail = getSolutionDetail(created.solution.id);
@@ -115,6 +134,7 @@ test('solution store creates, updates, toggles, rolls back and preserves version
     detail.versions.map((version) => version.changeType),
     ['ROLLBACK', 'ENABLE', 'DISABLE', 'UPDATE', 'CREATE']
   );
+  assert.equal(detail.versions[0].snapshot.thirdPartyDataFixScheme.code, 'TP-DFS-001');
 });
 
 test('solution references keep the referenced version snapshot after later edits', () => {
@@ -145,6 +165,32 @@ test('solution references keep the referenced version snapshot after later edits
   assert.equal(detail.references[0].versionNo, 2);
   assert.equal(detail.references[0].snapshot.title, '保单状态修正 v2');
   assert.equal(detail.solution.stats.referenceCount, 1);
+});
+
+test('solution reference list supports pagination search and ticket enrichment', () => {
+  const created = createSolution(buildSolutionInput(), admin).solution;
+  const tickets = listTickets().slice(0, 2);
+
+  referenceSolution({ solutionId: created.id, ticketId: tickets[0].id }, l1);
+  referenceSolution({ solutionId: created.id, ticketId: tickets[1].id }, l1);
+
+  const firstPage = listSolutionReferencesPage(created.id, { page: 1, pageSize: 1 });
+  assert.equal(firstPage.ok, true);
+  assert.equal(firstPage.pagination.total, 2);
+  assert.equal(firstPage.pagination.page, 1);
+  assert.equal(firstPage.pagination.pageSize, 1);
+  assert.equal(firstPage.references.length, 1);
+  assert.equal(Boolean(firstPage.references[0].ticket.title), true);
+  assert.equal(firstPage.references[0].versionNo, 1);
+
+  const searched = listSolutionReferencesPage(created.id, {
+    keyword: tickets[1].title.slice(0, 6),
+    page: 1,
+    pageSize: 10
+  });
+  assert.equal(searched.ok, true);
+  assert.equal(searched.pagination.total, 1);
+  assert.equal(searched.references[0].ticket.id, tickets[1].id);
 });
 
 test('deleting current solution keeps version and reference history', () => {

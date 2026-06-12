@@ -47,6 +47,7 @@ export function normalizeSolutionInput(input = {}, context = {}) {
     enabled: normalizeEnabled(input.enabled),
     insuranceTypeIds: uniqueStrings(input.insuranceTypeIds),
     relatedInternalSchemeIds: uniqueStrings(input.relatedInternalSchemeIds),
+    thirdPartyDataFixScheme: normalizeThirdPartyDataFixScheme(input.thirdPartyDataFixScheme),
     ticketTypes: uniqueNormalizedStrings(input.ticketTypes, (value) => value.toUpperCase()),
     systemCodes: uniqueNormalizedStrings(input.systemCodes, normalizeSystemCode),
     problemTypeIds: uniqueStrings(input.problemTypeIds),
@@ -110,6 +111,7 @@ export function buildSolutionSnapshot(solution = {}) {
       systemCodes: uniqueStrings(solution.systemCodes || solution.classification?.systemCodes).map(normalizeSystemCode).filter(Boolean),
       problemTypeIds: uniqueStrings(solution.problemTypeIds || solution.classification?.problemTypeIds)
     },
+    thirdPartyDataFixScheme: normalizeThirdPartyDataFixScheme(solution.thirdPartyDataFixScheme),
     permissions: clonePermissions(solution.permissions || solution),
     stats: deepCloneObject(solution.stats || {})
   };
@@ -171,6 +173,7 @@ export function mapSolutionToExportRow(solution, context = {}) {
     启用状态: solution.enabled === false ? '停用' : '启用',
     适用险种: joinDisplayNames(solution.insuranceTypeIds || solution.classification?.insuranceTypeIds, buildDisplayMap(context.insuranceTypes, 'id')),
     关联内部方案: uniqueStrings(solution.relatedInternalSchemeIds || solution.classification?.relatedInternalSchemeIds).join('、'),
+    关联第三方数据修正方案: formatThirdPartyDataFixScheme(solution.thirdPartyDataFixScheme),
     工单类型: uniqueStrings(solution.ticketTypes || solution.classification?.ticketTypes).join('、'),
     业务系统: joinDisplayNames(solution.systemCodes || solution.classification?.systemCodes, buildSystemDisplayMap(context.systems)),
     问题类型: joinDisplayNames(solution.problemTypeIds || solution.classification?.problemTypeIds, buildDisplayMap(context.problemTypes, 'id')),
@@ -190,6 +193,7 @@ export function parseSolutionImportRow(row, context = {}) {
     enabled: parseEnabledDisplay(row?.启用状态),
     insuranceTypeIds: splitDisplayValues(row?.适用险种).map((value) => resolveDictionaryValue(value, context.insuranceTypes, 'id')),
     relatedInternalSchemeIds: splitDisplayValues(row?.关联内部方案),
+    thirdPartyDataFixScheme: parseThirdPartyDataFixSchemeDisplay(row?.关联第三方数据修正方案),
     ticketTypes: splitDisplayValues(row?.工单类型).map((value) => value.toUpperCase()),
     systemCodes: splitDisplayValues(row?.业务系统).map((value) => resolveSystemValue(value, context.systems)),
     problemTypeIds: splitDisplayValues(row?.问题类型).map((value) => resolveDictionaryValue(value, context.problemTypes, 'id')),
@@ -235,6 +239,41 @@ function uniqueNormalizedStrings(values = [], normalize) {
 
 function normalizeSupportRoles(values = []) {
   return uniqueStrings(values).filter((role) => SUPPORT_ROLES.has(role));
+}
+
+function normalizeThirdPartyDataFixScheme(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    return parseThirdPartyDataFixSchemeDisplay(value);
+  }
+  if (typeof value !== 'object') return null;
+  const id = String(value.id || '').trim();
+  const code = String(value.code || '').trim().toUpperCase();
+  const title = String(value.title || value.name || '').trim();
+  const sourceSystem = String(value.sourceSystem || '').trim();
+  const description = String(value.description || '').trim();
+  if (!id && !code && !title) return null;
+  return { id, code, title, sourceSystem, description };
+}
+
+function formatThirdPartyDataFixScheme(value) {
+  const scheme = normalizeThirdPartyDataFixScheme(value);
+  if (!scheme) return '';
+  return [scheme.code, scheme.title].filter(Boolean).join(' ');
+}
+
+function parseThirdPartyDataFixSchemeDisplay(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const [codeCandidate, ...titleParts] = text.split(/\s+/);
+  const looksLikeCode = /^[A-Z0-9][A-Z0-9_-]*$/i.test(codeCandidate || '');
+  return {
+    id: '',
+    code: looksLikeCode ? codeCandidate.toUpperCase() : '',
+    title: looksLikeCode ? titleParts.join(' ').trim() : text,
+    sourceSystem: '',
+    description: ''
+  };
 }
 
 function hasInvalidSupportRole(values = []) {

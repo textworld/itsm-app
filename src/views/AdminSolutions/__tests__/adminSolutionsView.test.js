@@ -24,6 +24,17 @@ test('solution library admin view replaces data fix schemes management', () => {
   assert.match(source, /删除/);
   assert.match(source, /启用/);
   assert.match(source, /停用/);
+  assert.match(source, /THIRD_PARTY_SCHEMES_API_URL/);
+  assert.match(source, /关联第三方数据修正方案/);
+  assert.match(source, /showSearch/);
+  assert.match(source, /allowClear/);
+  assert.match(source, /openDetailDrawer/);
+  assert.match(source, /详情/);
+  assert.match(source, /修改记录/);
+  assert.match(source, /openReferencesDrawer/);
+  assert.match(source, /引用工单/);
+  assert.match(source, /referenceSearchKeyword/);
+  assert.match(source, /Pagination/);
 });
 
 test('solution library admin page is administrator-only', () => {
