@@ -1,12 +1,11 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   App as AntdApp,
   Button,
   Card,
-  Descriptions,
-  Divider,
   Drawer,
   Empty,
   Form,
@@ -51,9 +50,6 @@ export default function AdminSolutionsPage() {
   const [editingSolution, setEditingSolution] = useState(null);
   const [thirdPartyOptions, setThirdPartyOptions] = useState([]);
   const [thirdPartyLoading, setThirdPartyLoading] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [solutionDetail, setSolutionDetail] = useState(null);
   const [referencesOpen, setReferencesOpen] = useState(false);
   const [referencesLoading, setReferencesLoading] = useState(false);
   const [referencesSolution, setReferencesSolution] = useState(null);
@@ -206,24 +202,6 @@ export default function AdminSolutionsPage() {
     await loadSolutions();
   };
 
-  const openDetailDrawer = async (solution) => {
-    setDetailOpen(true);
-    setSolutionDetail(null);
-    setDetailLoading(true);
-    try {
-      const { response, data } = await requestJson(`${API_URL}/${solution.id}`);
-      if (!response.ok || data?.ok === false) {
-        throw new Error(data?.reason || '加载方案详情失败');
-      }
-      setSolutionDetail(data);
-    } catch (error) {
-      console.error(error);
-      message.error(error.message || '加载方案详情失败');
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
   const loadReferences = async ({ solutionId, page = 1, pageSize = referencePagination.pageSize, keyword = referenceSearchKeyword }) => {
     setReferencesLoading(true);
     try {
@@ -259,9 +237,9 @@ export default function AdminSolutionsPage() {
         dataIndex: 'code',
         width: 160,
         render: (value, record) => (
-          <Button type="link" size="small" onClick={() => openDetailDrawer(record)} style={{ padding: 0 }}>
+          <Link href={`/solutions/${record.id}`}>
             <Typography.Text code>{value || '-'}</Typography.Text>
-          </Button>
+          </Link>
         )
       },
       {
@@ -269,9 +247,9 @@ export default function AdminSolutionsPage() {
         dataIndex: 'title',
         width: 220,
         render: (value, record) => (
-          <Button type="link" size="small" onClick={() => openDetailDrawer(record)} style={{ padding: 0 }}>
+          <Link href={`/solutions/${record.id}`}>
             <Typography.Text strong>{value || '-'}</Typography.Text>
-          </Button>
+          </Link>
         )
       },
       {
@@ -444,62 +422,6 @@ export default function AdminSolutionsPage() {
       </Modal>
 
       <Drawer
-        title="方案详情"
-        width={720}
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        destroyOnClose
-      >
-        <Spin spinning={detailLoading}>
-          {solutionDetail?.solution ? (
-            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-              <Descriptions bordered size="small" column={1}>
-                <Descriptions.Item label="方案编码">{solutionDetail.solution.code}</Descriptions.Item>
-                <Descriptions.Item label="方案标题">{solutionDetail.solution.title}</Descriptions.Item>
-                <Descriptions.Item label="状态">
-                  <Tag color={solutionDetail.solution.enabled === false ? 'default' : 'green'}>
-                    {solutionDetail.solution.enabled === false ? '停用' : '启用'}
-                  </Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="当前版本">v{solutionDetail.solution.versionNo || 1}</Descriptions.Item>
-                <Descriptions.Item label="关联第三方数据修正方案">
-                  {formatThirdPartyScheme(solutionDetail.solution.thirdPartyDataFixScheme)}
-                </Descriptions.Item>
-                <Descriptions.Item label="方案描述">{solutionDetail.solution.description || '-'}</Descriptions.Item>
-              </Descriptions>
-
-              <div>
-                <Typography.Title level={5}>详细说明</Typography.Title>
-                <div
-                  className="solution-detail-content"
-                  dangerouslySetInnerHTML={{ __html: solutionDetail.solution.detailHtml || '<p>-</p>' }}
-                />
-              </div>
-
-              <Divider />
-              <div>
-                <Typography.Title level={5}>修改记录</Typography.Title>
-                <List
-                  dataSource={solutionDetail.versions || []}
-                  locale={{ emptyText: <Empty description="暂无修改记录" /> }}
-                  renderItem={(version) => (
-                    <List.Item>
-                      <List.Item.Meta
-                        title={`v${version.versionNo} ${formatChangeType(version.changeType)}`}
-                        description={`${version.operator?.name || '系统'} · ${formatDateTime(version.createdAt)}`}
-                      />
-                    </List.Item>
-                  )}
-                />
-              </div>
-            </Space>
-          ) : (
-            <Empty description="暂无详情" />
-          )}
-        </Spin>
-      </Drawer>
-
-      <Drawer
         title={referencesSolution ? `引用工单：${referencesSolution.title}` : '引用工单'}
         width={760}
         open={referencesOpen}
@@ -551,23 +473,6 @@ export default function AdminSolutionsPage() {
       </Drawer>
     </Space>
   );
-}
-
-function formatThirdPartyScheme(scheme) {
-  if (!scheme) return '-';
-  return [scheme.code, scheme.title, scheme.sourceSystem ? `(${scheme.sourceSystem})` : ''].filter(Boolean).join(' ');
-}
-
-function formatChangeType(type) {
-  const names = {
-    CREATE: '创建',
-    UPDATE: '更新',
-    ENABLE: '启用',
-    DISABLE: '停用',
-    ROLLBACK: '回滚',
-    IMPORT: '导入'
-  };
-  return names[type] || type || '-';
 }
 
 function formatDateTime(value) {
