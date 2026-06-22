@@ -24,6 +24,7 @@ import {
   DatabaseOutlined,
   CalendarOutlined,
   TeamOutlined,
+  SearchOutlined,
   CoffeeOutlined,
   SettingOutlined,
   ProfileOutlined,
@@ -106,6 +107,11 @@ export default function AppLayout({ children }) {
             label: <Link href="/admin/users">账号管理</Link>
           },
           {
+            key: '/admin/tickets',
+            icon: <SearchOutlined />,
+            label: <Link href="/admin/tickets">工单查询</Link>
+          },
+          {
             key: '/dictionaries/insurance-types',
             icon: <DatabaseOutlined />,
             label: <Link href="/dictionaries/insurance-types">险种词典</Link>
@@ -156,6 +162,7 @@ export default function AppLayout({ children }) {
     if (pathname.startsWith('/tickets/history')) return '/tickets/history';
     if (pathname.startsWith('/personal/quick-phrases')) return '/personal/quick-phrases';
     if (pathname.startsWith('/admin/users')) return '/admin/users';
+    if (pathname.startsWith('/admin/tickets')) return '/admin/tickets';
     if (pathname.startsWith('/dictionaries/insurance-types')) return '/dictionaries/insurance-types';
     if (pathname.startsWith('/systems')) return '/systems';
     if (pathname.startsWith('/schedules')) return '/schedules';
@@ -269,6 +276,8 @@ function pageTitle(key) {
       return '工单流转规则';
     case '/admin/users':
       return '账号管理';
+    case '/admin/tickets':
+      return '工单查询';
     case '/dictionaries/insurance-types':
       return '险种词典';
     case '/systems':

@@ -14,6 +14,7 @@ import L2Actions from '../../components/TicketDetail/L2Actions.jsx';
 import SubtaskActions from '../../components/TicketDetail/SubtaskActions.jsx';
 import SubtaskPanel from '../../components/TicketDetail/SubtaskPanel.jsx';
 import CustomTicketTags from '../../components/TicketDetail/CustomTicketTags.jsx';
+import TicketDispatchLogCard from '../../components/TicketDetail/TicketDispatchLogCard.jsx';
 import { ROLE_LABELS, ROLES } from '../../constants/roles.js';
 import { STATUS, getRequesterStatus } from '../../constants/ticketStatus.js';
 import { TicketSubmitForm } from '../TicketSubmit/index.jsx';
@@ -63,6 +64,7 @@ export default function TicketDetailPage() {
   }
 
   const isDraftTicket = getRequesterStatus(ticket) === STATUS.DRAFT;
+  const isAdminView = user?.role === ROLES.ADMIN;
 
   const renderActions = () => {
     if (!user) return null;
@@ -88,7 +90,7 @@ export default function TicketDetailPage() {
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <TicketInfoCard ticket={ticket} />
           <div ref={messageBoardRef}>
-            <MessageBoard ticket={ticket} />
+            <MessageBoard ticket={ticket} readOnly={isAdminView} />
           </div>
         </Space>
       )
@@ -98,7 +100,12 @@ export default function TicketDetailPage() {
       label: '流转轨迹',
       children: <TicketTimeline ticket={ticket} />
     },
-    user?.role !== ROLES.REQUESTER && {
+    isAdminView && {
+      key: 'dispatchLogs',
+      label: '派工日志',
+      children: <TicketDispatchLogCard ticketId={ticket.id} />
+    },
+    !isAdminView && user?.role !== ROLES.REQUESTER && {
       key: 'subtasks',
       label: '子任务',
       children: ticket.isSubtask ? (
@@ -128,13 +135,13 @@ export default function TicketDetailPage() {
         <Col xs={24} lg={8}>
           <div style={{ position: 'sticky', top: 16 }}>
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-              {user?.role !== ROLES.REQUESTER && (
+              {!isAdminView && user?.role !== ROLES.REQUESTER && (
                 <Card title="自定义标签">
                   <CustomTicketTags ticket={ticket} />
                 </Card>
               )}
-              {renderActions()}
-              {!isDraftTicket && <QuickMessageCard ticket={ticket} onViewAllMessages={handleViewAllMessages} />}
+              {!isAdminView && renderActions()}
+              {!isAdminView && !isDraftTicket && <QuickMessageCard ticket={ticket} onViewAllMessages={handleViewAllMessages} />}
             </Space>
           </div>
         </Col>

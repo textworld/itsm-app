@@ -46,6 +46,79 @@ function upsertTicket(ticket) {
   return normalized;
 }
 
+export function createTicketDispatchLog(input = {}) {
+  const db = getDb();
+  const createdAt = input.createdAt || new Date().toISOString();
+  const log = {
+    id: input.id || shortId('dispatch_log'),
+    ticketId: input.ticketId,
+    createdAt,
+    status: String(input.status || '').trim().toUpperCase(),
+    event: input.event || null,
+    assigneeId: input.assigneeId || null,
+    assigneeName: input.assigneeName || null,
+    ruleType: input.ruleType || null,
+    ruleId: input.ruleId || null,
+    routeKey: input.routeKey || null,
+    data: input.data && typeof input.data === 'object' ? input.data : {}
+  };
+
+  db.prepare(`
+    INSERT INTO ticket_dispatch_logs (
+      id,
+      ticket_id,
+      created_at,
+      status,
+      event,
+      assignee_id,
+      assignee_name,
+      rule_type,
+      rule_id,
+      route_key,
+      data
+    )
+    VALUES (
+      @id,
+      @ticket_id,
+      @created_at,
+      @status,
+      @event,
+      @assignee_id,
+      @assignee_name,
+      @rule_type,
+      @rule_id,
+      @route_key,
+      @data
+    )
+  `).run({
+    id: log.id,
+    ticket_id: log.ticketId,
+    created_at: log.createdAt,
+    status: log.status,
+    event: log.event,
+    assignee_id: log.assigneeId,
+    assignee_name: log.assigneeName,
+    rule_type: log.ruleType,
+    rule_id: log.ruleId,
+    route_key: log.routeKey,
+    data: JSON.stringify(log)
+  });
+
+  return log;
+}
+
+export function listTicketDispatchLogs(ticketId) {
+  const db = getDb();
+  return db
+    .prepare('SELECT data FROM ticket_dispatch_logs WHERE ticket_id = ? ORDER BY created_at DESC, id DESC')
+    .all(ticketId)
+    .map(parseRow)
+    .map((log) => ({
+      ...log,
+      data: log?.data && typeof log.data === 'object' ? log.data : {}
+    }));
+}
+
 function deleteTicketById(ticketId) {
   const db = getDb();
   db.prepare('DELETE FROM tickets WHERE id = ?').run(ticketId);
@@ -560,6 +633,13 @@ function autoAssignPendingTicket(ticket, event) {
     listTickets()
   );
   if (!route?.assignee?.id) {
+    createDispatchLogFromRoute({
+      ticket,
+      event,
+      status: 'SKIPPED',
+      reason: 'NO_AVAILABLE_ASSIGNEE',
+      route
+    });
     return null;
   }
 
@@ -583,7 +663,58 @@ function autoAssignPendingTicket(ticket, event) {
     route.assignee
   );
 
-  return result.ok ? result : null;
+  if (result.ok) {
+    createDispatchLogFromRoute({
+      ticket: result.ticket,
+      event,
+      status: 'SUCCESS',
+      route
+    });
+    return result;
+  }
+
+  createDispatchLogFromRoute({
+    ticket,
+    event,
+    status: 'FAILED',
+    reason: result.reason || 'AUTO_ASSIGN_ACCEPT_FAILED',
+    route
+  });
+  return null;
+}
+
+function createDispatchLogFromRoute({ ticket, event, status, route = null, reason = '' }) {
+  return createTicketDispatchLog({
+    ticketId: ticket.id,
+    status,
+    event,
+    assigneeId: route?.assignee?.id || null,
+    assigneeName: route?.assignee?.name || null,
+    ruleType: route?.ruleType || null,
+    ruleId: route?.ruleId || null,
+    routeKey: route?.routeKey || null,
+    data: {
+      reason,
+      ticket: {
+        id: ticket.id,
+        status: ticket.status,
+        systemCode: ticket.systemCode || null,
+        systemName: ticket.systemName || null,
+        toolType: ticket.toolType || null
+      },
+      route: route
+        ? {
+            ruleType: route.ruleType,
+            groupId: route.groupId,
+            ruleId: route.ruleId,
+            routeKey: route.routeKey,
+            sequenceIndex: route.sequenceIndex,
+            sequenceLength: route.sequenceLength,
+            assignee: route.assignee
+          }
+        : null
+    }
+  });
 }
 
 function shouldAutoAssignPendingTicket(ticket, event) {

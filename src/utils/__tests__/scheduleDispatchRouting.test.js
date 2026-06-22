@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { routeScheduleAssignee } from '../scheduleDispatchRouting.js';
+import {
+  DEFAULT_SCHEDULE_ASSIGNMENT_RULES,
+  routeScheduleAssignee
+} from '../scheduleDispatchRouting.js';
 
 const users = [
   { id: 'u_l1_1', name: 'L1 One', role: 'L1', availabilityStatus: 'ONLINE' },
@@ -96,6 +99,39 @@ test('skips offline assignees and continues to the next available fallback rule'
 
   assert.equal(result.assignee.id, 'u_l1_1');
   assert.equal(result.ruleType, 'BASE_SCHEDULE');
+});
+
+test('allows new assignment rules to be registered without changing the router', () => {
+  const vipRule = {
+    type: 'VIP_ESCALATION',
+    resolve({ ticket, group }) {
+      if (!ticket.vip) return null;
+      return {
+        ruleType: this.type,
+        ruleId: 'vip_rule',
+        routeKey: `VIP_ESCALATION:${group.id}:vip_rule`,
+        sequence: ['u_l1_4']
+      };
+    }
+  };
+
+  const result = routeScheduleAssignee(
+    {
+      id: 'TKT-8',
+      systemCode: 'ERP_CORE',
+      vip: true
+    },
+    buildScheduleConfig(),
+    users,
+    [],
+    {
+      rules: [vipRule, ...DEFAULT_SCHEDULE_ASSIGNMENT_RULES]
+    }
+  );
+
+  assert.equal(result.assignee.id, 'u_l1_4');
+  assert.equal(result.ruleType, 'VIP_ESCALATION');
+  assert.equal(result.routeKey, 'VIP_ESCALATION:grp_erp:vip_rule');
 });
 
 function buildScheduleConfig() {

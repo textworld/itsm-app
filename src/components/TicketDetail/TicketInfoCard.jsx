@@ -27,11 +27,12 @@ export default function TicketInfoCard({ ticket }) {
   const showTechnicalTags = user?.role !== ROLES.REQUESTER;
   const isAwaitingOaApproval = getSupportStatus(ticket) === STATUS.APPROVING;
   const approvalRecords = ticket.oaApplication?.approvalRecords || [];
+  const canShowDraftEdit = user?.role !== ROLES.ADMIN;
 
   return (
     <Card
       title="工单基本信息"
-      extra={<DraftTicketEditButton ticket={ticket} />}
+      extra={canShowDraftEdit ? <DraftTicketEditButton ticket={ticket} /> : null}
       >
       {isAwaitingOaApproval ? (
         <Alert

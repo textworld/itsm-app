@@ -47,6 +47,7 @@ import { useSystems } from '../../hooks/useSystems.js';
 
 const PHONE_PATTERN = /^1[3-9]\d{9}$/;
 const PERMISSION_APPLICATION_ATTACHMENT_CATEGORY = 'PERMISSION_APPLICATION';
+const DEFAULT_PHONE_PREFIXES = ['133', '135', '136', '138', '139', '150', '151', '156', '158', '159'];
 
 export default function TicketSubmitPage() {
   return <TicketSubmitForm />;
@@ -74,6 +75,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
   const [selectedDataFixSchemeId, setSelectedDataFixSchemeId] = useState('');
   const [dataFixSchemeTitleKeyword, setDataFixSchemeTitleKeyword] = useState('');
   const [invalidFieldKeys, setInvalidFieldKeys] = useState(new Set());
+  const [defaultReporterPhone] = useState(() => generateDefaultReporterPhone());
   const { systems, loading: systemsLoading } = useSystems();
   const isDraftEdit = Boolean(draftTicket);
 
@@ -523,6 +525,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
                 toolType: TOOL_TYPES.DATA_EXTRACT,
                 priority: PRIORITIES.P4,
                 systemCategory: SYSTEM_CATEGORY.OLD,
+                reporterPhone: defaultReporterPhone,
                 reportForOthers: false,
                 isStructuredDataExtract: false
               })
@@ -1060,4 +1063,17 @@ function resolveOaSubmitEvent(ticket = {}) {
     return EVENTS.SUBMIT_DATA_FIX_SCHEME_REVIEW;
   }
   return EVENTS.SUBMIT_TO_OA;
+}
+
+function generateDefaultReporterPhone() {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const prefix = DEFAULT_PHONE_PREFIXES[Math.floor(Math.random() * DEFAULT_PHONE_PREFIXES.length)];
+    const suffix = String(Math.floor(Math.random() * 100000000)).padStart(8, '0');
+    const phone = `${prefix}${suffix}`;
+    if (PHONE_PATTERN.test(phone)) {
+      return phone;
+    }
+  }
+
+  return '13800138000';
 }

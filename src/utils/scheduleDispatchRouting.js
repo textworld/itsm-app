@@ -3,7 +3,74 @@ import { INSURANCE_DICTIONARY_TYPE } from './adminConfigValidation.js';
 
 const ONLINE_STATUS = 'ONLINE';
 
-export function routeScheduleAssignee(ticket = {}, scheduleConfig = {}, users = [], previousTickets = []) {
+export const SCHEDULE_ASSIGNMENT_RULE_TYPES = {
+  INSURANCE_TEAM: 'INSURANCE_TEAM',
+  FLEXIBLE_RULE: 'FLEXIBLE_RULE',
+  BASE_SCHEDULE: 'BASE_SCHEDULE'
+};
+
+export const INSURANCE_TEAM_ASSIGNMENT_RULE = {
+  type: SCHEDULE_ASSIGNMENT_RULE_TYPES.INSURANCE_TEAM,
+  resolve({ ticket, group }) {
+    const insuranceCode = getInsuranceCode(ticket);
+    if (!insuranceCode) return null;
+
+    const team = (group.insuranceTeams || []).find((item) =>
+      (item.insuranceTypeCodes || []).some((code) => normalizeCode(code) === insuranceCode)
+    );
+    if (!team) return null;
+
+    return {
+      ruleType: this.type,
+      ruleId: team.id,
+      routeKey: `${this.type}:${group.id}:${team.id}`,
+      sequence: uniqueStrings(team.userIds)
+    };
+  }
+};
+
+export const FLEXIBLE_SYSTEM_ASSIGNMENT_RULE = {
+  type: SCHEDULE_ASSIGNMENT_RULE_TYPES.FLEXIBLE_RULE,
+  resolve({ group, systemCode }) {
+    const flexibleRule = (group.flexibleRules || []).find((rule) =>
+      (rule.systemCodes || []).some((code) => normalizeCode(code) === systemCode)
+    );
+    if (!flexibleRule) return null;
+
+    return {
+      ruleType: this.type,
+      ruleId: flexibleRule.id,
+      routeKey: `${this.type}:${group.id}:${flexibleRule.id}`,
+      sequence: buildWeightedSequence(flexibleRule.assignees)
+    };
+  }
+};
+
+export const BASE_SCHEDULE_ASSIGNMENT_RULE = {
+  type: SCHEDULE_ASSIGNMENT_RULE_TYPES.BASE_SCHEDULE,
+  resolve({ group }) {
+    return {
+      ruleType: this.type,
+      ruleId: group.id,
+      routeKey: `${this.type}:${group.id}`,
+      sequence: uniqueStrings(group.baseSchedule?.userIds)
+    };
+  }
+};
+
+export const DEFAULT_SCHEDULE_ASSIGNMENT_RULES = [
+  INSURANCE_TEAM_ASSIGNMENT_RULE,
+  FLEXIBLE_SYSTEM_ASSIGNMENT_RULE,
+  BASE_SCHEDULE_ASSIGNMENT_RULE
+];
+
+export function routeScheduleAssignee(
+  ticket = {},
+  scheduleConfig = {},
+  users = [],
+  previousTickets = [],
+  options = {}
+) {
   const systemCode = normalizeCode(ticket.systemCode || ticket.systemName);
   if (!systemCode) return null;
 
@@ -19,7 +86,7 @@ export function routeScheduleAssignee(ticket = {}, scheduleConfig = {}, users = 
       .map((user) => [user.id, user])
   );
 
-  for (const route of buildRouteCandidates(ticket, group, systemCode)) {
+  for (const route of buildRouteCandidates(ticket, group, systemCode, options.rules)) {
     const sequence = route.sequence
       .map((userId) => usersById.get(userId))
       .filter(Boolean);
@@ -45,43 +112,15 @@ export function routeScheduleAssignee(ticket = {}, scheduleConfig = {}, users = 
   return null;
 }
 
-function buildRouteCandidates(ticket, group, systemCode) {
-  const routes = [];
-  const insuranceCode = getInsuranceCode(ticket);
-  if (insuranceCode) {
-    const team = (group.insuranceTeams || []).find((item) =>
-      (item.insuranceTypeCodes || []).some((code) => normalizeCode(code) === insuranceCode)
-    );
-    if (team) {
-      routes.push({
-        ruleType: 'INSURANCE_TEAM',
-        ruleId: team.id,
-        routeKey: `INSURANCE_TEAM:${group.id}:${team.id}`,
-        sequence: uniqueStrings(team.userIds)
-      });
-    }
-  }
+function buildRouteCandidates(ticket, group, systemCode, rules = DEFAULT_SCHEDULE_ASSIGNMENT_RULES) {
+  return (Array.isArray(rules) ? rules : DEFAULT_SCHEDULE_ASSIGNMENT_RULES)
+    .flatMap((rule) => normalizeRuleResult(rule?.resolve?.({ ticket, group, systemCode })))
+    .filter((route) => route?.routeKey && Array.isArray(route.sequence));
+}
 
-  const flexibleRule = (group.flexibleRules || []).find((rule) =>
-    (rule.systemCodes || []).some((code) => normalizeCode(code) === systemCode)
-  );
-  if (flexibleRule) {
-    routes.push({
-      ruleType: 'FLEXIBLE_RULE',
-      ruleId: flexibleRule.id,
-      routeKey: `FLEXIBLE_RULE:${group.id}:${flexibleRule.id}`,
-      sequence: buildWeightedSequence(flexibleRule.assignees)
-    });
-  }
-
-  routes.push({
-    ruleType: 'BASE_SCHEDULE',
-    ruleId: group.id,
-    routeKey: `BASE_SCHEDULE:${group.id}`,
-    sequence: uniqueStrings(group.baseSchedule?.userIds)
-  });
-
-  return routes;
+function normalizeRuleResult(result) {
+  if (!result) return [];
+  return Array.isArray(result) ? result : [result];
 }
 
 function buildWeightedSequence(assignees = []) {

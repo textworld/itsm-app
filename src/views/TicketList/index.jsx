@@ -56,7 +56,7 @@ const YES_NO_OPTIONS = [
  * - 二线：待排查
  * - 顶部 + 底部均提供 "初始化数据" + "导出数据"
  */
-export default function TicketListPage({ mode = TICKET_LIST_MODES.CURRENT }) {
+export default function TicketListPage({ mode = TICKET_LIST_MODES.CURRENT, title = null }) {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { tickets, messageReads } = useTickets();
@@ -103,7 +103,7 @@ export default function TicketListPage({ mode = TICKET_LIST_MODES.CURRENT }) {
           <Space direction="vertical" size={0}>
             <Typography.Text strong>{myView.heading}</Typography.Text>
             <Typography.Text type="secondary">
-              共 {myView.total} 条工单 · 当前视图：{myView.subheading}
+              共 {myView.total} 条工单 · 当前视图：{title || myView.subheading}
             </Typography.Text>
           </Space>
           <DataActionBar />

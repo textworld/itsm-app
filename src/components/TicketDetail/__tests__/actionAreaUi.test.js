@@ -72,6 +72,10 @@ const customTicketTagsSource = fs.readFileSync(
   'utf8'
 );
 
+const ticketDispatchLogCardSource = fs.existsSync(new URL('../TicketDispatchLogCard.jsx', import.meta.url))
+  ? fs.readFileSync(new URL('../TicketDispatchLogCard.jsx', import.meta.url), 'utf8')
+  : '';
+
 test('草稿状态的修改工单要素入口放在基本信息卡片右上角', () => {
   assert.match(
     ticketInfoCardSource,
@@ -101,7 +105,7 @@ test('自定义标签放在详情页右侧操作区', () => {
 
   assert.match(ticketDetailSource, /import CustomTicketTags from '..\/..\/components\/TicketDetail\/CustomTicketTags\.jsx';/);
   assert.doesNotMatch(ticketInfoCardSource, /<CustomTicketTags ticket=\{ticket\}/);
-  assert.match(rightColumnSource, /<Card title="自定义标签"[\s\S]*<CustomTicketTags ticket=\{ticket\} \/>[\s\S]*\{renderActions\(\)\}/);
+  assert.match(rightColumnSource, /<Card title="自定义标签"[\s\S]*<CustomTicketTags ticket=\{ticket\} \/>[\s\S]*!isAdminView && renderActions\(\)/);
   assert.match(customTicketTagsSource, /updateCustomTags\(ticket\.id, tags\)/);
   assert.doesNotMatch(customTicketTagsSource, /EVENTS\.UPDATE_CUSTOM_TAGS/);
 });
@@ -173,7 +177,7 @@ test('工单详情页把留言放在工单信息下方而不是独立 tab', () =
   const infoTabSource = ticketDetailSource.slice(infoTabStart, timelineTabStart);
 
   assert.notEqual(infoTabStart, -1);
-  assert.match(infoTabSource, /<TicketInfoCard ticket=\{ticket\} \/>[\s\S]*<div ref=\{messageBoardRef\}>[\s\S]*<MessageBoard ticket=\{ticket\} \/>/);
+  assert.match(infoTabSource, /<TicketInfoCard ticket=\{ticket\} \/>[\s\S]*<div ref=\{messageBoardRef\}>[\s\S]*<MessageBoard ticket=\{ticket\} readOnly=\{isAdminView\} \/>/);
   assert.doesNotMatch(ticketDetailSource, /key:\s*'messages'/);
   assert.doesNotMatch(ticketDetailSource, /label:\s*'留言'/);
 });
@@ -193,6 +197,29 @@ test('流转轨迹将操作人角色展示为独立标签', () => {
 
 test('提单人查看工单详情时不展示子任务 tab', () => {
   assert.match(ticketDetailSource, /user\?\.role !== ROLES\.REQUESTER[\s\S]*key:\s*'subtasks'/);
+});
+
+test('管理员查看工单详情只读并展示派工日志', () => {
+  const timelineTabStart = ticketDetailSource.indexOf("key: 'timeline'");
+  const subtaskTabStart = ticketDetailSource.indexOf("key: 'subtasks'");
+  const afterTimelineTabsSource = ticketDetailSource.slice(timelineTabStart, subtaskTabStart);
+  const rightColumnStart = ticketDetailSource.indexOf('<Col xs={24} lg={8}>');
+  const rightColumnEnd = ticketDetailSource.indexOf('</Col>', rightColumnStart);
+  const rightColumnSource = ticketDetailSource.slice(rightColumnStart, rightColumnEnd);
+
+  assert.match(ticketDetailSource, /import TicketDispatchLogCard from '..\/..\/components\/TicketDetail\/TicketDispatchLogCard\.jsx';/);
+  assert.match(ticketDetailSource, /const isAdminView = user\?\.role === ROLES\.ADMIN/);
+  assert.match(ticketDetailSource, /<MessageBoard ticket=\{ticket\} readOnly=\{isAdminView\} \/>/);
+  assert.match(ticketDetailSource, /!isAdminView && user\?\.role !== ROLES\.REQUESTER/);
+  assert.match(ticketDetailSource, /!isAdminView && renderActions\(\)/);
+  assert.match(ticketDetailSource, /!isAdminView && !isDraftTicket && <QuickMessageCard/);
+  assert.match(afterTimelineTabsSource, /isAdminView && \{[\s\S]*key:\s*'dispatchLogs'[\s\S]*label:\s*'派工日志'[\s\S]*<TicketDispatchLogCard ticketId=\{ticket\.id\} \/>/);
+  assert.doesNotMatch(rightColumnSource, /<TicketDispatchLogCard ticketId=\{ticket\.id\} \/>/);
+  assert.match(ticketDispatchLogCardSource, /Card[\s\S]*title="派工日志"/);
+  assert.match(ticketDispatchLogCardSource, /Timeline/);
+  assert.match(ticketDispatchLogCardSource, /\/api\/workflow\/tickets\/\$\{ticketId\}\/dispatch-logs/);
+  assert.match(ticketDispatchLogCardSource, /ruleType/);
+  assert.match(ticketDispatchLogCardSource, /routeKey/);
 });
 
 test('子任务面板展示子任务单号并支持一键复制', () => {

@@ -169,6 +169,20 @@ function createDatabase() {
       data TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS ticket_dispatch_logs (
+      id TEXT PRIMARY KEY,
+      ticket_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      status TEXT NOT NULL,
+      event TEXT,
+      assignee_id TEXT,
+      assignee_name TEXT,
+      rule_type TEXT,
+      rule_id TEXT,
+      route_key TEXT,
+      data TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS defects (
       id TEXT PRIMARY KEY,
       updated_at TEXT NOT NULL,
@@ -241,6 +255,7 @@ function createDatabase() {
     CREATE INDEX IF NOT EXISTS idx_solution_versions_solution_id ON solution_versions(solution_id, version_no DESC);
     CREATE INDEX IF NOT EXISTS idx_solution_references_solution_id ON solution_references(solution_id, quoted_at DESC);
     CREATE INDEX IF NOT EXISTS idx_solution_references_ticket_id ON solution_references(ticket_id, quoted_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ticket_dispatch_logs_ticket_id ON ticket_dispatch_logs(ticket_id, created_at DESC);
   `);
 
   seedDatabase(db);
@@ -278,6 +293,7 @@ function seedDatabase(db, { force = false } = {}) {
 
       db.prepare('DELETE FROM users').run();
       db.prepare('DELETE FROM tickets').run();
+      db.prepare('DELETE FROM ticket_dispatch_logs').run();
       db.prepare('DELETE FROM defects').run();
       db.prepare('DELETE FROM message_reads').run();
       db.prepare('DELETE FROM uploads').run();
@@ -528,6 +544,11 @@ class JsonFallbackStatement {
     if (this.sql.includes('select data from tickets order by updated_at desc')) {
       return [...this.db.tables.tickets].sort(compareUpdatedRows);
     }
+    if (this.sql.includes('select data from ticket_dispatch_logs where ticket_id = ?')) {
+      return this.db.tables.ticket_dispatch_logs
+        .filter((row) => row.ticket_id === args[0])
+        .sort(compareCreatedRows);
+    }
     if (this.sql.includes('select data from defects order by updated_at desc')) {
       return [...this.db.tables.defects].sort(compareUpdatedRows);
     }
@@ -579,6 +600,11 @@ class JsonFallbackStatement {
     }
     if (this.sql.startsWith('delete from tickets')) {
       this.db.tables.tickets = [];
+      this.db.persist();
+      return { changes: 1 };
+    }
+    if (this.sql.startsWith('delete from ticket_dispatch_logs')) {
+      this.db.tables.ticket_dispatch_logs = [];
       this.db.persist();
       return { changes: 1 };
     }
@@ -653,6 +679,23 @@ class JsonFallbackStatement {
       upsertById(this.db.tables.tickets, {
         id: params.id,
         updated_at: params.updated_at,
+        data: params.data
+      });
+      this.db.persist();
+      return { changes: 1 };
+    }
+    if (this.sql.includes('insert into ticket_dispatch_logs')) {
+      upsertById(this.db.tables.ticket_dispatch_logs, {
+        id: params.id,
+        ticket_id: params.ticket_id,
+        created_at: params.created_at,
+        status: params.status,
+        event: params.event,
+        assignee_id: params.assignee_id,
+        assignee_name: params.assignee_name,
+        rule_type: params.rule_type,
+        rule_id: params.rule_id,
+        route_key: params.route_key,
         data: params.data
       });
       this.db.persist();
@@ -765,6 +808,7 @@ function createEmptyTables() {
   return {
     users: [],
     tickets: [],
+    ticket_dispatch_logs: [],
     defects: [],
     message_reads: [],
     uploads: [],
@@ -803,6 +847,14 @@ function compareUpdatedRows(left, right) {
     new Date(right.updated_at || right.created_at || 0).getTime() -
     new Date(left.updated_at || left.created_at || 0).getTime();
   if (updatedDiff !== 0) return updatedDiff;
+  return String(right.id || '').localeCompare(String(left.id || ''));
+}
+
+function compareCreatedRows(left, right) {
+  const createdDiff =
+    new Date(right.created_at || 0).getTime() -
+    new Date(left.created_at || 0).getTime();
+  if (createdDiff !== 0) return createdDiff;
   return String(right.id || '').localeCompare(String(left.id || ''));
 }
 

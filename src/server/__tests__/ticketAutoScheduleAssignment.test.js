@@ -7,10 +7,12 @@ import {
   dispatchCreateTicketEvent,
   dispatchTicketEvent,
   getTicketById,
+  listTicketDispatchLogs,
   updateUserAvailability
 } from '../store.js';
 import { reseedDb } from '../db.js';
 import { saveScheduleConfig } from '../adminConfigStore.js';
+import { GET as dispatchLogsGet } from '../../../app/api/workflow/tickets/[id]/dispatch-logs/route.js';
 
 const requesterUser = { id: 'u_requester_1', name: 'Requester', role: 'REQUESTER' };
 const adminUser = { id: 'u_admin_1', name: 'Admin', role: 'ADMIN' };
@@ -32,6 +34,30 @@ test('auto-assigns a submitted ticket through ACCEPT using the configured base s
   assert.equal(savedTicket.status, STATUS.PROCESSING);
   assert.equal(savedTicket.timeline.at(-1).action, EVENTS.ACCEPT);
   assert.equal(savedTicket.scheduleDispatch.ruleType, 'BASE_SCHEDULE');
+
+  const dispatchLogs = listTicketDispatchLogs(result.ticket.id);
+  assert.equal(dispatchLogs.length, 1);
+  assert.equal(dispatchLogs[0].ticketId, result.ticket.id);
+  assert.equal(dispatchLogs[0].status, 'SUCCESS');
+  assert.equal(dispatchLogs[0].event, EVENTS.SUBMIT);
+  assert.equal(dispatchLogs[0].assigneeId, 'u_l1_1');
+  assert.equal(dispatchLogs[0].ruleType, 'BASE_SCHEDULE');
+  assert.equal(dispatchLogs[0].data.route.sequenceIndex, 0);
+});
+
+test('records automatic assignment as a state-machine ACCEPT transition', () => {
+  saveBaseSchedule(['u_l1_1']);
+
+  const result = dispatchCreateTicketEvent(EVENTS.SUBMIT, buildTicketPayload('state machine accept'), requesterUser);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    result.ticket.timeline.map((entry) => entry.action),
+    [EVENTS.SUBMIT, EVENTS.ACCEPT]
+  );
+  assert.equal(result.ticket.timeline.at(-1).fromStatus, STATUS.PENDING);
+  assert.equal(result.ticket.timeline.at(-1).toStatus, STATUS.PROCESSING);
+  assert.equal(result.ticket.timeline.at(-1).operatorId, 'u_l1_1');
 });
 
 test('keeps a submitted ticket pending when configured assignees are offline', () => {
@@ -43,6 +69,13 @@ test('keeps a submitted ticket pending when configured assignees are offline', (
   assert.equal(result.ok, true);
   assert.equal(result.ticket.status, STATUS.PENDING);
   assert.equal(result.ticket.assigneeL1Id, null);
+
+  const dispatchLogs = listTicketDispatchLogs(result.ticket.id);
+  assert.equal(dispatchLogs.length, 1);
+  assert.equal(dispatchLogs[0].ticketId, result.ticket.id);
+  assert.equal(dispatchLogs[0].status, 'SKIPPED');
+  assert.equal(dispatchLogs[0].event, EVENTS.SUBMIT);
+  assert.equal(dispatchLogs[0].data.reason, 'NO_AVAILABLE_ASSIGNEE');
 });
 
 test('auto-assigns an OA generated formal ticket through ACCEPT', () => {
@@ -70,6 +103,39 @@ test('auto-assigns an OA generated formal ticket through ACCEPT', () => {
   assert.equal(result.ticket.assigneeL1Id, 'u_l1_1');
   assert.equal(savedTicket.formalTicketCreated, true);
   assert.equal(savedTicket.timeline.at(-1).action, EVENTS.ACCEPT);
+});
+
+test('dispatch logs route returns ticket dispatch logs for administrators', async () => {
+  saveBaseSchedule(['u_l1_1']);
+  const result = dispatchCreateTicketEvent(EVENTS.SUBMIT, buildTicketPayload('admin dispatch logs'), requesterUser);
+
+  const response = await dispatchLogsGet(
+    buildMockRequestForUser('u_admin_1'),
+    { params: Promise.resolve({ id: result.ticket.id }) }
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.logs.length, 1);
+  assert.equal(payload.logs[0].ticketId, result.ticket.id);
+  assert.equal(payload.logs[0].status, 'SUCCESS');
+  assert.equal(payload.logs[0].ruleType, 'BASE_SCHEDULE');
+});
+
+test('dispatch logs route rejects non-administrator users', async () => {
+  saveBaseSchedule(['u_l1_1']);
+  const result = dispatchCreateTicketEvent(EVENTS.SUBMIT, buildTicketPayload('forbidden dispatch logs'), requesterUser);
+
+  const response = await dispatchLogsGet(
+    buildMockRequestForUser('u_l1_1'),
+    { params: Promise.resolve({ id: result.ticket.id }) }
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 403);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.reason, '无管理员权限');
 });
 
 function saveBaseSchedule(userIds) {
@@ -106,5 +172,13 @@ function buildTicketPayload(title) {
       content: [{ type: 'paragraph', content: [{ type: 'text', text: title }] }]
     },
     attachments: []
+  };
+}
+
+function buildMockRequestForUser(userId) {
+  return {
+    cookies: {
+      get: (name) => (name === 'itsm_session_user_id' ? { value: userId } : null)
+    }
   };
 }

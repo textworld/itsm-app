@@ -63,6 +63,7 @@ test('administrator entries are grouped under a second-level admin menu', () => 
   assert.match(appLayoutSource, /label: '后台管理'/);
   assert.match(appLayoutSource, /children:/);
   assert.match(appLayoutSource, /href="\/admin\/users"/);
+  assert.match(appLayoutSource, /href="\/admin\/tickets"/);
   assert.match(appLayoutSource, /href="\/dictionaries\/insurance-types"/);
   assert.match(appLayoutSource, /href="\/systems"/);
   assert.match(appLayoutSource, /href="\/schedules"/);
@@ -70,6 +71,7 @@ test('administrator entries are grouped under a second-level admin menu', () => 
   assert.match(appLayoutSource, /href="\/solutions"/);
   assert.match(appLayoutSource, /href="\/oa-simulator"/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/admin\/users'\)/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/admin\/tickets'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/dictionaries\/insurance-types'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/systems'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/schedules'\)/);
@@ -77,6 +79,7 @@ test('administrator entries are grouped under a second-level admin menu', () => 
   assert.match(appLayoutSource, /pathname\.startsWith\('\/solutions'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/oa-simulator'\)/);
   assert.match(appLayoutSource, /账号管理/);
+  assert.match(appLayoutSource, /工单查询/);
   assert.match(appLayoutSource, /险种词典/);
   assert.match(appLayoutSource, /系统配置/);
   assert.match(appLayoutSource, /排班配置/);
