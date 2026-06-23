@@ -1,0 +1,83 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  createEmptyRichTextDoc,
+  richTextPlainTextToDoc,
+  richTextDocHasContent,
+  richTextDocToHtml,
+  richTextDocToPlainText,
+  richTextHtmlToDoc
+} from '../richText.js';
+
+test('空文档不应被识别为有内容', () => {
+  assert.equal(richTextDocHasContent(createEmptyRichTextDoc()), false);
+});
+
+test('JSON 文档可提取纯文本', () => {
+  const doc = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '你好，世界' }]
+      }
+    ]
+  };
+
+  assert.equal(richTextDocToPlainText(doc), '你好，世界');
+});
+
+test('JSON 文档可转为 HTML', () => {
+  const doc = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '转换测试' }]
+      }
+    ]
+  };
+
+  assert.match(richTextDocToHtml(doc), /转换测试/);
+});
+
+test('HTML 可转换为包含图片节点的文档', () => {
+  const doc = richTextHtmlToDoc('<p>说明</p><img src="/api/uploads/upl_1" alt="截图" />');
+
+  assert.equal(doc.type, 'doc');
+  assert.equal(doc.content[0].type, 'paragraph');
+  assert.equal(doc.content[1].type, 'image');
+  assert.equal(doc.content[1].attrs.src, '/api/uploads/upl_1');
+});
+
+test('rich text image scale is preserved in JSON and generated HTML', () => {
+  const doc = {
+    type: 'doc',
+    content: [
+      {
+        type: 'image',
+        attrs: {
+          src: '/api/uploads/upl_scaled',
+          alt: 'scaled',
+          widthPercent: 55
+        }
+      }
+    ]
+  };
+
+  const html = richTextDocToHtml(doc);
+  const parsed = richTextHtmlToDoc('<img src="/api/uploads/upl_scaled" data-width-percent="45" />');
+
+  assert.match(html, /data-width-percent="55"/);
+  assert.match(html, /width:\s*55%/);
+  assert.equal(parsed.content[0].attrs.widthPercent, 45);
+});
+
+test('绾枃鏈姙缁撴€荤粨鍙浆涓哄瘜鏂囨湰娈佃惤', () => {
+  const doc = richTextPlainTextToDoc('处理过程：已重启服务\n处理结论：问题恢复');
+
+  assert.equal(doc.type, 'doc');
+  assert.equal(doc.content.length, 2);
+  assert.equal(richTextDocToPlainText(doc), '处理过程：已重启服务 处理结论：问题恢复');
+});

@@ -1,0 +1,526 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import dayjs from 'dayjs';
+
+import {
+  DATA_FIX_SCHEME_CONFIG_KEY,
+  INSURANCE_DICTIONARY_TYPE,
+  SYSTEM_MODULE_DICTIONARY_TYPE,
+  SUPPORT_REST_CONFIG_KEY,
+  buildUpcomingSupportRestDays,
+  validateInsuranceTypeInput,
+  validateDataFixSchemeConfig,
+  validateScheduleConfig,
+  validateSystemConfig,
+  validateSupportRestConfig
+} from '../adminConfigValidation.js';
+
+const scheduleContext = {
+  systems: [
+    { value: 'ERP_CORE', label: 'ERP 核心系统' },
+    { value: 'CRM_CENTER', label: 'CRM 客户管理系统' }
+  ],
+  enabledInsuranceTypes: [
+    { code: 'MEDICAL', name: '医疗险', enabled: true },
+    { code: 'LIFE', name: '寿险', enabled: true }
+  ],
+  assignableUsers: [
+    { id: 'u_l1_1', name: '李一线', role: 'L1' },
+    { id: 'u_l1_2', name: '周一线', role: 'L1' }
+  ]
+};
+
+test('insurance type validation requires unique code and name', () => {
+  const existingItems = [
+    { id: 'ins_1', type: INSURANCE_DICTIONARY_TYPE, code: 'MEDICAL', name: '医疗险', enabled: true }
+  ];
+
+  assert.deepEqual(validateInsuranceTypeInput({ code: '', name: '' }, existingItems).errors, [
+    { path: ['code'], message: '请输入险种编码' },
+    { path: ['name'], message: '请输入险种名称' }
+  ]);
+
+  assert.deepEqual(validateInsuranceTypeInput({ code: ' medical ', name: '其他' }, existingItems).errors, [
+    { path: ['code'], message: '险种编码已存在' }
+  ]);
+
+  assert.deepEqual(validateInsuranceTypeInput({ code: 'OTHER', name: '医疗险' }, existingItems).errors, [
+    { path: ['name'], message: '险种名称已存在' }
+  ]);
+});
+
+test('insurance type validation allows editing current item without duplicate errors', () => {
+  const existingItems = [
+    { id: 'ins_1', type: INSURANCE_DICTIONARY_TYPE, code: 'MEDICAL', name: '医疗险', enabled: true }
+  ];
+
+  const result = validateInsuranceTypeInput(
+    { code: ' medical ', name: ' 医疗险 ', enabled: false },
+    existingItems,
+    'ins_1'
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value, {
+    code: 'MEDICAL',
+    name: '医疗险',
+    enabled: false
+  });
+});
+
+test('system config validation accepts complete classification config and rejects partial config', () => {
+  const valid = validateSystemConfig({
+    systems: [
+      {
+        id: 'sys_erp_core',
+        code: 'erp_core',
+        name: 'ERP 核心系统',
+        category: 'OLD',
+        ticketClassification: {
+          fieldLabel: '模块',
+          dictionaryType: SYSTEM_MODULE_DICTIONARY_TYPE
+        }
+      }
+    ]
+  });
+
+  assert.equal(valid.ok, true);
+  assert.equal(valid.value.systems[0].code, 'ERP_CORE');
+  assert.deepEqual(valid.value.systems[0].ticketClassification, {
+    fieldLabel: '模块',
+    dictionaryType: SYSTEM_MODULE_DICTIONARY_TYPE
+  });
+
+  const invalid = validateSystemConfig({
+    systems: [
+      {
+        id: 'sys_invalid',
+        code: 'CRM_CENTER',
+        name: 'CRM 客户管理系统',
+        category: 'NEW',
+        ticketClassification: { fieldLabel: '险种' }
+      }
+    ]
+  });
+
+  assert.equal(invalid.ok, false);
+  assert.deepEqual(invalid.errors, [
+    { path: ['systems', 0, 'ticketClassification', 'dictionaryType'], message: '请选择分类词典' }
+  ]);
+});
+
+test('schedule validation requires each group to have systems and a base schedule', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: '',
+          systemCodes: [],
+          baseSchedule: { userIds: [] },
+          insuranceTeams: []
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    { path: ['groups', 0, 'name'], message: '请输入排班分组名称' },
+    { path: ['groups', 0, 'systemCodes'], message: '请选择系统' },
+    { path: ['groups', 0, 'baseSchedule', 'userIds'], message: '基础排班至少选择一名一线人员' }
+  ]);
+});
+
+test('schedule validation rejects duplicate systems across groups', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: 'ERP 组',
+          systemCodes: ['ERP_CORE'],
+          baseSchedule: { userIds: ['u_l1_1'] },
+          insuranceTeams: []
+        },
+        {
+          id: 'grp_2',
+          name: '重复系统组',
+          systemCodes: ['ERP_CORE'],
+          baseSchedule: { userIds: ['u_l1_2'] },
+          insuranceTeams: []
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    { path: ['groups', 1, 'systemCodes'], message: 'ERP 核心系统已出现在其他排班分组中' }
+  ]);
+});
+
+test('schedule validation rejects duplicate insurance and users within one group teams', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: 'ERP 组',
+          systemCodes: ['ERP_CORE'],
+          baseSchedule: { userIds: ['u_l1_1'] },
+          insuranceTeams: [
+            {
+              id: 'team_1',
+              name: '医疗险小组',
+              userIds: ['u_l1_1'],
+              insuranceTypeCodes: ['MEDICAL']
+            },
+            {
+              id: 'team_2',
+              name: '重复小组',
+              userIds: ['u_l1_1'],
+              insuranceTypeCodes: ['MEDICAL']
+            }
+          ]
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    { path: ['groups', 0, 'insuranceTeams', 1, 'userIds'], message: '李一线 已出现在本分组其他险种小组中' },
+    { path: ['groups', 0, 'insuranceTeams', 1, 'insuranceTypeCodes'], message: '医疗险 已出现在本分组其他险种小组中' }
+  ]);
+});
+
+test('schedule validation allows insurance teams without names', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: 'ERP 组',
+          systemCodes: ['ERP_CORE'],
+          baseSchedule: { userIds: ['u_l1_1'] },
+          insuranceTeams: [
+            {
+              id: 'team_1',
+              userIds: ['u_l1_2'],
+              insuranceTypeCodes: ['MEDICAL']
+            }
+          ]
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test('schedule validation allows flexible rules with personnel ratios that do not total 100', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: 'ERP 组',
+          systemCodes: ['ERP_CORE', 'CRM_CENTER'],
+          baseSchedule: { userIds: ['u_l1_1'] },
+          insuranceTeams: [],
+          flexibleRules: [
+            {
+              id: 'flex_1',
+              systemCodes: ['ERP_CORE'],
+              assignees: [
+                { userId: 'u_l1_1', ratio: 70 },
+                { userId: 'u_l1_2', ratio: 20 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.value.groups[0].flexibleRules, [
+    {
+      id: 'flex_1',
+      systemCodes: ['ERP_CORE'],
+      assignees: [
+        { userId: 'u_l1_1', ratio: 70 },
+        { userId: 'u_l1_2', ratio: 20 }
+      ]
+    }
+  ]);
+});
+
+test('schedule validation rejects invalid flexible rule systems, duplicate coverage, users, and ratios', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: 'ERP 组',
+          systemCodes: ['ERP_CORE'],
+          baseSchedule: { userIds: ['u_l1_1'] },
+          insuranceTeams: [],
+          flexibleRules: [
+            {
+              id: 'flex_1',
+              systemCodes: [],
+              assignees: []
+            },
+            {
+              id: 'flex_2',
+              systemCodes: ['ERP_CORE', 'CRM_CENTER'],
+              assignees: [
+                { userId: 'u_l1_1', ratio: 0 },
+                { userId: 'u_l1_1', ratio: 10 },
+                { userId: 'u_l2_1', ratio: 5 }
+              ]
+            },
+            {
+              id: 'flex_3',
+              systemCodes: ['ERP_CORE'],
+              assignees: [
+                { userId: 'u_l1_2', ratio: 15 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    { path: ['groups', 0, 'flexibleRules', 0, 'systemCodes'], message: '灵活规则至少选择一个系统' },
+    { path: ['groups', 0, 'flexibleRules', 0, 'assignees'], message: '灵活规则至少配置一名人员' },
+    { path: ['groups', 0, 'flexibleRules', 1, 'systemCodes'], message: 'CRM 客户管理系统不在当前排班规则系统范围内' },
+    { path: ['groups', 0, 'flexibleRules', 1, 'assignees', 0, 'ratio'], message: '李一线 的派单比例必须大于 0' },
+    { path: ['groups', 0, 'flexibleRules', 1, 'assignees', 1, 'userId'], message: '李一线 已出现在本灵活规则中' },
+    { path: ['groups', 0, 'flexibleRules', 1, 'assignees', 2, 'userId'], message: '人员 u_l2_1 不是可选一线人员' },
+    { path: ['groups', 0, 'flexibleRules', 2, 'systemCodes'], message: 'ERP 核心系统已出现在本分组其他灵活规则中' }
+  ]);
+});
+
+test('schedule validation rejects non-L1 users and disabled insurance references', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: 'ERP 组',
+          systemCodes: ['ERP_CORE'],
+          baseSchedule: { userIds: ['u_l2_1'] },
+          insuranceTeams: [
+            {
+              id: 'team_1',
+              name: '医疗险小组',
+              userIds: ['u_l2_1'],
+              insuranceTypeCodes: ['DISABLED']
+            }
+          ]
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    { path: ['groups', 0, 'baseSchedule', 'userIds'], message: '人员 u_l2_1 不是可选一线人员' },
+    { path: ['groups', 0, 'insuranceTeams', 0, 'userIds'], message: '人员 u_l2_1 不是可选一线人员' },
+    { path: ['groups', 0, 'insuranceTeams', 0, 'insuranceTypeCodes'], message: '险种 DISABLED 不存在或未启用' }
+  ]);
+});
+
+test('schedule validation allows the same person in different groups', () => {
+  const result = validateScheduleConfig(
+    {
+      groups: [
+        {
+          id: 'grp_1',
+          name: 'ERP 组',
+          systemCodes: ['ERP_CORE'],
+          baseSchedule: { userIds: ['u_l1_1'] },
+          insuranceTeams: [
+            {
+              id: 'team_1',
+              name: '医疗险小组',
+              userIds: ['u_l1_1'],
+              insuranceTypeCodes: ['MEDICAL']
+            }
+          ]
+        },
+        {
+          id: 'grp_2',
+          name: 'CRM 组',
+          systemCodes: ['CRM_CENTER'],
+          baseSchedule: { userIds: ['u_l1_1'] },
+          insuranceTeams: [
+            {
+              id: 'team_2',
+              name: '寿险小组',
+              userIds: ['u_l1_1'],
+              insuranceTypeCodes: ['LIFE']
+            }
+          ]
+        }
+      ]
+    },
+    scheduleContext
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test('support rest validation requires L1 users and valid time ranges', () => {
+  assert.equal(SUPPORT_REST_CONFIG_KEY, 'SUPPORT_REST_CONFIG');
+
+  const result = validateSupportRestConfig(
+    {
+      restPeriods: [
+        {
+          id: 'rest_invalid',
+          userIds: [],
+          startsAt: '2026-05-18T10:00:00.000Z',
+          endsAt: '2026-05-18T09:00:00.000Z',
+          reason: '时间错误'
+        }
+      ]
+    },
+    { assignableUsers: scheduleContext.assignableUsers }
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    { path: ['restPeriods', 0, 'userIds'], message: '请选择一线技术支持人员' },
+    { path: ['restPeriods', 0, 'endsAt'], message: '结束时间必须晚于开始时间' }
+  ]);
+});
+
+test('support rest validation rejects non-L1 users and overlapping periods for the same person', () => {
+  const result = validateSupportRestConfig(
+    {
+      restPeriods: [
+        {
+          id: 'rest_1',
+          userIds: ['u_l1_1', 'u_l2_1'],
+          startsAt: '2026-05-18T09:00:00.000Z',
+          endsAt: '2026-05-18T12:00:00.000Z',
+          reason: '上午'
+        },
+        {
+          id: 'rest_2',
+          userIds: ['u_l1_1'],
+          startsAt: '2026-05-18T11:00:00.000Z',
+          endsAt: '2026-05-18T13:00:00.000Z',
+          reason: '重叠'
+        }
+      ]
+    },
+    { assignableUsers: scheduleContext.assignableUsers }
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    { path: ['restPeriods', 0, 'userIds'], message: '人员 u_l2_1 不是可选一线人员' },
+    { path: ['restPeriods', 1, 'startsAt'], message: '李一线 存在重叠休息时间' }
+  ]);
+});
+
+test('support rest validation allows adjacent periods and normalizes ids and reasons', () => {
+  const result = validateSupportRestConfig(
+    {
+      restPeriods: [
+        {
+          userIds: ['u_l1_1'],
+          startsAt: '2026-05-18T09:00:00.000Z',
+          endsAt: '2026-05-18T12:00:00.000Z',
+          reason: ' 上午调休 '
+        },
+        {
+          id: 'rest_adjacent',
+          userIds: ['u_l1_1'],
+          startsAt: '2026-05-18T12:00:00.000Z',
+          endsAt: '2026-05-18T18:00:00.000Z',
+          reason: ''
+        }
+      ]
+    },
+    { assignableUsers: scheduleContext.assignableUsers }
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.restPeriods[0].id, 'rest_1');
+  assert.equal(result.value.restPeriods[0].reason, '上午调休');
+  assert.equal(result.value.restPeriods[1].id, 'rest_adjacent');
+});
+
+test('upcoming support rest days include future and cross-day periods grouped by date', () => {
+  const crossDayStart = dayjs('2026-05-18').hour(22).minute(0).second(0).millisecond(0);
+  const crossDayEnd = dayjs('2026-05-19').hour(2).minute(0).second(0).millisecond(0);
+  const days = buildUpcomingSupportRestDays(
+    {
+      restPeriods: [
+        {
+          id: 'rest_cross_day',
+          userIds: ['u_l1_1', 'u_l1_2'],
+          startsAt: crossDayStart.toISOString(),
+          endsAt: crossDayEnd.toISOString(),
+          reason: '夜间调休'
+        },
+        {
+          id: 'rest_outside',
+          userIds: ['u_l1_1'],
+          startsAt: '2026-06-30T09:00:00.000Z',
+          endsAt: '2026-06-30T10:00:00.000Z',
+          reason: '太远'
+        }
+      ]
+    },
+    scheduleContext.assignableUsers,
+    { from: '2026-05-18T00:00:00.000Z', days: 2 }
+  );
+
+  assert.deepEqual(days.map((day) => day.date), ['2026-05-18', '2026-05-19']);
+  assert.equal(days[0].items[0].id, 'rest_cross_day');
+  assert.equal(days[1].items[0].id, 'rest_cross_day');
+  assert.deepEqual(days[0].items[0].userNames, ['李一线', '周一线']);
+  assert.deepEqual(days[1].items[0].userNames, ['李一线', '周一线']);
+  assert.equal(days[0].items[0].dayStartsAt < days[0].items[0].dayEndsAt, true);
+  assert.equal(days[1].items[0].dayStartsAt < days[1].items[0].dayEndsAt, true);
+});
+
+test('data fix scheme validation requires title and description and normalizes ids', () => {
+  assert.equal(DATA_FIX_SCHEME_CONFIG_KEY, 'DATA_FIX_SCHEME_CONFIG');
+
+  const invalid = validateDataFixSchemeConfig({
+    schemes: [
+      { id: 'scheme_empty', title: '', description: '' },
+      { title: '  月结数据重算  ', description: '  修正月结汇总数据  ' }
+    ]
+  });
+
+  assert.equal(invalid.ok, false);
+  assert.deepEqual(invalid.errors, [
+    { path: ['schemes', 0, 'title'], message: '请输入方案标题' },
+    { path: ['schemes', 0, 'description'], message: '请输入方案描述' }
+  ]);
+  assert.equal(invalid.value.schemes[1].id, 'scheme_2');
+  assert.equal(invalid.value.schemes[1].title, '月结数据重算');
+  assert.equal(invalid.value.schemes[1].description, '修正月结汇总数据');
+});

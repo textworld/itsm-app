@@ -1,0 +1,908 @@
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: #f0f2f5;
+}
+
+#root {
+  min-height: 100%;
+}
+
+.app-shell {
+  background:
+    linear-gradient(180deg, #0f1f38 0, #102744 108px, #f0f2f5 108px, #f0f2f5 100%);
+}
+
+.app-shell-header {
+  height: auto !important;
+  line-height: normal !important;
+  padding: 0 !important;
+  color: #fff;
+  background: linear-gradient(135deg, #11233d 0%, #183a63 100%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 24px rgba(6, 24, 44, 0.16);
+}
+
+.app-shell-header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px 10px;
+}
+
+.app-shell-brand {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-shell-brand-title.ant-typography {
+  margin: 0;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.app-shell-brand-subtitle.ant-typography {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+
+.app-shell-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 8px;
+}
+
+.app-shell-toolbar-button.ant-btn {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.app-shell-toolbar-button.ant-btn:hover,
+.app-shell-toolbar-button.ant-btn:focus {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.app-shell-role-tag.ant-tag {
+  margin-inline-end: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(22, 119, 255, 0.2);
+  color: #d6e4ff;
+}
+
+.app-shell-user-trigger {
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  transition: background 0.2s ease;
+}
+
+.app-shell-user-trigger:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.app-shell-nav {
+  padding: 0 24px;
+}
+
+.app-shell-nav .ant-menu {
+  background: transparent;
+  border-bottom: none;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 500;
+}
+
+.app-shell-nav .ant-menu-horizontal {
+  line-height: 46px;
+}
+
+.app-shell-nav .ant-menu-horizontal > .ant-menu-item,
+.app-shell-nav .ant-menu-horizontal > .ant-menu-submenu {
+  top: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-inline: 18px;
+  border-bottom-width: 3px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.app-shell-nav .ant-menu-dark.ant-menu-horizontal > .ant-menu-item-selected,
+.app-shell-nav .ant-menu-dark.ant-menu-horizontal > .ant-menu-submenu-selected,
+.app-shell-nav .ant-menu-dark.ant-menu-horizontal > .ant-menu-item:hover,
+.app-shell-nav .ant-menu-dark.ant-menu-horizontal > .ant-menu-submenu:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-shell-nav .ant-menu-dark.ant-menu-horizontal > .ant-menu-item-selected::after,
+.app-shell-nav .ant-menu-dark.ant-menu-horizontal > .ant-menu-submenu-selected::after,
+.app-shell-nav .ant-menu-dark.ant-menu-horizontal > .ant-menu-item:hover::after,
+.app-shell-nav .ant-menu-dark.ant-menu-horizontal > .ant-menu-submenu:hover::after {
+  border-bottom-color: #69b1ff;
+}
+
+.app-shell-nav .ant-menu-item .anticon,
+.app-shell-nav .ant-menu-submenu .anticon {
+  margin-inline-end: 8px;
+}
+
+.app-shell-content {
+  padding: 24px;
+}
+
+.app-shell-content-inner {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.app-shell-page-title.ant-typography {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: #1f1f1f;
+}
+
+.announcement-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 20px;
+  border-bottom: 1px solid #f3d37a;
+  background: #fff7d6;
+  color: #6f4b00;
+}
+
+.announcement-banner-icon {
+  flex: 0 0 auto;
+  color: #d48806;
+}
+
+.announcement-banner-viewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.announcement-banner-track {
+  display: inline-block;
+  min-width: 100%;
+  animation-name: announcement-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.announcement-banner-pin.ant-tag {
+  flex: 0 0 auto;
+  margin-inline-end: 0;
+  border-color: #d48806;
+  background: #fffbe6;
+  color: #ad6800;
+}
+
+.announcement-banner .ant-btn-link {
+  flex: 0 0 auto;
+  color: #8a5a00;
+}
+
+.announcement-banner-detail {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.announcement-banner-detail:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+@keyframes announcement-scroll {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+@media (max-width: 992px) {
+  .app-shell-header-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .app-shell-toolbar {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .app-shell-nav .ant-menu-horizontal {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+
+  .app-shell-nav .ant-menu-horizontal > .ant-menu-item,
+  .app-shell-nav .ant-menu-horizontal > .ant-menu-submenu {
+    flex: none;
+  }
+
+  .announcement-banner {
+    padding: 6px 12px;
+  }
+}
+
+.ticket-submit-reference-page {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  padding: 12px 8px 24px;
+}
+
+.ticket-submit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ticket-submit-title {
+  margin: 0 !important;
+  padding-left: 64px;
+}
+
+.reference-ticket-form {
+  color: #333;
+}
+
+.reference-form-line {
+  border-top: 1px dotted #ddd;
+  padding: 7px 0;
+  min-height: 42px;
+}
+
+.reference-form-line:last-of-type {
+  border-bottom: 1px dotted #ddd;
+}
+
+.reference-form-line .ant-form-item {
+  margin-bottom: 0;
+}
+
+.reference-form-line .ant-form-item-label {
+  line-height: 30px;
+}
+
+.reference-form-line .ant-form-item-label > label {
+  color: #333;
+  font-size: 14px;
+}
+
+.reference-form-line .ant-form-item-explain {
+  font-size: 12px;
+}
+
+.reference-form-line .ant-input,
+.reference-form-line .ant-select-selector {
+  border-radius: 2px !important;
+}
+
+.reference-ticket-form .field-error-emphasis .ant-input,
+.reference-ticket-form .field-error-emphasis .ant-select-selector,
+.reference-ticket-form .field-error-emphasis .ant-radio-group,
+.reference-ticket-form .field-error-emphasis .rich-text-editor {
+  outline: 2px solid #ff4d4f;
+  outline-offset: 2px;
+}
+
+.reference-ticket-form .field-error-emphasis .rich-text-editor {
+  border-color: #ff4d4f;
+}
+
+.ai-ticket-chat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 52vh;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.ai-ticket-chat-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+.ai-ticket-chat-row.ai-ticket-chat-user {
+  justify-content: flex-end;
+}
+
+.ai-ticket-chat-row.ai-ticket-chat-assistant {
+  justify-content: flex-start;
+}
+
+.ai-ticket-chat-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #597ef7;
+}
+
+.ai-ticket-chat-user .ai-ticket-chat-avatar {
+  background: #52c41a;
+}
+
+.ai-ticket-chat-bubble {
+  max-width: 78%;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.ai-ticket-chat-user .ai-ticket-chat-bubble {
+  color: #102a12;
+  background: #f6ffed;
+  border-top-right-radius: 4px;
+}
+
+.ai-ticket-chat-assistant .ai-ticket-chat-bubble {
+  color: #1f2937;
+  background: #fff;
+  border-top-left-radius: 4px;
+}
+
+.ai-ticket-chat-name {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ai-ticket-chat-content {
+  white-space: pre-wrap;
+  margin-bottom: 0 !important;
+}
+
+.reference-short-control {
+  width: 150px !important;
+}
+
+.reference-priority-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+.priority-sla-hint {
+  white-space: normal;
+  font-size: 13px;
+}
+
+.reference-medium-control {
+  width: 220px !important;
+}
+
+.reference-title-control {
+  max-width: 560px;
+}
+
+.reference-conditional-line {
+  background: #fffdf6;
+}
+
+.reference-form-line-tall {
+  padding-bottom: 12px;
+}
+
+.reference-form-line-tall .ant-form-item-label {
+  align-items: flex-start;
+  padding-top: 8px;
+}
+
+.reference-attachment-line .ant-form-item-label {
+  align-items: flex-start;
+  padding-top: 8px;
+}
+
+.reference-form-actions {
+  padding: 16px 0 0 112px;
+}
+
+.rich-text-editor {
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  max-width: calc(100vw - 360px);
+  position: relative;
+}
+
+.rich-text-toolbar {
+  min-height: 38px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #d9d9d9;
+  background: #fafafa;
+}
+
+.rich-text-image-scale-control {
+  display: inline-flex;
+  align-items: center;
+  width: 120px;
+  padding: 0 4px;
+}
+
+.rich-text-image-scale-control .ant-slider {
+  width: 100%;
+  margin: 3px 0;
+}
+
+.rich-text-content {
+  min-height: 220px;
+  padding: 12px;
+  outline: none;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.rich-text-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #bfbfbf;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.rich-text-content img,
+.ticket-rich-description img {
+  max-width: 100%;
+  height: auto;
+}
+
+.rich-text-content p {
+  margin: 0 0 8px;
+}
+
+.quick-phrase-suggestions {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 20;
+  max-width: 520px;
+  border: 1px solid #91caff;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.quick-phrase-suggestions-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #f6faff;
+}
+
+.quick-phrase-suggestions-list {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.quick-phrase-suggestion-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid #f5f5f5;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quick-phrase-suggestion-item.is-active,
+.quick-phrase-suggestion-item:hover {
+  background: #e6f4ff;
+}
+
+.quick-phrase-suggestion-title {
+  display: block;
+  margin-bottom: 2px;
+  color: #1f1f1f;
+  font-weight: 600;
+}
+
+.quick-phrase-suggestion-content {
+  display: block;
+  color: #595959;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-rich-description img {
+  cursor: zoom-in;
+}
+
+.rich-text-content blockquote,
+.ticket-rich-description blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid #d9d9d9;
+  color: #666;
+}
+
+.reference-upload {
+  max-width: 640px;
+}
+
+.reference-upload .ant-upload-drag {
+  border-radius: 2px;
+}
+
+.ticket-rich-description {
+  min-height: 24px;
+}
+
+.ticket-rich-description p {
+  margin: 0 0 8px;
+}
+
+.ticket-description-section {
+  padding: 12px 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  background: #fff;
+  min-height: 80px;
+}
+
+.ticket-detail-sticky-tabs > .ant-tabs-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #f0f2f5;
+  padding-top: 8px;
+}
+
+.ticket-attachment-section {
+  padding: 4px 0;
+}
+
+.ticket-assignee-highlight.ant-typography {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 10px;
+  border-radius: 4px;
+  background: #e6f4ff;
+  color: #0958d9;
+  box-shadow: inset 3px 0 0 #1677ff;
+}
+
+.ticket-assignee-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ticket-assignee-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.ticket-custom-tags {
+  width: 100%;
+}
+
+.admin-config-page {
+  width: 100%;
+}
+
+.admin-config-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-config-error-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.schedule-group-card .ant-card-body {
+  padding-top: 18px;
+}
+
+.schedule-team-panel {
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+@media (max-width: 768px) {
+  .ticket-assignee-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.message-rich-content {
+  min-height: 24px;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.message-rich-content p {
+  margin: 0 0 8px;
+}
+
+.message-rich-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  cursor: zoom-in;
+}
+
+.message-rich-content blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid #d9d9d9;
+  color: #666;
+}
+
+.message-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.message-thread-item {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding-top: 4px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.message-thread-item:first-child {
+  border-top: none;
+}
+
+.message-thread-avatar {
+  position: relative;
+}
+
+.message-thread-avatar-inner {
+  position: sticky;
+  top: 12px;
+  width: 44px;
+  height: 44px;
+}
+
+.message-thread-body {
+  min-width: 0;
+}
+
+.message-thread-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.message-thread-actions {
+  margin-top: 10px;
+}
+
+.message-quote-block,
+.message-quote-editor {
+  border-left: 3px solid #91caff;
+  background: #f5faff;
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+
+.message-quote-block {
+  margin-bottom: 10px;
+}
+
+.message-quote-block-text,
+.message-quote-editor-text {
+  margin: 4px 0 0 !important;
+  color: #595959;
+}
+
+.message-quote-editor {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.message-quote-editor-main {
+  min-width: 0;
+}
+
+.attachment-list-item {
+  max-width: 100%;
+}
+
+.attachment-thumb {
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.attachment-thumb .ant-image-img {
+  object-fit: cover;
+}
+
+.attachment-file-icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  background: #fafafa;
+  color: #8c8c8c;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.attachment-file-icon-word {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
+.attachment-file-icon-excel {
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.attachment-file-icon-pdf {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.attachment-file-icon-ppt {
+  background: #fff7e6;
+  color: #d46b08;
+}
+
+.attachment-file-icon-text {
+  background: #fafafa;
+  color: #595959;
+}
+
+.attachment-file-icon-zip {
+  background: #f9f0ff;
+  color: #722ed1;
+}
+
+.attachment-file-icon-default {
+  background: #fafafa;
+  color: #8c8c8c;
+}
+
+.priority-tag-p1 {
+  font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(255, 77, 79, 0.25);
+}
+
+.sla-remaining-text {
+  font-weight: 600;
+}
+
+.sla-remaining-p1 {
+  color: #cf1322;
+}
+
+.sla-remaining-overdue {
+  color: #a8071a;
+}
+
+.sla-expire-time {
+  font-size: 12px;
+}
+
+.sla-remaining-refreshing {
+  animation: slaRefreshPulse 0.9s ease;
+}
+
+.ticket-row-priority-p1 td {
+  border-left-color: #ff4d4f;
+}
+
+.ticket-row-priority-p1 td:first-child {
+  box-shadow: inset 4px 0 0 #ff4d4f;
+}
+
+.ticket-row-overdue td {
+  background: #fff1f0 !important;
+}
+
+.ticket-row-overdue:hover td {
+  background: #ffe7e6 !important;
+}
+
+.ticket-unread-badge .ant-badge-count {
+  font-weight: 700;
+  font-size: 13px;
+  height: 24px;
+  line-height: 24px;
+  padding: 0 10px;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.18);
+}
+
+.ticket-unread-badge-compact .ant-badge-count {
+  font-size: 12px;
+  height: 20px;
+  line-height: 20px;
+  min-width: 20px;
+  padding: 0 8px;
+}
+
+.ticket-read-tag {
+  margin-inline-end: 0;
+  font-weight: 600;
+}
+
+.ticket-read-tag-compact {
+  font-size: 12px;
+  line-height: 18px;
+  padding-inline: 6px;
+}
+
+@keyframes slaRefreshPulse {
+  0% {
+    background: #fffbe6;
+    box-shadow: 0 0 0 0 rgba(250, 173, 20, 0.35);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 8px rgba(250, 173, 20, 0);
+  }
+}
