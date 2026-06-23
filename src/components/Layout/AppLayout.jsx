@@ -132,6 +132,11 @@ export default function AppLayout({ children }) {
             label: <Link href="/support-rests">休息时间配置</Link>
           },
           {
+            key: '/sla-rules',
+            icon: <CalendarOutlined />,
+            label: <Link href="/sla-rules">SLA 配置</Link>
+          },
+          {
             key: '/solutions',
             icon: <FileTextOutlined />,
             label: <Link href="/solutions">标准解决方案库</Link>
@@ -167,6 +172,7 @@ export default function AppLayout({ children }) {
     if (pathname.startsWith('/systems')) return '/systems';
     if (pathname.startsWith('/schedules')) return '/schedules';
     if (pathname.startsWith('/support-rests')) return '/support-rests';
+    if (pathname.startsWith('/sla-rules')) return '/sla-rules';
     if (pathname.startsWith('/solutions')) return '/solutions';
     if (pathname.startsWith('/announcements')) return '/announcements';
     if (pathname.startsWith('/oa-simulator')) return '/oa-simulator';
@@ -286,6 +292,8 @@ function pageTitle(key) {
       return '排班配置';
     case '/support-rests':
       return '休息时间配置';
+    case '/sla-rules':
+      return 'SLA 配置';
     case '/solutions':
       return '标准解决方案库';
     case '/announcements':

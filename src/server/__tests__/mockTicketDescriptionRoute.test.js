@@ -8,11 +8,16 @@ import {
   buildMockTicketDescriptionMessages,
   prepareGeneratedMockTicketDescription
 } from '../mockTicketDescription.js';
+import { reseedDb } from '../db.js';
 
 const routeSource = fs.readFileSync(
   new URL('../../../app/api/ai/mock-ticket-description/route.js', import.meta.url),
   'utf8'
 );
+
+test.beforeEach(() => {
+  reseedDb();
+});
 
 test('模拟工单描述接口使用 OpenAI SDK 生成描述且不硬编码密钥', () => {
   assert.match(routeSource, /import OpenAI from 'openai'/);
@@ -116,7 +121,7 @@ test('本地兜底模拟描述也基于工单基本信息生成问题描述', ()
 
   assert.match(description, /ERP 核心系统/);
   assert.match(description, /生产系统数据修正/);
-  assert.match(description, /P2-高/);
+  assert.match(description, /P2-中/);
   assert.match(description, /订单状态批量修正申请/);
   assert.doesNotMatch(description, /处理建议|建议补充的信息|工单摘要|可以/);
 });

@@ -10,12 +10,59 @@ import {
   listTickets
 } from '../store.js';
 import { reseedDb } from '../db.js';
-import { saveSystemConfig } from '../adminConfigStore.js';
+import { saveSlaConfig, saveSystemConfig } from '../adminConfigStore.js';
 
 const requesterUser = { id: 'u_requester_1', name: '张三', role: 'REQUESTER' };
 
 test.beforeEach(() => {
   reseedDb();
+});
+
+test('新提交工单应用后台保存的 SLA 配置快照', () => {
+  const saveResult = saveSlaConfig(
+    {
+      rules: {
+        DATA_EXTRACT: {
+          P2: {
+            enabled: true,
+            responseMinutes: 15,
+            firstHandleMinutes: 30,
+            resolveMinutes: 90,
+            warnings: [],
+            escalations: []
+          }
+        }
+      }
+    },
+    { id: 'u_admin_1', name: '管理员', role: 'ADMIN' }
+  );
+  assert.equal(saveResult.ok, true);
+
+  const result = dispatchCreateTicketEvent(
+    EVENTS.SUBMIT,
+    {
+      title: '应用后台 SLA 配置',
+      toolType: 'DATA_EXTRACT',
+      priority: 'P2',
+      systemName: 'ERP_CORE',
+      reporterPhone: '13800138000',
+      reporterEmail: '',
+      reportForOthers: false,
+      description: '提交时应用后台 SLA 配置',
+      descriptionHtml: '<p>提交时应用后台 SLA 配置</p>',
+      attachments: [],
+      submittedAt: '2026-06-12T00:00:00.000Z'
+    },
+    requesterUser
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.ticket.slaRuleSnapshot.channel, 'DATA_EXTRACT');
+  assert.equal(result.ticket.slaRuleSnapshot.priority, 'P2');
+  assert.equal(result.ticket.slaRuleSnapshot.resolveMinutes, 90);
+  assert.equal(result.ticket.slaDeadlines.resolveDueAt, '2026-06-12T01:30:00.000Z');
+  assert.equal(result.ticket.expiresAt, '2026-06-12T01:30:00.000Z');
+  assert.equal(result.ticket.slaConfig, undefined);
 });
 
 test('工单保存系统编码和中文名快照，后台改名不影响历史工单', () => {
@@ -233,7 +280,7 @@ test('暂存草稿不生成正式工单号', () => {
     {
       title: '暂存问题',
       toolType: 'DATA_EXTRACT',
-      priority: 'P4',
+      priority: 'P3',
       systemName: 'ERP',
       reporterPhone: '13800138000',
       reporterEmail: '',

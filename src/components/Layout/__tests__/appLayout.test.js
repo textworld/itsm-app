@@ -68,6 +68,7 @@ test('administrator entries are grouped under a second-level admin menu', () => 
   assert.match(appLayoutSource, /href="\/systems"/);
   assert.match(appLayoutSource, /href="\/schedules"/);
   assert.match(appLayoutSource, /href="\/support-rests"/);
+  assert.match(appLayoutSource, /href="\/sla-rules"/);
   assert.match(appLayoutSource, /href="\/solutions"/);
   assert.match(appLayoutSource, /href="\/oa-simulator"/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/admin\/users'\)/);
@@ -76,6 +77,7 @@ test('administrator entries are grouped under a second-level admin menu', () => 
   assert.match(appLayoutSource, /pathname\.startsWith\('\/systems'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/schedules'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/support-rests'\)/);
+  assert.match(appLayoutSource, /pathname\.startsWith\('\/sla-rules'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/solutions'\)/);
   assert.match(appLayoutSource, /pathname\.startsWith\('\/oa-simulator'\)/);
   assert.match(appLayoutSource, /账号管理/);
@@ -84,6 +86,7 @@ test('administrator entries are grouped under a second-level admin menu', () => 
   assert.match(appLayoutSource, /系统配置/);
   assert.match(appLayoutSource, /排班配置/);
   assert.match(appLayoutSource, /休息时间配置/);
+  assert.match(appLayoutSource, /SLA 配置/);
   assert.match(appLayoutSource, /标准解决方案库/);
   assert.doesNotMatch(appLayoutSource, /href="\/data-fix-schemes"/);
   assert.match(appLayoutSource, /OA 模拟审批台/);

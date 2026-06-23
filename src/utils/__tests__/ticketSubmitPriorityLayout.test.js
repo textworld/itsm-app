@@ -36,7 +36,8 @@ test('优先级控件容器支持行内布局和换行', () => {
 });
 
 test('提交页 SLA 文案改为工单处理时效', () => {
-  assert.match(ticketSubmitView, /工单处理时效 P1: 30分钟/);
+  assert.match(ticketSubmitView, /工单处理时效 P0: 30分钟/);
+  assert.match(ticketSubmitView, /P3：8小时/);
   assert.doesNotMatch(ticketSubmitView, /SLA时效/);
 });
 

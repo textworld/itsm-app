@@ -4,11 +4,11 @@ import { STATUS } from '../constants/ticketStatus.js';
 const ONE_SECOND = 1000;
 const ONE_MINUTE = 60 * ONE_SECOND;
 
-export function calculateTicketExpiresAt(createdAt, priority = PRIORITIES.P4) {
+export function calculateTicketExpiresAt(createdAt, priority = PRIORITIES.P3) {
   const createdTime = new Date(createdAt).getTime();
   if (Number.isNaN(createdTime)) return null;
 
-  const slaMinutes = PRIORITY_SLA_MINUTES[priority] || PRIORITY_SLA_MINUTES[PRIORITIES.P4];
+  const slaMinutes = PRIORITY_SLA_MINUTES[priority] || PRIORITY_SLA_MINUTES[PRIORITIES.P3];
   return new Date(createdTime + slaMinutes * ONE_MINUTE).toISOString();
 }
 
@@ -17,7 +17,7 @@ export function getTicketExpiresAt(ticket) {
     return ticket.expiresAt;
   }
 
-  return calculateTicketExpiresAt(ticket?.createdAt, ticket?.priority || PRIORITIES.P4);
+  return calculateTicketExpiresAt(ticket?.createdAt, ticket?.priority || PRIORITIES.P3);
 }
 
 export function isTicketClosed(ticket) {
@@ -69,7 +69,7 @@ export function sortTicketsByPriorityAndCreatedAt(tickets = []) {
 }
 
 function getPriorityOrder(priority) {
-  return PRIORITY_ORDER[priority] || PRIORITY_ORDER[PRIORITIES.P4];
+  return PRIORITY_ORDER[priority] || PRIORITY_ORDER[PRIORITIES.P3];
 }
 
 function formatDuration(durationMs, includeSecondsWhenUnderMinute) {

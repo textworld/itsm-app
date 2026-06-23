@@ -8,7 +8,7 @@ const source = fs.readFileSync(
 );
 
 test('support rest config view manages rest periods and upcoming windows through admin API', () => {
-  assert.match(source, /\/api\/admin\/support-rests/);
+  assert.match(source, /\/api\/config\/admin\/support-rests/);
   assert.match(source, /validateSupportRestConfig/);
   assert.match(source, /buildUpcomingSupportRestDays/);
   assert.match(source, /buildSupportRestPeriodFromQuickAdd/);

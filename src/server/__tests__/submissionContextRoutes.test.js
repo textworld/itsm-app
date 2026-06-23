@@ -99,7 +99,7 @@ function buildTicket(patch = {}) {
     id: patch.id || 'TKT-SUBMISSION-1',
     title: patch.title || 'submission ticket',
     toolType: patch.toolType || 'CONSULT',
-    priority: 'P4',
+    priority: 'P3',
     systemName: 'ERP_CORE',
     reporterPhone: '13800138000',
     reporterEmail: '',

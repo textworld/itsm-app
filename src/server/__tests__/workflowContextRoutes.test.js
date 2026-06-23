@@ -161,7 +161,7 @@ function buildTicket(patch = {}) {
     id: patch.id || 'TKT-WORKFLOW-1',
     title: 'workflow ticket',
     toolType: patch.toolType || 'CONSULT',
-    priority: 'P4',
+    priority: 'P3',
     systemName: 'ERP_CORE',
     reporterPhone: '13800138000',
     descriptionDoc: {

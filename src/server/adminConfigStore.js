@@ -15,9 +15,11 @@ import {
   validateInsuranceTypeInput,
   validateDataFixSchemeConfig,
   validateScheduleConfig,
+  validateSlaConfig,
   validateSystemConfig,
   validateSupportRestConfig
 } from '../utils/adminConfigValidation.js';
+import { SLA_CONFIG_KEY, buildDefaultSlaConfig } from '../utils/slaConfig.js';
 import {
   buildPersonalQuickPhrasesConfigKey,
   validateQuickPhraseConfig
@@ -227,6 +229,44 @@ export function getScheduleConfig() {
     updatedAt: null,
     updatedBy: null
   };
+}
+
+export function getSlaConfig() {
+  const db = getDb();
+  const row = db.prepare('SELECT data FROM app_configs WHERE key = ?').get(SLA_CONFIG_KEY);
+  return parseRow(row) || buildDefaultSlaConfig();
+}
+
+export function saveSlaConfig(input, user) {
+  const validation = validateSlaConfig(input);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      reason: 'SLA 配置校验失败',
+      errors: validation.errors
+    };
+  }
+
+  const config = {
+    ...validation.value,
+    updatedAt: nowIso(),
+    updatedBy: actorFromUser(user)
+  };
+
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO app_configs (key, updated_at, data)
+    VALUES (@key, @updated_at, @data)
+    ON CONFLICT(key) DO UPDATE SET
+      updated_at = excluded.updated_at,
+      data = excluded.data
+  `).run({
+    key: SLA_CONFIG_KEY,
+    updated_at: config.updatedAt,
+    data: JSON.stringify(config)
+  });
+
+  return { ok: true, config };
 }
 
 export function saveScheduleConfig(input, user) {

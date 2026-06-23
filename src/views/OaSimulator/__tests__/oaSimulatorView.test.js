@@ -8,7 +8,7 @@ const source = fs.readFileSync(
 );
 
 test('OA simulator view loads applications and posts admin actions', () => {
-  assert.match(source, /\/api\/oa-simulator\/applications/);
+  assert.match(source, /\/api\/approval\/applications/);
   assert.match(source, /postOaAction/);
   assert.match(source, /GENERATE_TICKET/);
   assert.match(source, /DIRECT_CLOSE/);

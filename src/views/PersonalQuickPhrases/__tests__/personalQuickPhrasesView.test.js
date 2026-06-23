@@ -8,7 +8,7 @@ const source = fs.readFileSync(
 );
 
 test('personal quick phrases view loads and saves through personal API', () => {
-  assert.match(source, /\/api\/personal\/quick-phrases/);
+  assert.match(source, /\/api\/config\/personal\/quick-phrases/);
   assert.match(source, /validateQuickPhraseConfig/);
   assert.match(source, /method: 'PUT'/);
   assert.match(source, /addPhrase/);

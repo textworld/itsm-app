@@ -8,7 +8,7 @@ const source = fs.readFileSync(
 );
 
 test('system config admin view manages systems through admin API', () => {
-  assert.match(source, /\/api\/admin\/systems/);
+  assert.match(source, /\/api\/config\/admin\/systems/);
   assert.match(source, /系统配置/);
   assert.match(source, /系统编码/);
   assert.match(source, /系统名称/);

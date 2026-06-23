@@ -8,7 +8,7 @@ const source = fs.readFileSync(
 );
 
 test('insurance dictionary view loads and edits insurance types through admin API', () => {
-  assert.match(source, /\/api\/admin\/dictionaries\/insurance-types/);
+  assert.match(source, /\/api\/config\/admin\/dictionaries\/insurance-types/);
   assert.match(source, /<Table/);
   assert.match(source, /<Modal/);
   assert.match(source, /<Switch/);

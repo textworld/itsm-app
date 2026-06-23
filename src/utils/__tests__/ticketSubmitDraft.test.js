@@ -25,7 +25,7 @@ test('提交工单页面右上角提供一键生成模拟工单按钮', () => {
 });
 
 test('一键生成模拟工单会调用大模型生成描述', () => {
-  assert.match(submitPageSource, /fetch\('\/api\/ai\/mock-ticket-description'/);
+  assert.match(submitPageSource, /fetch\('\/api\/submission\/mock-description'/);
   assert.match(submitPageSource, /buildMockTicketDescriptionDoc/);
   assert.match(submitPageSource, /mockGenerating/);
 });
