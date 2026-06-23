@@ -5,10 +5,12 @@ import { buildCustomTagUpdate } from '../utils/customTicketTags.js';
 import { routeScheduleAssignee } from '../utils/scheduleDispatchRouting.js';
 import { routeRandomTechTransferAssignee } from '../utils/techTransferRouting.js';
 import { TICKET_ACTIONS, canPerformTicketAction } from '../permissions/ticketPermissionMatrix.js';
+import { getAllSupportAssignees, getSupportAssigneesByRole } from '../constants/supportAccounts.js';
 import { getDb, reseedDb } from './db.js';
 import {
   findEnabledDictionaryOption,
   getScheduleConfig,
+  getSlaConfig,
   getSystemConfig,
   getTicketClassificationDictionaryName
 } from './adminConfigStore.js';
@@ -398,6 +400,7 @@ function prepareCreateTicketPayload(event, payload = {}) {
   if (event === EVENTS.SUBMIT || isOaCreateEvent(event)) {
     return {
       ...normalizedPayload,
+      slaConfig: normalizedPayload.slaConfig || getSlaConfig(),
       id: isFormalTicketId(normalizedPayload.id) ? normalizedPayload.id : generateTicketId(listTickets())
     };
   }
@@ -626,11 +629,27 @@ function getTicketAssignmentTargets(ticket, event, payload = {}, user = null) {
 }
 
 function listActiveSupportAssignees(role) {
+  const supportOrder = new Map(
+    (role ? getSupportAssigneesByRole(role) : getAllSupportAssignees())
+      .map((user, index) => [user.id, index])
+  );
+
   return listUsers()
     .filter((user) => ['L1', 'L2'].includes(user.role))
     .filter((user) => !role || user.role === role)
     .filter((user) => isUserOnline(user))
+    .sort((left, right) => compareSupportAssigneeOrder(left, right, supportOrder))
     .map(({ id, name, role: userRole }) => ({ id, name, role: userRole }));
+}
+
+function compareSupportAssigneeOrder(left, right, supportOrder) {
+  const leftOrder = supportOrder.has(left.id) ? supportOrder.get(left.id) : Number.MAX_SAFE_INTEGER;
+  const rightOrder = supportOrder.has(right.id) ? supportOrder.get(right.id) : Number.MAX_SAFE_INTEGER;
+  if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+
+  return String(left.username || left.id).localeCompare(String(right.username || right.id), 'zh-Hans-CN', {
+    numeric: true
+  });
 }
 
 function isUserAssignable(userId, role = null) {

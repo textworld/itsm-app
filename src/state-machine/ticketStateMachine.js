@@ -24,6 +24,7 @@ import { buildDescriptionHistoryEntry, buildDescriptionUpdate } from '../utils/d
 import { buildDraftTicketUpdate } from '../utils/draftTicketEditing.js';
 import { createEmptyRichTextDoc, richTextHtmlToDoc, richTextToPlainText } from '../utils/richText.js';
 import { calculateTicketExpiresAt } from '../utils/sla.js';
+import { buildSlaSnapshot, calculateSlaDeadlines, findSlaRuleForTicket } from '../utils/slaConfig.js';
 import { canUserHandleSubtaskSystem } from '../utils/subtaskRouting.js';
 
 export const EVENTS = {
@@ -1189,8 +1190,8 @@ function buildSubtaskTicket(payload = {}, user, now) {
     parentTicketId: payload.parentTicketId || null,
     title: payload.title || description,
     toolType: TOOL_TYPES.SUBTASK,
-    priority: payload.priority || PRIORITIES.P4,
-    priorityLabel: payload.priorityLabel || PRIORITY_LABELS[payload.priority || PRIORITIES.P4],
+    priority: payload.priority || PRIORITIES.P3,
+    priorityLabel: payload.priorityLabel || PRIORITY_LABELS[payload.priority || PRIORITIES.P3],
     systemCategory: payload.systemCategory || SYSTEM_CATEGORY.OLD,
     systemCode: payload.systemCode || payload.systemName || '',
     systemName: payload.systemDisplayName || payload.systemName || payload.systemCode || '',
@@ -1200,7 +1201,7 @@ function buildSubtaskTicket(payload = {}, user, now) {
     attachments: payload.attachments || [],
     createdAt: payload.createdAt || now,
     submittedAt: payload.submittedAt || now,
-    expiresAt: payload.expiresAt || calculateTicketExpiresAt(now, payload.priority || PRIORITIES.P4),
+    expiresAt: payload.expiresAt || calculateTicketExpiresAt(now, payload.priority || PRIORITIES.P3),
     requesterId: payload.requesterId || null,
     requesterName: payload.requesterName || '',
     ...buildExplicitSubtaskAssigneeUpdate(payload),
@@ -1244,6 +1245,7 @@ function inferTechRoleFromUserId(userId) {
 }
 
 function buildSubmittedTicket(_ticket, payload = {}, user, now) {
+  const { slaConfig: submittedSlaConfig, ...ticketPayload } = payload;
   const createdAt = payload.createdAt || now;
   const submittedAt = payload.submittedAt || now;
   const descriptionDoc =
@@ -1252,15 +1254,24 @@ function buildSubmittedTicket(_ticket, payload = {}, user, now) {
     createEmptyRichTextDoc();
   const description = payload.description || richTextToPlainText(descriptionDoc);
   const descriptionHtml = payload.descriptionHtml || '';
-  const expiresAt = payload.expiresAt || calculateTicketExpiresAt(submittedAt, payload.priority || PRIORITIES.P4);
   const systemCode = payload.systemCode || payload.systemName || '';
   const shouldConvertDataFixToConsult =
     payload.toolType === TOOL_TYPES.DATA_FIX && !hasDataFixSubmissionSolution(payload);
+  const resolvedToolType = shouldConvertDataFixToConsult ? TOOL_TYPES.CONSULT : payload.toolType;
+  const slaMatch = findSlaRuleForTicket(
+    { ...payload, toolType: resolvedToolType },
+    submittedSlaConfig
+  );
+  const slaRuleSnapshot = slaMatch ? buildSlaSnapshot(slaMatch) : null;
+  const slaDeadlines = slaMatch ? calculateSlaDeadlines(submittedAt, slaMatch.rule) : undefined;
+  const expiresAt = payload.expiresAt ||
+    slaDeadlines?.resolveDueAt ||
+    calculateTicketExpiresAt(submittedAt, payload.priority || PRIORITIES.P3);
 
   return {
-    ...payload,
+    ...ticketPayload,
     isDraft: false,
-    toolType: shouldConvertDataFixToConsult ? TOOL_TYPES.CONSULT : payload.toolType,
+    toolType: resolvedToolType,
     originalToolType: shouldConvertDataFixToConsult
       ? TOOL_TYPES.DATA_FIX
       : payload.originalToolType || payload.toolType,
@@ -1272,6 +1283,8 @@ function buildSubmittedTicket(_ticket, payload = {}, user, now) {
     createdAt,
     submittedAt,
     expiresAt,
+    slaRuleSnapshot,
+    ...(slaDeadlines ? { slaDeadlines } : {}),
     updatedAt: payload.updatedAt || now,
     requesterId: payload.requesterId || user?.id || null,
     requesterName: payload.requesterName || user?.name || '未知用户',
@@ -1318,7 +1331,7 @@ function hasDataFixSubmissionSolution(payload = {}) {
 
 function buildDraftTicket(_ticket, payload = {}, user, now) {
   const createdAt = payload.createdAt || now;
-  const priority = payload.priority || PRIORITIES.P4;
+  const priority = payload.priority || PRIORITIES.P3;
   const systemCode = payload.systemCode || payload.systemName || '';
   const reportForOthers = payload.reportForOthers === true;
   const descriptionDoc =

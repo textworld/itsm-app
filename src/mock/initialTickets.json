@@ -35,8 +35,8 @@
         "remark": "新建工单"
       }
     ],
-    "priority": "P1",
-    "priorityLabel": "P1-紧急",
+    "priority": "P0",
+    "priorityLabel": "P0-紧急",
     "expiresAt": "2026-04-10T09:50:00.000Z"
   },
   {
@@ -105,8 +105,8 @@
         "remark": "一线受理"
       }
     ],
-    "priority": "P2",
-    "priorityLabel": "P2-高",
+    "priority": "P1",
+    "priorityLabel": "P1-高",
     "expiresAt": "2026-04-12T12:05:00.000Z"
   },
   {
@@ -145,7 +145,7 @@
       "defectId": "BUG-2026-0003",
       "title": "数据抽取任务大数据量下超时",
       "module": "数据集成",
-      "priority": "P2",
+      "priority": "P1",
       "isNew": false
     },
     "l2Conclusion": "",
@@ -188,8 +188,8 @@
         "remark": "已关联缺陷 BUG-2026-0003"
       }
     ],
-    "priority": "P3",
-    "priorityLabel": "P3-中",
+    "priority": "P2",
+    "priorityLabel": "P2-中",
     "expiresAt": "2026-04-15T14:40:00.000Z"
   },
   {
@@ -237,7 +237,7 @@
       "defectId": "BUG-2026-0001",
       "title": "报表导出时部分中文字段乱码",
       "module": "报表中心",
-      "priority": "P1",
+      "priority": "P0",
       "isNew": false
     },
     "l2Conclusion": "导出模板固定使用 GBK 编码，对含生僻字的商品名未能兼容。临时规避：在导出前对字段做 UTF-8-BOM 转码；根因修复需升级报表导出组件版本，已排期 V5.2 版本解决。",
@@ -291,8 +291,8 @@
         "remark": "二线提交排查结论"
       }
     ],
-    "priority": "P4",
-    "priorityLabel": "P4-不紧急",
+    "priority": "P3",
+    "priorityLabel": "P3-低",
     "expiresAt": "2026-04-13T17:10:00.000Z"
   },
   {
@@ -383,8 +383,8 @@
         "remark": "一线复核完成，总结已同步语料库"
       }
     ],
-    "priority": "P1",
-    "priorityLabel": "P1-紧急",
+    "priority": "P0",
+    "priorityLabel": "P0-紧急",
     "expiresAt": "2026-04-11T09:20:00.000Z"
   },
   {
@@ -469,8 +469,8 @@
         "remark": "满意度 5 星"
       }
     ],
-    "priority": "P2",
-    "priorityLabel": "P2-高",
+    "priority": "P1",
+    "priorityLabel": "P1-高",
     "expiresAt": "2026-04-08T11:00:00.000Z"
   }
 ]

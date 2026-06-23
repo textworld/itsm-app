@@ -8,7 +8,7 @@ const source = fs.readFileSync(
 );
 
 test('admin user management view lists and creates users through admin API', () => {
-  assert.match(source, /\/api\/admin\/users/);
+  assert.match(source, /\/api\/access\/admin\/users/);
   assert.match(source, /<Table/);
   assert.match(source, /<Modal/);
   assert.match(source, /Input\.Search/);

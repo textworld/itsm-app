@@ -19,5 +19,5 @@ test('login page exposes public registration for non-admin roles', () => {
   assert.match(authContextSource, /name/);
   assert.match(loginSource, /ROLE_OPTIONS\.filter/);
   assert.match(loginSource, /option\.value !== ROLES\.ADMIN/);
-  assert.match(authContextSource, /\/api\/auth\/register/);
+  assert.match(authContextSource, /\/api\/access\/register/);
 });

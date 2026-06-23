@@ -1,4 +1,5 @@
 import { isKnownTicketClassificationDictionaryType } from '../constants/systems.js';
+export { validateSlaConfig } from './slaConfig.js';
 
 export const INSURANCE_DICTIONARY_TYPE = 'INSURANCE_TYPE';
 export const SYSTEM_MODULE_DICTIONARY_TYPE = 'SYSTEM_MODULE';

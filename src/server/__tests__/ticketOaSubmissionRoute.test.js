@@ -65,7 +65,7 @@ function buildTicket(patch = {}) {
     id: patch.id || 'TKT-ROUTE-1',
     title: 'route ticket',
     toolType: patch.toolType || 'CONSULT',
-    priority: 'P4',
+    priority: 'P3',
     systemName: 'ERP_CORE',
     reporterPhone: '13800138000',
     descriptionDoc: {

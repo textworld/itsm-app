@@ -116,7 +116,7 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
                     'sla-remaining-text',
                     pulse ? 'sla-remaining-refreshing' : '',
                     isTicketOverdue(record, now) ? 'sla-remaining-overdue' : '',
-                    record.priority === PRIORITIES.P1 ? 'sla-remaining-p1' : ''
+                    record.priority === PRIORITIES.P0 ? 'sla-remaining-p0' : ''
                   ].filter(Boolean).join(' ')}
                 >
                   {formatTicketRemaining(record, now)}
@@ -179,7 +179,7 @@ export default function TicketTable({ dataSource = [], showRequester = true }) {
       dataSource={sortedDataSource}
       rowClassName={(record) =>
         [
-          record.priority === PRIORITIES.P1 ? 'ticket-row-priority-p1' : '',
+          record.priority === PRIORITIES.P0 ? 'ticket-row-priority-p0' : '',
           isTicketOverdue(record, now) ? 'ticket-row-overdue' : ''
         ].filter(Boolean).join(' ')
       }
@@ -311,23 +311,23 @@ function UnreadMessageBadge({ ticket, user, messageReads, compact = false }) {
 }
 
 function PriorityTag({ priority }) {
-  const color = priority === PRIORITIES.P1
+  const color = priority === PRIORITIES.P0
     ? 'red'
-    : priority === PRIORITIES.P2
+    : priority === PRIORITIES.P1
       ? 'orange'
-      : priority === PRIORITIES.P3
+      : priority === PRIORITIES.P2
         ? 'blue'
         : 'default';
 
   return (
-    <Tag color={color} className={priority === PRIORITIES.P1 ? 'priority-tag-p1' : ''}>
-      {PRIORITY_LABELS[priority] || priority || PRIORITY_LABELS[PRIORITIES.P4]}
+    <Tag color={color} className={priority === PRIORITIES.P0 ? 'priority-tag-p0' : ''}>
+      {PRIORITY_LABELS[priority] || priority || PRIORITY_LABELS[PRIORITIES.P3]}
     </Tag>
   );
 }
 
 function getPrioritySortValue(priority) {
-  return PRIORITY_ORDER[priority] || PRIORITY_ORDER[PRIORITIES.P4];
+  return PRIORITY_ORDER[priority] || PRIORITY_ORDER[PRIORITIES.P3];
 }
 
 function useSlaClock(tickets) {

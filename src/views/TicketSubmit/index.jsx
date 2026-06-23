@@ -521,7 +521,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
             ? buildDraftTicketFormValues(draftTicket)
             : {
                 toolType: TOOL_TYPES.DATA_EXTRACT,
-                priority: PRIORITIES.P4,
+                priority: PRIORITIES.P3,
                 systemCategory: SYSTEM_CATEGORY.OLD,
                 reportForOthers: false,
                 isStructuredDataExtract: false
@@ -578,7 +578,7 @@ export function TicketSubmitForm({ draftTicket = null }) {
                     <Select className="reference-short-control" options={PRIORITY_OPTIONS} />
                   </Form.Item>
                   <Typography.Text type="secondary" className="priority-sla-hint">
-                    工单处理时效 P1: 30分钟，P2：2小时，P3：6小时，P4：8小时
+                    工单处理时效 P0: 30分钟，P1：2小时，P2：6小时，P3：8小时
                   </Typography.Text>
                 </div>
               </Form.Item>
@@ -966,7 +966,7 @@ function buildTicketPayload(values = {}, attachments, user, now, systems = []) {
   const reportForOthers = values.reportForOthers === true;
   const selectedSystem = resolveSelectedSystem(systems, values.systemName);
   const systemName = selectedSystem?.name || values.systemDisplayName || values.systemName || '';
-  const priority = values.priority || PRIORITIES.P4;
+  const priority = values.priority || PRIORITIES.P3;
   const priorityLabel = PRIORITY_LABELS[priority] || priority;
   const descriptionDoc = values.descriptionDoc || createEmptyRichTextDoc();
 

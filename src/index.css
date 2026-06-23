@@ -827,7 +827,7 @@ body {
   color: #8c8c8c;
 }
 
-.priority-tag-p1 {
+.priority-tag-p0 {
   font-weight: 700;
   box-shadow: 0 0 0 1px rgba(255, 77, 79, 0.25);
 }
@@ -836,7 +836,7 @@ body {
   font-weight: 600;
 }
 
-.sla-remaining-p1 {
+.sla-remaining-p0 {
   color: #cf1322;
 }
 
@@ -852,11 +852,11 @@ body {
   animation: slaRefreshPulse 0.9s ease;
 }
 
-.ticket-row-priority-p1 td {
+.ticket-row-priority-p0 td {
   border-left-color: #ff4d4f;
 }
 
-.ticket-row-priority-p1 td:first-child {
+.ticket-row-priority-p0 td:first-child {
   box-shadow: inset 4px 0 0 #ff4d4f;
 }
 

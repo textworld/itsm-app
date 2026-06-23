@@ -88,7 +88,7 @@ function createOaTicket(id) {
       id,
       title: 'approval route ticket',
       toolType: 'DATA_EXTRACT',
-      priority: 'P4',
+      priority: 'P3',
       systemName: 'ERP_CORE',
       reporterPhone: '13800138000',
       descriptionDoc: {

@@ -9,7 +9,7 @@ const source = fs.readFileSync(
 
 test('ticket submit form loads and clears optional system classification', () => {
   assert.match(source, /selectedClassificationConfig/);
-  assert.match(source, /\/api\/dictionaries\/options\?type=/);
+  assert.match(source, /\/api\/config\/dictionaries\/options\?type=/);
   assert.match(source, /ticketClassificationOptionId/);
   assert.match(source, /form\.setFieldsValue\(\{[\s\S]*systemName: undefined,[\s\S]*ticketClassificationOptionId: undefined/);
   assert.match(source, /onChange=\{\(\) => form\.setFieldValue\('ticketClassificationOptionId', undefined\)\}/);

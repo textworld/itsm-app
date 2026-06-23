@@ -18,7 +18,7 @@ test('CREATE_DRAFT 通过状态机创建草稿且不进入待受理', () => {
       id: 'draft_state_1',
       title: '暂存草稿',
       toolType: 'DATA_EXTRACT',
-      priority: PRIORITIES.P4,
+      priority: PRIORITIES.P3,
       systemName: 'ERP',
       reporterPhone: '13800138000',
       reporterEmail: '',
@@ -239,6 +239,92 @@ test('SUBMIT 通过状态机创建待受理工单', () => {
   assert.equal(nextTicket.timeline[0].action, EVENTS.SUBMIT);
 });
 
+test('SUBMIT applies enabled SLA config snapshot and deadlines through state machine', () => {
+  const nextTicket = applyTransition(
+    null,
+    EVENTS.SUBMIT,
+    {
+      id: 'TKT-SLA-CONFIG-1',
+      title: '数据修正超时规则',
+      toolType: 'DATA_FIX',
+      priority: PRIORITIES.P2,
+      systemName: 'ERP',
+      reporterPhone: '13800138000',
+      reporterEmail: 'zhangsan@example.com',
+      reportForOthers: false,
+      description: '数据修正',
+      descriptionHtml: '<p>数据修正</p>',
+      attachments: [],
+      dataFixSolution: { requesterSolution: '执行数据修正脚本' },
+      submittedAt: '2026-06-12T00:00:00.000Z',
+      slaConfig: {
+        rules: {
+          DATA_FIX: {
+            P2: {
+              enabled: true,
+              responseMinutes: 10,
+              firstHandleMinutes: 20,
+              resolveMinutes: 30,
+              warnings: [{ node: 'response', beforeMinutes: 5, targets: ['ASSIGNEE'], channels: ['DINGTALK'], frequencyMinutes: 5 }],
+              escalations: [{ afterMinutes: 60, target: 'GROUP_LEADER', useOrgHierarchy: true }]
+            }
+          }
+        }
+      }
+    },
+    requesterUser
+  );
+
+  assert.equal(nextTicket.slaRuleSnapshot.channel, 'DATA_FIX');
+  assert.equal(nextTicket.slaRuleSnapshot.priority, 'P2');
+  assert.equal(nextTicket.slaRuleSnapshot.resolveMinutes, 30);
+  assert.deepEqual(nextTicket.slaDeadlines, {
+    responseDueAt: '2026-06-12T00:10:00.000Z',
+    firstHandleDueAt: '2026-06-12T00:20:00.000Z',
+    resolveDueAt: '2026-06-12T00:30:00.000Z'
+  });
+  assert.equal(nextTicket.expiresAt, '2026-06-12T00:30:00.000Z');
+});
+
+test('SUBMIT keeps legacy SLA fallback when matching config rule is disabled', () => {
+  const nextTicket = applyTransition(
+    null,
+    EVENTS.SUBMIT,
+    {
+      id: 'TKT-SLA-FALLBACK-1',
+      title: '禁用规则回退',
+      toolType: 'DATA_FIX',
+      priority: PRIORITIES.P2,
+      systemName: 'ERP',
+      reporterPhone: '13800138000',
+      reporterEmail: 'zhangsan@example.com',
+      reportForOthers: false,
+      description: '禁用规则回退',
+      descriptionHtml: '<p>禁用规则回退</p>',
+      attachments: [],
+      dataFixSolution: { requesterSolution: '执行数据修正脚本' },
+      submittedAt: '2026-06-12T00:00:00.000Z',
+      slaConfig: {
+        rules: {
+          DATA_FIX: {
+            P2: {
+              enabled: false,
+              responseMinutes: 10,
+              firstHandleMinutes: 20,
+              resolveMinutes: 30
+            }
+          }
+        }
+      }
+    },
+    requesterUser
+  );
+
+  assert.equal(nextTicket.slaRuleSnapshot, null);
+  assert.equal(nextTicket.slaDeadlines, undefined);
+  assert.equal(nextTicket.expiresAt, '2026-06-12T06:00:00.000Z');
+});
+
 test('UPDATE_DRAFT 通过状态机保持草稿状态并更新工单要素', () => {
   const nextTicket = applyTransition(
     {
@@ -248,7 +334,7 @@ test('UPDATE_DRAFT 通过状态机保持草稿状态并更新工单要素', () =
       supportStatus: STATUS.DRAFT,
       toolType: 'DATA_EXTRACT',
       title: '原始标题',
-      priority: PRIORITIES.P4,
+      priority: PRIORITIES.P3,
       systemCode: 'ERP',
       systemName: 'ERP系统',
       reporterPhone: '13800138000',
@@ -804,7 +890,7 @@ test('审批类工单通过 SUBMIT_TO_OA 进入审批中并锁定', () => {
       id: 'TKT-OA-1',
       title: '数据提取审批',
       toolType: 'DATA_EXTRACT',
-      priority: PRIORITIES.P4,
+      priority: PRIORITIES.P3,
       systemName: 'ERP_CORE',
       reporterPhone: '13800138000',
       descriptionDoc: {
@@ -836,7 +922,7 @@ test('数据修正有方案进入一线方案审核，无方案自动转咨询�
       id: 'TKT-FIX-SOLUTION',
       title: '修正保单数据',
       toolType: 'DATA_FIX',
-      priority: PRIORITIES.P4,
+      priority: PRIORITIES.P3,
       systemName: 'ERP_CORE',
       reporterPhone: '13800138000',
       dataFixSolution: {
@@ -863,7 +949,7 @@ test('数据修正有方案进入一线方案审核，无方案自动转咨询�
       id: 'TKT-FIX-NO-SOLUTION',
       title: '修正无方案',
       toolType: 'DATA_FIX',
-      priority: PRIORITIES.P4,
+      priority: PRIORITIES.P3,
       systemName: 'ERP_CORE',
       reporterPhone: '13800138000',
       descriptionDoc: {
@@ -927,7 +1013,7 @@ test('OA 审核生成正式工单或直接办结都通过状态机联动', () =>
       id: 'TKT-OA-RESULT',
       title: '权限审批',
       toolType: 'PERMISSION',
-      priority: PRIORITIES.P4,
+      priority: PRIORITIES.P3,
       systemName: 'ERP_CORE',
       reporterPhone: '13800138000',
       descriptionDoc: {
@@ -971,7 +1057,7 @@ test('OA reject returns approving ticket to draft and unlocks it', () => {
       id: 'TKT-OA-REJECT',
       title: 'permission approval',
       toolType: 'PERMISSION',
-      priority: PRIORITIES.P4,
+      priority: PRIORITIES.P3,
       systemName: 'ERP_CORE',
       reporterPhone: '13800138000',
       descriptionDoc: {
@@ -1045,7 +1131,7 @@ test('data fix without requester solution keeps original type when AI resolves i
       id: 'draft_data_fix_ai',
       title: 'data fix without solution',
       toolType: 'DATA_FIX',
-      priority: PRIORITIES.P4,
+      priority: PRIORITIES.P3,
       systemName: 'ERP_CORE',
       reporterPhone: '13800138000',
       descriptionDoc: {
